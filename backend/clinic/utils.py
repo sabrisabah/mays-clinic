@@ -1,9 +1,29 @@
+def normalize_height_m(height):
+    """Store/compute height in meters. Values > 3 are treated as centimeters
+    (clinic staff commonly type 170 instead of 1.70)."""
+    try:
+        h = float(height or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if h <= 0:
+        return 0.0
+    if h > 3:
+        h = h / 100.0
+    return round(h, 2)
+
+
 def compute_bmi(weight: float, height_m: float):
     """height_m is the patient's height in METERS (e.g. 1.70).
+    Values entered in centimeters (e.g. 170) are normalized automatically.
     Classification follows the WHO BMI obesity-grading table:
     <18.5 نقص الوزن, 18.5-24.9 وزن طبيعي, 25.0-29.9 زيادة الوزن,
     30.0-34.9 السمنة – الدرجة الأولى, 35.0-39.9 السمنة – الدرجة الثانية,
     >=40.0 السمنة – الدرجة الثالثة."""
+    height_m = normalize_height_m(height_m)
+    try:
+        weight = float(weight or 0)
+    except (TypeError, ValueError):
+        weight = 0.0
     if not weight or not height_m:
         return 0.0, ""
     bmi = round(weight / (height_m * height_m), 1)
@@ -145,6 +165,7 @@ def compute_suggested_calories(weight, height_m, age, gender, activity_level, go
       (e.g. -500 for weight loss, +500 for weight gain).
     height_m is in METERS; the Mifflin-St Jeor formula needs centimeters internally.
     Returns (0, 0) when there isn't enough data (weight/height/age) to compute a BMR."""
+    height_m = normalize_height_m(height_m)
     if not weight or not height_m or not age:
         return 0, 0
 

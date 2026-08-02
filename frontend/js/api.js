@@ -127,6 +127,44 @@ function bmiBadgeClass(bmiClass) {
   }
 }
 
+// Height is stored in meters on the server. The UI asks for centimeters
+// because clinic staff almost always type 170 rather than 1.70.
+function heightToCm(meters) {
+  const m = parseFloat(meters);
+  if (!m) return "";
+  if (m > 3) return Math.round(m); // already cm (legacy / mistyped)
+  return Math.round(m * 1000) / 10; // keep one decimal when needed (1.705 -> 170.5)
+}
+
+function heightToMeters(cmOrMeters) {
+  const h = parseFloat(cmOrMeters);
+  if (!h || h <= 0) return 0;
+  if (h > 3) return Math.round(h) / 100;
+  return h;
+}
+
+function computeBmiLocal(weight, heightCmOrM) {
+  const w = parseFloat(weight) || 0;
+  const h = heightToMeters(heightCmOrM);
+  if (!w || !h) return { bmi: 0, bmiClass: "" };
+  const bmi = Math.round((w / (h * h)) * 10) / 10;
+  let bmiClass = "";
+  if (bmi < 18.5) bmiClass = "نقص الوزن";
+  else if (bmi < 25) bmiClass = "وزن طبيعي";
+  else if (bmi < 30) bmiClass = "زيادة الوزن";
+  else if (bmi < 35) bmiClass = "السمنة – الدرجة الأولى";
+  else if (bmi < 40) bmiClass = "السمنة – الدرجة الثانية";
+  else bmiClass = "السمنة – الدرجة الثالثة";
+  return { bmi, bmiClass };
+}
+
+function computeWhrLocal(waist, hip) {
+  const w = parseFloat(waist) || 0;
+  const h = parseFloat(hip) || 0;
+  if (!w || !h) return 0;
+  return Math.round((w / h) * 100) / 100;
+}
+
 function fmtDate(iso) {
   if (!iso) return "-";
   const d = new Date(iso);

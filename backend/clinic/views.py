@@ -11,7 +11,14 @@ from rest_framework import status
 
 from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose
 from .permissions import IsDoctor
-from .utils import compute_bmi, compute_whr, compute_whr_class, compute_activity_level, next_file_number
+from .utils import (
+    compute_bmi,
+    compute_whr,
+    compute_whr_class,
+    compute_activity_level,
+    next_file_number,
+    normalize_height_m,
+)
 from . import serializers as sz
 
 
@@ -209,6 +216,10 @@ class AssessmentView(APIView):
         serializer = sz.AssessmentSerializer(assessment, data=request.data, partial=False)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+
+        # Accept height typed in cm (e.g. 170) or meters (1.70); always store meters.
+        if "height" in data:
+            data["height"] = normalize_height_m(data.get("height", 0))
 
         bmi, bmi_class = compute_bmi(data.get("weight", 0), data.get("height", 0))
         whr = compute_whr(data.get("waist", 0), data.get("hip", 0))

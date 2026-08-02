@@ -55,7 +55,7 @@
         <h3>🔹 القياسات الجسمية</h3>
         <div class="grid-3">
           <div class="field"><label>الوزن (كغم)</label><input type="number" step="0.1" id="weight"></div>
-          <div class="field"><label>الطول (متر)</label><input type="number" step="0.01" id="height" placeholder="1.70"></div>
+          <div class="field"><label>الطول (سم)</label><input type="number" step="0.1" id="height" placeholder="170"></div>
           <div class="field"><label>محيط الخصر (سم)</label><input type="number" step="0.1" id="waist"></div>
           <div class="field"><label>محيط الورك (سم)</label><input type="number" step="0.1" id="hip"></div>
         </div>
@@ -330,7 +330,7 @@ async function load() {
 
     const a = await apiFetch(`/api/patients/${patientId}/assessment`);
     document.getElementById("weight").value = a.weight || "";
-    document.getElementById("height").value = a.height || "";
+    document.getElementById("height").value = heightToCm(a.height);
     document.getElementById("waist").value = a.waist || "";
     document.getElementById("hip").value = a.hip || "";
     updateComputed(a.bmi, a.bmi_class, a.whr, a.whr_class, a.activity_level);
@@ -378,8 +378,8 @@ async function load() {
 }
 
 function updateComputed(bmi, bmiClass, whr, whrClass, activityLevel) {
-  document.getElementById("bmiOut").textContent = bmi || "-";
-  document.getElementById("whrOut").textContent = whr || "-";
+  document.getElementById("bmiOut").textContent = bmi ? bmi : "-";
+  document.getElementById("whrOut").textContent = whr ? whr : "-";
   const badge = document.getElementById("bmiBadge");
   badge.textContent = bmiClass || "-";
   badge.className = "badge " + bmiBadgeClass(bmiClass);
@@ -388,7 +388,22 @@ function updateComputed(bmi, bmiClass, whr, whrClass, activityLevel) {
   whrBadge.textContent = whrClass || "-";
   whrBadge.className = "badge " + (whrClass === "طبيعي" ? "green" : whrClass ? "red" : "gray");
 
-  document.getElementById("activityLevelOut").textContent = activityLevel || "-";
+  if (activityLevel !== undefined) {
+    document.getElementById("activityLevelOut").textContent = activityLevel || "-";
+  }
+}
+
+function refreshLiveMetrics() {
+  const { bmi, bmiClass } = computeBmiLocal(
+    document.getElementById("weight").value,
+    document.getElementById("height").value
+  );
+  const whr = computeWhrLocal(
+    document.getElementById("waist").value,
+    document.getElementById("hip").value
+  );
+  // WHR risk class is gender-specific and confirmed by the server on save.
+  updateComputed(bmi, bmiClass, whr, "");
 }
 
 document.getElementById("assessForm").addEventListener("submit", async (e) => {
@@ -412,7 +427,7 @@ document.getElementById("assessForm").addEventListener("submit", async (e) => {
 
     const payload = {
       weight: parseFloat(document.getElementById("weight").value) || 0,
-      height: parseFloat(document.getElementById("height").value) || 0,
+      height: heightToMeters(document.getElementById("height").value),
       waist: parseFloat(document.getElementById("waist").value) || 0,
       hip: parseFloat(document.getElementById("hip").value) || 0,
       medical_history: getCheckedValues("medicalHistoryGroup"),
@@ -458,6 +473,10 @@ document.getElementById("assessForm").addEventListener("submit", async (e) => {
   } catch (err) {
     showMsg(msgEl, err.message, "error");
   }
+});
+
+["weight", "height", "waist", "hip"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", refreshLiveMetrics);
 });
 
 load();
