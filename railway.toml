@@ -1,0 +1,9 @@
+# Deploy from the repo root so both backend/ and frontend/ are in the image.
+# Explicit startCommand avoids Railpack looking for manage.py at the root.
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "cd backend && python manage.py migrate --noinput && python manage.py collectstatic --noinput && python manage.py seed_doctor && gunicorn mays_clinic.wsgi:application --bind 0.0.0.0:$PORT"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

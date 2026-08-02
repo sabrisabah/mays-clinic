@@ -8,14 +8,32 @@ from datetime import timedelta
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
+# Railway (and most PaaS) set these; use them to flip production defaults.
+ON_RAILWAY = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RAILWAY_PUBLIC_DOMAIN"))
+
 SECRET_KEY = os.environ.get(
     "MAYS_SECRET_KEY", "mays-clinic-dev-secret-change-me"
 )
 DOCTOR_INVITE_CODE = os.environ.get("MAYS_DOCTOR_CODE", "MAYS-DOCTOR-2026")
 
-DEBUG = os.environ.get("MAYS_DEBUG", "1") == "1"
+# Default DEBUG off on Railway unless MAYS_DEBUG=1 is set explicitly.
+_default_debug = "0" if ON_RAILWAY else "1"
+DEBUG = os.environ.get("MAYS_DEBUG", _default_debug) == "1"
 
 ALLOWED_HOSTS = ["*"]
+
+# HTTPS behind Railway's proxy — needed for admin login / CSRF.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("MAYS_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+_railway_domain = os.environ.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+if _railway_domain:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{_railway_domain}")
+# Always trust any *.up.railway.app host the service may get.
+CSRF_TRUSTED_ORIGINS.append("https://*.up.railway.app")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -87,14 +105,18 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# Compressed (not Manifest) — avoids 500s if a hashed static file is missing.
+STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Serve the plain-HTML/JS frontend directly from this same Django service
 # (no separate host/CORS needed): WhiteNoise serves files under FRONTEND_DIR
 # at the site root, e.g. /index.html, /css/style.css, /patient/dashboard.html.
-WHITENOISE_ROOT = FRONTEND_DIR
-WHITENOISE_INDEX_FILE = True
+# Only enable when frontend/ exists (repo-root deploy). If Railway Root Directory
+# is set to backend/, this stays off and /api still works.
+if FRONTEND_DIR.is_dir():
+    WHITENOISE_ROOT = FRONTEND_DIR
+    WHITENOISE_INDEX_FILE = True
 
 # ---- CORS (frontend runs on a different port) ----
 CORS_ALLOW_ALL_ORIGINS = True
