@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+backend/mays_clinic.db
+backend/mays_clinic.db-journal
+.DS_Store

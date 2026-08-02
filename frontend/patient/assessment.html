@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>استمارة التقييم — عيادة دكتورة ميس</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس"> عيادة دكتورة ميس</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="tabs-nav">
+      <a href="dashboard.html">الرئيسية</a>
+      <a href="assessment.html" class="active">استمارة التقييم</a>
+      <a href="plan.html">الخطة الغذائية</a>
+      <a href="followup.html">ملف المتابعة</a>
+      <a href="mounjaro.html">متابعة المونجارو</a>
+      <a href="progress.html">متابعة التقدم</a>
+    </div>
+
+    <div id="msg" class="msg" style="display:none;"></div>
+
+    <form id="assessForm">
+      <!-- 1. المعلومات الشخصية -->
+      <div class="card">
+        <h3>🔹 المعلومات الشخصية</h3>
+        <div class="grid">
+          <div class="field"><label>الاسم</label><input type="text" id="name_first"></div>
+          <div class="field"><label>اسم الأب</label><input type="text" id="name_father"></div>
+          <div class="field"><label>اسم الجد</label><input type="text" id="name_grandfather"></div>
+          <div class="field"><label>العمر</label><input type="number" id="age" min="0"></div>
+          <div class="field">
+            <label>الجنس</label>
+            <div class="radio-row">
+              <label class="radio-item"><input type="radio" name="gender" value="ذكر"> ذكر</label>
+              <label class="radio-item"><input type="radio" name="gender" value="أنثى"> أنثى</label>
+            </div>
+          </div>
+          <div class="field"><label>رقم الهاتف</label><input type="text" id="phone"></div>
+          <div class="field"><label>العنوان</label><input type="text" id="address"></div>
+          <div class="field"><label>المهنة</label><input type="text" id="occupation"></div>
+          <div class="field"><label>رقم الملف</label><input type="text" id="file_number" disabled></div>
+        </div>
+      </div>
+
+      <!-- 2. القياسات الجسمية -->
+      <div class="card">
+        <h3>🔹 القياسات الجسمية</h3>
+        <div class="grid-3">
+          <div class="field"><label>الوزن (كغم)</label><input type="number" step="0.1" id="weight"></div>
+          <div class="field"><label>الطول (متر)</label><input type="number" step="0.01" id="height" placeholder="1.70"></div>
+          <div class="field"><label>محيط الخصر (سم)</label><input type="number" step="0.1" id="waist"></div>
+          <div class="field"><label>محيط الورك (سم)</label><input type="number" step="0.1" id="hip"></div>
+        </div>
+        <div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <span>BMI المحسوب: <b id="bmiOut">-</b></span>
+          <span id="bmiBadge" class="badge gray">-</span>
+          <span>WHR المحسوب: <b id="whrOut">-</b></span>
+          <span id="whrBadge" class="badge gray">-</span>
+        </div>
+      </div>
+
+      <!-- 3. التاريخ الطبي -->
+      <div class="card">
+        <h3>🔹 التاريخ الطبي</h3>
+        <div class="field" style="margin-bottom:12px;">
+          <label>الأمراض</label>
+          <div class="check-group" id="medicalHistoryGroup">
+            <label class="check-item"><input type="checkbox" value="سكري"> سكري</label>
+            <label class="check-item"><input type="checkbox" value="ضغط دم"> ضغط دم</label>
+            <label class="check-item"><input type="checkbox" value="كبد دهني"> كبد دهني</label>
+            <label class="check-item"><input type="checkbox" value="اضطرابات الغدة"> اضطرابات الغدة</label>
+            <label class="check-item" id="pcosItem" style="display:none;"><input type="checkbox" value="تكيس مبايض"> تكيس مبايض</label>
+            <label class="check-item"><input type="checkbox" value="أمراض قلب"> أمراض قلب</label>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>أمراض أخرى</label><input type="text" id="medical_other"></div>
+          <div class="field"><label>عمليات جراحية</label><input type="text" id="surgeries"></div>
+          <div class="field"><label>حساسية غذائية</label><input type="text" id="food_allergy"></div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>مشاكل هضمية</label>
+          <div class="check-group" id="digestiveGroup">
+            <label class="check-item"><input type="checkbox" value="إمساك"> إمساك</label>
+            <label class="check-item"><input type="checkbox" value="انتفاخ"> انتفاخ</label>
+            <label class="check-item"><input type="checkbox" value="قولون عصبي"> قولون عصبي</label>
+            <label class="check-item"><input type="checkbox" value="حرقة"> حرقة</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. الأدوية والمكملات -->
+      <div class="card">
+        <h3>🔹 الأدوية والمكملات</h3>
+        <div class="grid">
+          <div class="field"><label>الأدوية الحالية</label><input type="text" id="current_medications"></div>
+          <div class="field"><label>المكملات</label><input type="text" id="supplements"></div>
+          <div class="field"><label>أخرى (أدوية إنقاص وزن)</label><input type="text" id="weight_loss_meds_other"></div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>أدوية إنقاص الوزن</label>
+          <div class="check-group" id="weightLossMedsGroup">
+            <label class="check-item"><input type="checkbox" value="Ozempic"> Ozempic</label>
+            <label class="check-item"><input type="checkbox" value="Mounjaro"> Mounjaro</label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. نمط الحياة -->
+      <div class="card">
+        <h3>🔹 نمط الحياة</h3>
+        <div class="grid">
+          <div class="field">
+            <label>النشاط البدني (يُحسب تلقائياً حسب أيام الرياضة)</label>
+            <div><span id="activityLevelOut" class="badge green">-</span></div>
+          </div>
+          <div class="field"><label>نوع الرياضة</label><input type="text" id="sport_type"></div>
+          <div class="field"><label>عدد الأيام/أسبوع</label><input type="number" id="sport_days_per_week" min="0" max="7"></div>
+          <div class="field"><label>النوم (ساعات)</label><input type="number" step="0.5" id="sleep_hours"></div>
+          <div class="field">
+            <label>جودة النوم</label>
+            <div class="radio-row" id="sleepQualityGroup">
+              <label class="radio-item"><input type="radio" name="sleep_quality" value="جيدة"> جيدة</label>
+              <label class="radio-item"><input type="radio" name="sleep_quality" value="متوسطة"> متوسطة</label>
+              <label class="radio-item"><input type="radio" name="sleep_quality" value="سيئة"> سيئة</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>التوتر</label>
+            <div class="radio-row" id="stressLevelGroup">
+              <label class="radio-item"><input type="radio" name="stress_level" value="منخفض"> منخفض</label>
+              <label class="radio-item"><input type="radio" name="stress_level" value="متوسط"> متوسط</label>
+              <label class="radio-item"><input type="radio" name="stress_level" value="عالي"> عالي</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. التقييم السريري السريع -->
+      <div class="card">
+        <h3>🔹 التقييم السريري السريع</h3>
+        <div class="grid">
+          <div class="field">
+            <label>الشهية</label>
+            <div class="radio-row" id="appetiteGroup">
+              <label class="radio-item"><input type="radio" name="appetite" value="منخفضة"> منخفضة</label>
+              <label class="radio-item"><input type="radio" name="appetite" value="طبيعية"> طبيعية</label>
+              <label class="radio-item"><input type="radio" name="appetite" value="عالية"> عالية</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>الجوع الليلي</label>
+            <div class="radio-row" id="nightHungerGroup">
+              <label class="radio-item"><input type="radio" name="night_hunger" value="true"> نعم</label>
+              <label class="radio-item"><input type="radio" name="night_hunger" value="false"> لا</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>اشتهاء السكريات</label>
+            <div class="radio-row" id="sugarCravingGroup">
+              <label class="radio-item"><input type="radio" name="sugar_craving" value="true"> نعم</label>
+              <label class="radio-item"><input type="radio" name="sugar_craving" value="false"> لا</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>مقاومة إنسولين</label>
+            <div class="radio-row" id="insulinResistanceGroup">
+              <label class="radio-item"><input type="radio" name="insulin_resistance" value="true"> نعم</label>
+              <label class="radio-item"><input type="radio" name="insulin_resistance" value="false"> لا</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>أعراض هرمونية</label>
+            <div class="radio-row" id="hormonalSymptomsGroup">
+              <label class="radio-item"><input type="radio" name="hormonal_symptoms" value="true"> نعم</label>
+              <label class="radio-item"><input type="radio" name="hormonal_symptoms" value="false"> لا</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. التاريخ الغذائي -->
+      <div class="card">
+        <h3>🔹 التاريخ الغذائي</h3>
+        <div class="grid">
+          <div class="field"><label>عدد الوجبات / يوم</label><input type="number" id="meals_per_day" min="0"></div>
+          <div class="field">
+            <label>سناك</label>
+            <div class="radio-row" id="snackGroup">
+              <label class="radio-item"><input type="radio" name="snack" value="true"> نعم</label>
+              <label class="radio-item"><input type="radio" name="snack" value="false"> لا</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>نوع الأكل</label>
+            <div class="radio-row" id="eatingTypeGroup">
+              <label class="radio-item"><input type="radio" name="eating_type" value="منزلي"> منزلي</label>
+              <label class="radio-item"><input type="radio" name="eating_type" value="مطاعم"> مطاعم</label>
+              <label class="radio-item"><input type="radio" name="eating_type" value="مختلط"> مختلط</label>
+            </div>
+          </div>
+          <div class="field"><label>الأطعمة المفضلة</label><input type="text" id="favorite_foods"></div>
+          <div class="field"><label>الأطعمة غير المرغوبة</label><input type="text" id="disliked_foods"></div>
+          <div class="field"><label>الماء (لتر/يوم)</label><input type="number" step="0.1" id="water_liters"></div>
+          <div class="field"><label>القهوة (أكواب/يوم)</label><input type="number" id="coffee_per_day" min="0"></div>
+          <div class="field">
+            <label>السكريات</label>
+            <div class="radio-row" id="sugarIntakeGroup">
+              <label class="radio-item"><input type="radio" name="sugar_intake" value="منخفض"> منخفض</label>
+              <label class="radio-item"><input type="radio" name="sugar_intake" value="متوسط"> متوسط</label>
+              <label class="radio-item"><input type="radio" name="sugar_intake" value="عالي"> عالي</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 8. الهدف العلاجي -->
+      <div class="card">
+        <h3>🔹 الهدف العلاجي</h3>
+        <div class="grid">
+          <div class="field">
+            <label>الهدف</label>
+            <div class="radio-row" id="goalTypeGroup">
+              <label class="radio-item"><input type="radio" name="goal_type" value="نزول وزن"> نزول وزن</label>
+              <label class="radio-item"><input type="radio" name="goal_type" value="زيادة وزن"> زيادة وزن</label>
+              <label class="radio-item"><input type="radio" name="goal_type" value="تثبيت"> تثبيت</label>
+              <label class="radio-item"><input type="radio" name="goal_type" value="تحسين صحي"> تحسين صحي</label>
+            </div>
+          </div>
+          <div class="field"><label>الوزن الحالي</label><input type="number" step="0.1" id="current_weight"></div>
+          <div class="field"><label>الوزن المستهدف</label><input type="number" step="0.1" id="target_weight"></div>
+          <div class="field">
+            <label>المدة المتوقعة</label>
+            <div style="display:flex; gap:8px;">
+              <select id="goal_duration_unit" style="flex:1;">
+                <option value="يوم">يوم</option>
+                <option value="أسبوع">أسبوع</option>
+                <option value="شهر">شهر</option>
+              </select>
+              <input type="number" min="1" id="goal_duration_value" style="flex:1;" placeholder="العدد">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button type="submit" class="btn">حفظ الاستمارة</button>
+        <a href="dashboard.html" class="btn secondary">إلغاء والعودة</a>
+      </div>
+    </form>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("patient")) { throw new Error("redirect"); }
+document.getElementById("userChip").textContent = Auth.getName();
+const patientId = Auth.getPatientId();
+const msgEl = document.getElementById("msg");
+
+function getCheckedValues(groupId) {
+  return Array.from(document.querySelectorAll(`#${groupId} input:checked`)).map(i => i.value);
+}
+function setCheckedValues(groupId, values) {
+  (values || []).forEach(v => {
+    const el = document.querySelector(`#${groupId} input[value="${CSS.escape(v)}"]`);
+    if (el) el.checked = true;
+  });
+}
+function getRadioValue(name) {
+  const el = document.querySelector(`input[name="${name}"]:checked`);
+  return el ? el.value : "";
+}
+function setRadioValue(name, value) {
+  if (value === null || value === undefined || value === "") return;
+  const el = document.querySelector(`input[name="${name}"][value="${CSS.escape(String(value))}"]`);
+  if (el) el.checked = true;
+}
+
+function updatePcosVisibility() {
+  const pcosItem = document.getElementById("pcosItem");
+  const isFemale = getRadioValue("gender") === "أنثى";
+  pcosItem.style.display = isFemale ? "" : "none";
+  if (!isFemale) {
+    const cb = pcosItem.querySelector("input");
+    if (cb) cb.checked = false;
+  }
+}
+document.querySelectorAll('input[name="gender"]').forEach((el) => {
+  el.addEventListener("change", updatePcosVisibility);
+});
+
+function setGoalDuration(value) {
+  const units = ["يوم", "أسبوع", "شهر"];
+  const str = (value || "").trim();
+  const match = str.match(/^(\d+)\s*(.+)$/);
+  if (match && units.includes(match[2].trim())) {
+    document.getElementById("goal_duration_value").value = match[1];
+    document.getElementById("goal_duration_unit").value = match[2].trim();
+  } else {
+    document.getElementById("goal_duration_value").value = "";
+  }
+}
+function getGoalDuration() {
+  const val = document.getElementById("goal_duration_value").value.trim();
+  const unit = document.getElementById("goal_duration_unit").value;
+  return val ? `${val} ${unit}` : "";
+}
+
+async function load() {
+  try {
+    const profile = await apiFetch(`/api/patients/${patientId}`);
+    document.getElementById("name_first").value = profile.name_first || "";
+    document.getElementById("name_father").value = profile.name_father || "";
+    document.getElementById("name_grandfather").value = profile.name_grandfather || "";
+    document.getElementById("age").value = profile.age || "";
+    document.getElementById("phone").value = profile.phone || "";
+    document.getElementById("address").value = profile.address || "";
+    document.getElementById("occupation").value = profile.occupation || "";
+    document.getElementById("file_number").value = profile.file_number || "";
+    setRadioValue("gender", profile.gender);
+    updatePcosVisibility();
+
+    const a = await apiFetch(`/api/patients/${patientId}/assessment`);
+    document.getElementById("weight").value = a.weight || "";
+    document.getElementById("height").value = a.height || "";
+    document.getElementById("waist").value = a.waist || "";
+    document.getElementById("hip").value = a.hip || "";
+    updateComputed(a.bmi, a.bmi_class, a.whr, a.whr_class, a.activity_level);
+
+    setCheckedValues("medicalHistoryGroup", a.medical_history);
+    updatePcosVisibility();
+    document.getElementById("medical_other").value = a.medical_other || "";
+    document.getElementById("surgeries").value = a.surgeries || "";
+    document.getElementById("food_allergy").value = a.food_allergy || "";
+    setCheckedValues("digestiveGroup", a.digestive_issues);
+
+    document.getElementById("current_medications").value = a.current_medications || "";
+    setCheckedValues("weightLossMedsGroup", a.weight_loss_meds);
+    document.getElementById("weight_loss_meds_other").value = a.weight_loss_meds_other || "";
+    document.getElementById("supplements").value = a.supplements || "";
+
+    document.getElementById("sport_type").value = a.sport_type || "";
+    document.getElementById("sport_days_per_week").value = a.sport_days_per_week || "";
+    document.getElementById("sleep_hours").value = a.sleep_hours || "";
+    setRadioValue("sleep_quality", a.sleep_quality);
+    setRadioValue("stress_level", a.stress_level);
+
+    setRadioValue("appetite", a.appetite);
+    setRadioValue("night_hunger", a.night_hunger);
+    setRadioValue("sugar_craving", a.sugar_craving);
+    setRadioValue("insulin_resistance", a.insulin_resistance);
+    setRadioValue("hormonal_symptoms", a.hormonal_symptoms);
+
+    document.getElementById("meals_per_day").value = a.meals_per_day || "";
+    setRadioValue("snack", a.snack);
+    setRadioValue("eating_type", a.eating_type);
+    document.getElementById("favorite_foods").value = a.favorite_foods || "";
+    document.getElementById("disliked_foods").value = a.disliked_foods || "";
+    document.getElementById("water_liters").value = a.water_liters || "";
+    document.getElementById("coffee_per_day").value = a.coffee_per_day || "";
+    setRadioValue("sugar_intake", a.sugar_intake);
+
+    setRadioValue("goal_type", a.goal_type);
+    document.getElementById("current_weight").value = a.current_weight || a.weight || "";
+    document.getElementById("target_weight").value = a.target_weight || "";
+    setGoalDuration(a.goal_duration);
+  } catch (err) {
+    showMsg(msgEl, err.message, "error");
+  }
+}
+
+function updateComputed(bmi, bmiClass, whr, whrClass, activityLevel) {
+  document.getElementById("bmiOut").textContent = bmi || "-";
+  document.getElementById("whrOut").textContent = whr || "-";
+  const badge = document.getElementById("bmiBadge");
+  badge.textContent = bmiClass || "-";
+  badge.className = "badge " + bmiBadgeClass(bmiClass);
+
+  const whrBadge = document.getElementById("whrBadge");
+  whrBadge.textContent = whrClass || "-";
+  whrBadge.className = "badge " + (whrClass === "طبيعي" ? "green" : whrClass ? "red" : "gray");
+
+  document.getElementById("activityLevelOut").textContent = activityLevel || "-";
+}
+
+document.getElementById("assessForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+
+  try {
+    await apiFetch(`/api/patients/${patientId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name_first: document.getElementById("name_first").value.trim(),
+        name_father: document.getElementById("name_father").value.trim(),
+        name_grandfather: document.getElementById("name_grandfather").value.trim(),
+        age: parseInt(document.getElementById("age").value) || 0,
+        gender: getRadioValue("gender"),
+        phone: document.getElementById("phone").value.trim(),
+        address: document.getElementById("address").value.trim(),
+        occupation: document.getElementById("occupation").value.trim(),
+      }),
+    });
+
+    const payload = {
+      weight: parseFloat(document.getElementById("weight").value) || 0,
+      height: parseFloat(document.getElementById("height").value) || 0,
+      waist: parseFloat(document.getElementById("waist").value) || 0,
+      hip: parseFloat(document.getElementById("hip").value) || 0,
+      medical_history: getCheckedValues("medicalHistoryGroup"),
+      medical_other: document.getElementById("medical_other").value.trim(),
+      surgeries: document.getElementById("surgeries").value.trim(),
+      food_allergy: document.getElementById("food_allergy").value.trim(),
+      digestive_issues: getCheckedValues("digestiveGroup"),
+      current_medications: document.getElementById("current_medications").value.trim(),
+      weight_loss_meds: getCheckedValues("weightLossMedsGroup"),
+      weight_loss_meds_other: document.getElementById("weight_loss_meds_other").value.trim(),
+      supplements: document.getElementById("supplements").value.trim(),
+      sport_type: document.getElementById("sport_type").value.trim(),
+      sport_days_per_week: parseInt(document.getElementById("sport_days_per_week").value) || 0,
+      sleep_hours: parseFloat(document.getElementById("sleep_hours").value) || 0,
+      sleep_quality: getRadioValue("sleep_quality"),
+      stress_level: getRadioValue("stress_level"),
+      appetite: getRadioValue("appetite"),
+      night_hunger: getRadioValue("night_hunger") === "true",
+      sugar_craving: getRadioValue("sugar_craving") === "true",
+      insulin_resistance: getRadioValue("insulin_resistance") === "true",
+      hormonal_symptoms: getRadioValue("hormonal_symptoms") === "true",
+      meals_per_day: parseInt(document.getElementById("meals_per_day").value) || 0,
+      snack: getRadioValue("snack") === "true",
+      eating_type: getRadioValue("eating_type"),
+      favorite_foods: document.getElementById("favorite_foods").value.trim(),
+      disliked_foods: document.getElementById("disliked_foods").value.trim(),
+      water_liters: parseFloat(document.getElementById("water_liters").value) || 0,
+      coffee_per_day: parseInt(document.getElementById("coffee_per_day").value) || 0,
+      sugar_intake: getRadioValue("sugar_intake"),
+      goal_type: getRadioValue("goal_type"),
+      current_weight: parseFloat(document.getElementById("current_weight").value) || 0,
+      target_weight: parseFloat(document.getElementById("target_weight").value) || 0,
+      goal_duration: getGoalDuration(),
+    };
+
+    const result = await apiFetch(`/api/patients/${patientId}/assessment`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+    updateComputed(result.bmi, result.bmi_class, result.whr, result.whr_class, result.activity_level);
+    showMsg(msgEl, "تم حفظ الاستمارة بنجاح ✅", "success");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch (err) {
+    showMsg(msgEl, err.message, "error");
+  }
+});
+
+load();
+</script>
+</body>
+</html>

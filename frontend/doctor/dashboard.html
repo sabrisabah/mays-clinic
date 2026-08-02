@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة الطبيب — عيادة دكتورة ميس</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس"> عيادة دكتورة ميس — واجهة الطبيب</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card"><div class="value" id="statTotal">-</div><div class="label">إجمالي المراجعين</div></div>
+      <div class="stat-card"><div class="value" id="statObese">-</div><div class="label">تصنيف سمنة</div></div>
+      <div class="stat-card"><div class="value" id="statOverweight">-</div><div class="label">زيادة وزن</div></div>
+      <div class="stat-card"><div class="value" id="statNormal">-</div><div class="label">وزن طبيعي</div></div>
+    </div>
+
+    <div class="card">
+      <h2>قائمة المراجعين</h2>
+      <div class="search-row">
+        <input type="text" id="searchBox" placeholder="ابحث بالاسم، رقم الملف، أو الهاتف...">
+        <button class="btn secondary" onclick="load()">بحث</button>
+      </div>
+      <div id="tableWrap"></div>
+      <p style="color:var(--muted); font-size:.85rem; margin-top:10px;">
+        لإضافة مريض جديد، اطلب منه إنشاء حساب "مريض" من صفحة تسجيل الدخول — سيظهر تلقائياً في هذه القائمة.
+      </p>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("doctor")) { throw new Error("redirect"); }
+document.getElementById("userChip").textContent = "د. " + Auth.getName();
+
+async function load() {
+  const search = document.getElementById("searchBox").value.trim();
+  const wrap = document.getElementById("tableWrap");
+  try {
+    const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+    const patients = await apiFetch(`/api/patients${qs}`);
+
+    document.getElementById("statTotal").textContent = patients.length;
+    document.getElementById("statObese").textContent = patients.filter(p => bmiClassOf(p.latest_bmi).startsWith("السمنة")).length;
+    document.getElementById("statOverweight").textContent = patients.filter(p => bmiClassOf(p.latest_bmi) === "زيادة الوزن").length;
+    document.getElementById("statNormal").textContent = patients.filter(p => bmiClassOf(p.latest_bmi) === "وزن طبيعي").length;
+
+    if (!patients.length) {
+      wrap.innerHTML = `<div class="empty-state">لا يوجد مراجعون بعد.</div>`;
+      return;
+    }
+    const rows = patients.map(p => `
+      <tr style="cursor:pointer;" onclick="location.href='patient.html?id=${p.patient_id}'">
+        <td>${p.file_number}</td>
+        <td>${p.full_name}</td>
+        <td>${p.age || "-"} / ${p.gender || "-"}</td>
+        <td>${p.phone || "-"}</td>
+        <td>${p.latest_weight || "-"}</td>
+        <td>${p.latest_bmi ? `<span class="badge ${bmiBadgeClass(bmiClassOf(p.latest_bmi))}">${p.latest_bmi}</span>` : "-"}</td>
+        <td>${fmtDate(p.last_visit)}</td>
+        <td><a class="btn small secondary" href="patient.html?id=${p.patient_id}">فتح الملف</a></td>
+      </tr>`).join("");
+    wrap.innerHTML = `
+      <table>
+        <thead><tr><th>رقم الملف</th><th>الاسم</th><th>العمر/الجنس</th><th>الهاتف</th><th>الوزن</th><th>BMI</th><th>آخر زيارة</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (err) {
+    wrap.innerHTML = `<div class="msg error">${err.message}</div>`;
+  }
+}
+function bmiClassOf(bmi) {
+  if (!bmi) return "";
+  if (bmi < 18.5) return "نقص الوزن";
+  if (bmi < 25) return "وزن طبيعي";
+  if (bmi < 30) return "زيادة الوزن";
+  if (bmi < 35) return "السمنة – الدرجة الأولى";
+  if (bmi < 40) return "السمنة – الدرجة الثانية";
+  return "السمنة – الدرجة الثالثة";
+}
+document.getElementById("searchBox").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+load();
+</script>
+</body>
+</html>

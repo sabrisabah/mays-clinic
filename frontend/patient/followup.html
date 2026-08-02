@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ملف المتابعة — عيادة دكتورة ميس</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس"> عيادة دكتورة ميس</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="tabs-nav">
+      <a href="dashboard.html">الرئيسية</a>
+      <a href="assessment.html">استمارة التقييم</a>
+      <a href="plan.html">الخطة الغذائية</a>
+      <a href="followup.html" class="active">ملف المتابعة</a>
+      <a href="mounjaro.html">متابعة المونجارو</a>
+      <a href="progress.html">متابعة التقدم</a>
+    </div>
+
+    <div id="content"></div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("patient")) { throw new Error("redirect"); }
+document.getElementById("userChip").textContent = Auth.getName();
+const patientId = Auth.getPatientId();
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s || "";
+  return div.innerHTML;
+}
+
+async function load() {
+  const content = document.getElementById("content");
+  try {
+    const f = await apiFetch(`/api/patients/${patientId}/followup`);
+    const labResults = f.lab_results || {};
+    const labEntries = Object.entries(labResults).filter(([, v]) => v !== null && v !== undefined && v !== 0);
+    const treatments = f.treatments || [];
+
+    const hasAnything = f.insulin_resistance_value || labEntries.length || treatments.length || f.followup_interval_value;
+
+    if (!hasAnything) {
+      content.innerHTML = `<div class="card"><div class="empty-state">لم يقم الطبيب بتعبئة ملف المتابعة بعد.</div></div>`;
+      return;
+    }
+
+    const labRows = labEntries.length
+      ? `<table><thead><tr><th>التحليل</th><th>القيمة</th></tr></thead><tbody>
+          ${labEntries.map(([name, val]) => `<tr><td>${escapeHtml(name)}</td><td>${val}</td></tr>`).join("")}
+        </tbody></table>`
+      : `<div class="empty-state">لا توجد نتائج تحاليل مسجلة بعد.</div>`;
+
+    const treatmentBadges = treatments.length
+      ? treatments.map((t) => `<span class="badge green">${escapeHtml(t)}</span>`).join(" ")
+      : `<span class="badge gray">لا يوجد علاج محدد</span>`;
+
+    content.innerHTML = `
+      <div class="card">
+        <h3>🔹 مقاومة الانسولين</h3>
+        <p>${f.insulin_resistance_value ? f.insulin_resistance_value : "لم تُسجَّل قيمة بعد"}</p>
+      </div>
+
+      <div class="card">
+        <h3>🔹 التحاليل</h3>
+        ${labRows}
+      </div>
+
+      <div class="card">
+        <h3>🔹 العلاج أو الوصفة الطبية</h3>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">${treatmentBadges}</div>
+      </div>
+
+      <div class="card">
+        <h3>🔹 موعد المتابعة القادم</h3>
+        <p>${f.followup_interval_value ? `بعد ${f.followup_interval_value} ${f.followup_interval_unit || ""}` : "لم يُحدَّد بعد"}</p>
+        <p style="color:var(--muted); font-size:.8rem;">آخر تحديث: ${fmtDate(f.updated_at)}</p>
+      </div>`;
+  } catch (err) {
+    content.innerHTML = `<div class="msg error">${err.message}</div>`;
+  }
+}
+load();
+</script>
+</body>
+</html>

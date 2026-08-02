@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>عيادة دكتورة ميس للتغذية</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+  html, body { height: 100%; margin: 0; }
+  body {
+    min-height: 100vh;
+    background: radial-gradient(circle at 25% 15%, #5fc2f2 0%, #2f86cc 42%, #123a66 100%);
+    display: flex; align-items: center; justify-content: center;
+    padding: 32px 16px;
+  }
+
+  .neu-page { width: 100%; max-width: 400px; display: flex; flex-direction: column; align-items: center; }
+
+  .neu-brand {
+    display: flex; align-items: center; justify-content: center;
+    background: #ffffff; border-radius: 26px; padding: 14px 28px;
+    margin-bottom: 24px; box-shadow: 0 10px 26px rgba(6,26,52,.35);
+  }
+  .neu-brand img { height: 130px; width: auto; display: block; }
+
+  .neu-card {
+    width: 100%;
+    background: linear-gradient(150deg, #5fc0ee 0%, #2f7fc9 100%);
+    border-radius: 32px;
+    padding: 34px 30px 30px;
+    box-shadow: 22px 22px 44px rgba(6,26,52,.45), -12px -12px 30px rgba(255,255,255,.12);
+  }
+
+  .neu-tabs {
+    display: flex; gap: 6px; background: rgba(6,26,52,.28); border-radius: 999px;
+    padding: 4px; margin-bottom: 22px;
+  }
+  .neu-tabs button {
+    flex: 1; border: none; background: transparent; color: rgba(234,244,255,.75);
+    padding: 9px; border-radius: 999px; font-family: inherit; font-size: .85rem;
+    font-weight: 600; cursor: pointer; transition: background .15s, color .15s;
+  }
+  .neu-tabs button.active { background: #10294d; color: #fff; box-shadow: 0 2px 8px rgba(6,26,52,.4); }
+
+  .neu-avatar {
+    width: 82px; height: 82px; border-radius: 50%; background: #10294d;
+    display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;
+    box-shadow: inset 0 2px 6px rgba(255,255,255,.08), 0 8px 18px rgba(6,26,52,.5);
+  }
+  .neu-avatar svg { width: 38px; height: 38px; color: #eaf4ff; }
+
+  .neu-title {
+    text-align: center; color: #eaf4ff; font-size: 1.05rem; font-weight: 700;
+    letter-spacing: 2px; margin: 0 0 24px;
+  }
+
+  .neu-field { position: relative; margin-bottom: 16px; }
+  .neu-field svg {
+    position: absolute; right: 18px; top: 50%; transform: translateY(-50%);
+    width: 18px; height: 18px; color: rgba(234,244,255,.85); pointer-events: none;
+  }
+  .neu-field input, .neu-field select {
+    width: 100%; border: none; border-radius: 999px; padding: 14px 46px 14px 18px;
+    background: rgba(6,26,52,.22); color: #fff; font-size: .92rem; font-family: inherit;
+    box-shadow: inset 3px 3px 8px rgba(6,26,52,.35), inset -2px -2px 6px rgba(255,255,255,.06);
+    box-sizing: border-box;
+  }
+  .neu-field input::placeholder { color: rgba(234,244,255,.6); }
+  .neu-field input:focus, .neu-field select:focus { outline: none; box-shadow: inset 3px 3px 8px rgba(6,26,52,.45), 0 0 0 2px rgba(255,255,255,.35); }
+  .neu-field select { appearance: none; -webkit-appearance: none; cursor: pointer; }
+  .neu-field select option { color: #10294d; }
+
+  .neu-row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+  .neu-row-3 .neu-field { margin-bottom: 0; }
+  .neu-row-3 input, .neu-row-3 select { padding-right: 14px; font-size: .8rem; }
+  .neu-row-3 svg { display: none; }
+
+  .neu-optrow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: .78rem; }
+  .neu-optrow label { display: flex; align-items: center; gap: 6px; color: rgba(234,244,255,.85); cursor: pointer; }
+  .neu-optrow input[type=checkbox] { accent-color: #10294d; }
+  .neu-optrow a { color: #eaf4ff; text-decoration: none; cursor: pointer; opacity: .9; }
+  .neu-optrow a:hover { text-decoration: underline; }
+
+  .neu-hint { font-size: .72rem; color: rgba(234,244,255,.65); margin: 4px 0 16px; line-height: 1.5; }
+
+  .neu-btn {
+    display: block; width: 100%; border: none; border-radius: 999px; padding: 14px;
+    background: #10294d; color: #fff; font-family: inherit; font-size: .92rem; font-weight: 700;
+    letter-spacing: 1px; cursor: pointer; box-shadow: 0 10px 20px rgba(6,26,52,.4);
+    transition: background .15s, transform .1s;
+  }
+  .neu-btn:hover { background: #163a60; }
+  .neu-btn:active { transform: translateY(1px); }
+
+  .msg {
+    border-radius: 14px; padding: 10px 14px; font-size: .82rem; margin-bottom: 16px;
+    background: rgba(6,26,52,.3); color: #fff; display: none;
+  }
+  .msg.error { background: rgba(120,20,20,.4); }
+  .msg.success { background: rgba(20,90,60,.4); }
+
+  .neu-footnote { text-align: center; color: rgba(234,244,255,.75); font-size: .76rem; margin-top: 20px; line-height: 1.6; max-width: 340px; }
+</style>
+</head>
+<body>
+  <div class="neu-page">
+    <div class="neu-brand">
+      <img src="images/logo.png" alt="شعار عيادة دكتورة ميس">
+    </div>
+
+    <div class="neu-card">
+      <div class="neu-tabs">
+        <button id="tabLogin" class="active" onclick="switchTab('login')">تسجيل الدخول</button>
+        <button id="tabRegister" onclick="switchTab('register')">حساب جديد</button>
+      </div>
+
+      <div class="neu-avatar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.3-3.8 4.3-5.8 7.5-5.8s6.2 2 7.5 5.8"/></svg>
+      </div>
+      <h1 class="neu-title" id="cardTitle">تسجيل الدخول</h1>
+
+      <div id="msg" class="msg" style="display:none;"></div>
+
+      <!-- LOGIN -->
+      <form id="loginForm">
+        <div class="neu-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6.5 3.5c1 2 1.8 3.6 1 4.8-.8 1.2-2 1.4-1.6 2.6.8 2.4 3.3 4.9 5.7 5.7 1.2.4 1.4-.8 2.6-1.6 1.2-.8 2.8 0 4.8 1v2.3c0 1-.8 1.8-1.8 1.7-6.4-.6-12-6.2-12.6-12.6-.1-1 .7-1.8 1.7-1.8h.2Z"/></svg>
+          <input type="text" id="loginIdentifier" required placeholder="رقم الهاتف" autocomplete="username">
+        </div>
+        <div class="neu-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="10.5" width="14" height="9" rx="1.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+          <input type="password" id="loginPassword" required placeholder="كلمة المرور" inputmode="numeric" autocomplete="current-password">
+        </div>
+        <div class="neu-optrow">
+          <label><input type="checkbox" id="rememberMe" checked> تذكرني</label>
+          <a id="forgotPassword">نسيت كلمة المرور؟</a>
+        </div>
+        <p class="neu-hint">الطبيب يسجّل الدخول ببريده الإلكتروني وكلمة المرور الخاصة به في نفس الحقل أعلاه.</p>
+        <button type="submit" class="neu-btn">دخول</button>
+      </form>
+
+      <!-- REGISTER (patients only — doctor accounts are created by clinic admin) -->
+      <form id="registerForm" style="display:none;">
+        <div class="neu-row-3">
+          <div class="neu-field"><input type="text" id="regNameFirst" required placeholder="الاسم"></div>
+          <div class="neu-field"><input type="text" id="regNameFather" required placeholder="اسم الأب"></div>
+          <div class="neu-field"><input type="text" id="regNameGrandfather" placeholder="اسم الجد"></div>
+        </div>
+        <div class="neu-row-3">
+          <div class="neu-field"><input type="number" id="regAge" min="0" max="120" required placeholder="العمر"></div>
+          <div class="neu-field">
+            <select id="regGender" required>
+              <option value="" disabled selected>الجنس</option>
+              <option value="ذكر">ذكر</option>
+              <option value="أنثى">أنثى</option>
+            </select>
+          </div>
+          <div class="neu-field"><input type="date" id="regVisitDate" required></div>
+        </div>
+        <div class="neu-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6.5 3.5c1 2 1.8 3.6 1 4.8-.8 1.2-2 1.4-1.6 2.6.8 2.4 3.3 4.9 5.7 5.7 1.2.4 1.4-.8 2.6-1.6 1.2-.8 2.8 0 4.8 1v2.3c0 1-.8 1.8-1.8 1.7-6.4-.6-12-6.2-12.6-12.6-.1-1 .7-1.8 1.7-1.8h.2Z"/></svg>
+          <input type="text" id="regPhone" required placeholder="رقم الهاتف" autocomplete="username">
+        </div>
+        <div class="neu-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 21s-6.5-5.7-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.3-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.2"/></svg>
+          <input type="text" id="regAddress" placeholder="العنوان (اختياري)">
+        </div>
+        <div class="neu-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3.5" y="6.5" width="17" height="12" rx="2"/><path d="M8.5 6.5V5a1.5 1.5 0 0 1 1.5-1.5h4A1.5 1.5 0 0 1 15.5 5v1.5"/></svg>
+          <input type="text" id="regOccupation" placeholder="المهنة (اختياري)">
+        </div>
+        <div class="neu-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="10.5" width="14" height="9" rx="1.5"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg>
+          <input type="password" id="regPassword" required minlength="4" inputmode="numeric" pattern="[0-9]{4,}" placeholder="كلمة مرور (أرقام، 4 على الأقل)" autocomplete="new-password">
+        </div>
+        <button type="submit" class="neu-btn">إنشاء الحساب</button>
+      </form>
+    </div>
+
+    <p class="neu-footnote">هذه الصفحة لتسجيل المرضى فقط. حسابات الأطباء يُنشئها مسؤول العيادة عبر لوحة الإدارة.</p>
+  </div>
+
+<script src="js/api.js"></script>
+<script>
+if (Auth.isLoggedIn()) {
+  window.location.href = Auth.getRole() === "doctor" ? "doctor/dashboard.html" : "patient/dashboard.html";
+}
+
+const msgEl = document.getElementById("msg");
+
+function switchTab(tab) {
+  const isLogin = tab === "login";
+  document.getElementById("tabLogin").classList.toggle("active", isLogin);
+  document.getElementById("tabRegister").classList.toggle("active", !isLogin);
+  document.getElementById("loginForm").style.display = isLogin ? "block" : "none";
+  document.getElementById("registerForm").style.display = isLogin ? "none" : "block";
+  document.getElementById("cardTitle").textContent = isLogin ? "تسجيل الدخول" : "إنشاء حساب";
+  hideMsg(msgEl);
+}
+
+// Visit date must be today or a future date — never in the past.
+const visitDateInput = document.getElementById("regVisitDate");
+const todayStr = new Date().toISOString().slice(0, 10);
+visitDateInput.min = todayStr;
+visitDateInput.value = todayStr;
+
+// Force numeric-only input for password fields (PIN-style).
+function digitsOnly(e) {
+  e.target.value = e.target.value.replace(/[^0-9]/g, "");
+}
+document.getElementById("regPassword").addEventListener("input", digitsOnly);
+
+document.getElementById("forgotPassword").addEventListener("click", (e) => {
+  e.preventDefault();
+  showMsg(msgEl, "الرجاء التواصل مع إدارة العيادة لإعادة تعيين كلمة المرور.", "success");
+});
+
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  const identifier = document.getElementById("loginIdentifier").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  const remember = document.getElementById("rememberMe").checked;
+  try {
+    const data = await apiFetch("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ identifier, password }),
+    });
+    Auth.save(data, remember);
+    window.location.href = data.role === "doctor" ? "doctor/dashboard.html" : "patient/dashboard.html";
+  } catch (err) {
+    showMsg(msgEl, err.message, "error");
+  }
+});
+
+document.getElementById("registerForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  const payload = {
+    name_first: document.getElementById("regNameFirst").value.trim(),
+    name_father: document.getElementById("regNameFather").value.trim(),
+    name_grandfather: document.getElementById("regNameGrandfather").value.trim(),
+    age: parseInt(document.getElementById("regAge").value, 10),
+    gender: document.getElementById("regGender").value,
+    phone: document.getElementById("regPhone").value.trim(),
+    address: document.getElementById("regAddress").value.trim(),
+    occupation: document.getElementById("regOccupation").value.trim(),
+    visit_date: document.getElementById("regVisitDate").value,
+    password: document.getElementById("regPassword").value,
+  };
+  try {
+    const data = await apiFetch("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    Auth.save(data, true);
+    window.location.href = data.role === "doctor" ? "doctor/dashboard.html" : "patient/dashboard.html";
+  } catch (err) {
+    showMsg(msgEl, err.message, "error");
+  }
+});
+</script>
+</body>
+</html>

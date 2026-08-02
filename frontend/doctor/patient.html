@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ملف المريض — عيادة دكتورة ميس</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس"> عيادة دكتورة ميس — واجهة الطبيب</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <a href="dashboard.html" class="btn secondary small">→ العودة لقائمة المراجعين</a>
+
+    <div class="card" style="margin-top:12px;">
+      <h2 id="patientTitle">جاري التحميل...</h2>
+      <p style="color:var(--muted); margin:0;">رقم الملف: <b id="fileNumber">-</b></p>
+    </div>
+
+    <div id="msg" class="msg" style="display:none;"></div>
+
+    <div class="tabs-nav">
+      <a href="#" class="tab-link active" data-tab="profile">الملف الشخصي</a>
+      <a href="#" class="tab-link" data-tab="assessment">استمارة التقييم</a>
+      <a href="#" class="tab-link" data-tab="plan">الخطة الغذائية</a>
+      <a href="#" class="tab-link" data-tab="followup">ملف المتابعة</a>
+      <a href="#" class="tab-link" data-tab="mounjaro">متابعة المونجارو</a>
+      <a href="#" class="tab-link" data-tab="progress">متابعة التقدم</a>
+      <a href="#" class="tab-link" data-tab="notes">ملاحظات الطبيب</a>
+    </div>
+
+    <!-- PROFILE TAB -->
+    <div class="tab-panel" id="tab-profile">
+      <form id="profileForm" class="card">
+        <h3>🔹 المعلومات الشخصية</h3>
+        <div class="grid">
+          <div class="field"><label>الاسم</label><input type="text" id="name_first"></div>
+          <div class="field"><label>اسم الأب</label><input type="text" id="name_father"></div>
+          <div class="field"><label>اسم الجد</label><input type="text" id="name_grandfather"></div>
+          <div class="field"><label>العمر</label><input type="number" id="age" min="0"></div>
+          <div class="field">
+            <label>الجنس</label>
+            <div class="radio-row">
+              <label class="radio-item"><input type="radio" name="gender" value="ذكر"> ذكر</label>
+              <label class="radio-item"><input type="radio" name="gender" value="أنثى"> أنثى</label>
+            </div>
+          </div>
+          <div class="field"><label>رقم الهاتف</label><input type="text" id="phone"></div>
+          <div class="field"><label>العنوان</label><input type="text" id="address"></div>
+          <div class="field"><label>المهنة</label><input type="text" id="occupation"></div>
+          <div class="field"><label>البريد الإلكتروني</label><input type="text" id="email" disabled></div>
+        </div>
+        <div class="btn-row"><button type="submit" class="btn">حفظ المعلومات الشخصية</button></div>
+      </form>
+    </div>
+
+    <!-- ASSESSMENT TAB -->
+    <div class="tab-panel" id="tab-assessment" style="display:none;">
+      <form id="assessForm">
+        <div class="card">
+          <h3>🔹 القياسات الجسمية</h3>
+          <div class="grid-3">
+            <div class="field"><label>الوزن (كغم)</label><input type="number" step="0.1" id="weight"></div>
+            <div class="field"><label>الطول (متر)</label><input type="number" step="0.01" id="height" placeholder="1.70"></div>
+            <div class="field"><label>محيط الخصر (سم)</label><input type="number" step="0.1" id="waist"></div>
+            <div class="field"><label>محيط الورك (سم)</label><input type="number" step="0.1" id="hip"></div>
+          </div>
+          <div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <span>BMI: <b id="bmiOut">-</b></span>
+            <span id="bmiBadge" class="badge gray">-</span>
+            <span>WHR: <b id="whrOut">-</b></span>
+            <span id="whrBadge" class="badge gray">-</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 التاريخ الطبي</h3>
+          <div class="field" style="margin-bottom:12px;">
+            <label>الأمراض</label>
+            <div class="check-group" id="medicalHistoryGroup">
+              <label class="check-item"><input type="checkbox" value="سكري"> سكري</label>
+              <label class="check-item"><input type="checkbox" value="ضغط دم"> ضغط دم</label>
+              <label class="check-item"><input type="checkbox" value="كبد دهني"> كبد دهني</label>
+              <label class="check-item"><input type="checkbox" value="اضطرابات الغدة"> اضطرابات الغدة</label>
+              <label class="check-item" id="pcosItem" style="display:none;"><input type="checkbox" value="تكيس مبايض"> تكيس مبايض</label>
+              <label class="check-item"><input type="checkbox" value="أمراض قلب"> أمراض قلب</label>
+            </div>
+          </div>
+          <div class="grid">
+            <div class="field"><label>أمراض أخرى</label><input type="text" id="medical_other"></div>
+            <div class="field"><label>عمليات جراحية</label><input type="text" id="surgeries"></div>
+            <div class="field"><label>حساسية غذائية</label><input type="text" id="food_allergy"></div>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label>مشاكل هضمية</label>
+            <div class="check-group" id="digestiveGroup">
+              <label class="check-item"><input type="checkbox" value="إمساك"> إمساك</label>
+              <label class="check-item"><input type="checkbox" value="انتفاخ"> انتفاخ</label>
+              <label class="check-item"><input type="checkbox" value="قولون عصبي"> قولون عصبي</label>
+              <label class="check-item"><input type="checkbox" value="حرقة"> حرقة</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 الأدوية والمكملات</h3>
+          <div class="grid">
+            <div class="field"><label>الأدوية الحالية</label><input type="text" id="current_medications"></div>
+            <div class="field"><label>المكملات</label><input type="text" id="supplements"></div>
+            <div class="field"><label>أخرى (أدوية إنقاص وزن)</label><input type="text" id="weight_loss_meds_other"></div>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label>أدوية إنقاص الوزن</label>
+            <div class="check-group" id="weightLossMedsGroup">
+              <label class="check-item"><input type="checkbox" value="Ozempic"> Ozempic</label>
+              <label class="check-item"><input type="checkbox" value="Mounjaro"> Mounjaro</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 نمط الحياة</h3>
+          <div class="grid">
+            <div class="field">
+              <label>النشاط البدني (يُحسب تلقائياً حسب أيام الرياضة)</label>
+              <div><span id="activityLevelOut" class="badge green">-</span></div>
+            </div>
+            <div class="field"><label>نوع الرياضة</label><input type="text" id="sport_type"></div>
+            <div class="field"><label>عدد الأيام/أسبوع</label><input type="number" id="sport_days_per_week" min="0" max="7"></div>
+            <div class="field"><label>النوم (ساعات)</label><input type="number" step="0.5" id="sleep_hours"></div>
+            <div class="field">
+              <label>جودة النوم</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="sleep_quality" value="جيدة"> جيدة</label>
+              <label class="radio-item"><input type="radio" name="sleep_quality" value="متوسطة"> متوسطة</label>
+              <label class="radio-item"><input type="radio" name="sleep_quality" value="سيئة"> سيئة</label></div>
+            </div>
+            <div class="field">
+              <label>التوتر</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="stress_level" value="منخفض"> منخفض</label>
+              <label class="radio-item"><input type="radio" name="stress_level" value="متوسط"> متوسط</label>
+              <label class="radio-item"><input type="radio" name="stress_level" value="عالي"> عالي</label></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 التقييم السريري السريع</h3>
+          <div class="grid">
+            <div class="field"><label>الشهية</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="appetite" value="منخفضة"> منخفضة</label>
+              <label class="radio-item"><input type="radio" name="appetite" value="طبيعية"> طبيعية</label>
+              <label class="radio-item"><input type="radio" name="appetite" value="عالية"> عالية</label></div>
+            </div>
+            <div class="field"><label>الجوع الليلي</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="night_hunger" value="true"> نعم</label>
+              <label class="radio-item"><input type="radio" name="night_hunger" value="false"> لا</label></div>
+            </div>
+            <div class="field"><label>اشتهاء السكريات</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="sugar_craving" value="true"> نعم</label>
+              <label class="radio-item"><input type="radio" name="sugar_craving" value="false"> لا</label></div>
+            </div>
+            <div class="field"><label>مقاومة إنسولين</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="insulin_resistance" value="true"> نعم</label>
+              <label class="radio-item"><input type="radio" name="insulin_resistance" value="false"> لا</label></div>
+            </div>
+            <div class="field"><label>أعراض هرمونية</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="hormonal_symptoms" value="true"> نعم</label>
+              <label class="radio-item"><input type="radio" name="hormonal_symptoms" value="false"> لا</label></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 التاريخ الغذائي</h3>
+          <div class="grid">
+            <div class="field"><label>عدد الوجبات / يوم</label><input type="number" id="meals_per_day" min="0"></div>
+            <div class="field"><label>سناك</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="snack" value="true"> نعم</label>
+              <label class="radio-item"><input type="radio" name="snack" value="false"> لا</label></div>
+            </div>
+            <div class="field"><label>نوع الأكل</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="eating_type" value="منزلي"> منزلي</label>
+              <label class="radio-item"><input type="radio" name="eating_type" value="مطاعم"> مطاعم</label>
+              <label class="radio-item"><input type="radio" name="eating_type" value="مختلط"> مختلط</label></div>
+            </div>
+            <div class="field"><label>الأطعمة المفضلة</label><input type="text" id="favorite_foods"></div>
+            <div class="field"><label>الأطعمة غير المرغوبة</label><input type="text" id="disliked_foods"></div>
+            <div class="field"><label>الماء (لتر/يوم)</label><input type="number" step="0.1" id="water_liters"></div>
+            <div class="field"><label>القهوة (أكواب/يوم)</label><input type="number" id="coffee_per_day" min="0"></div>
+            <div class="field"><label>السكريات</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="sugar_intake" value="منخفض"> منخفض</label>
+              <label class="radio-item"><input type="radio" name="sugar_intake" value="متوسط"> متوسط</label>
+              <label class="radio-item"><input type="radio" name="sugar_intake" value="عالي"> عالي</label></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 الهدف العلاجي</h3>
+          <div class="grid">
+            <div class="field"><label>الهدف</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="goal_type" value="نزول وزن"> نزول وزن</label>
+              <label class="radio-item"><input type="radio" name="goal_type" value="زيادة وزن"> زيادة وزن</label>
+              <label class="radio-item"><input type="radio" name="goal_type" value="تثبيت"> تثبيت</label>
+              <label class="radio-item"><input type="radio" name="goal_type" value="تحسين صحي"> تحسين صحي</label></div>
+            </div>
+            <div class="field"><label>الوزن الحالي</label><input type="number" step="0.1" id="current_weight"></div>
+            <div class="field"><label>الوزن المستهدف</label><input type="number" step="0.1" id="target_weight"></div>
+            <div class="field">
+              <label>المدة المتوقعة</label>
+              <div style="display:flex; gap:8px;">
+                <select id="goal_duration_unit" style="flex:1;">
+                  <option value="يوم">يوم</option>
+                  <option value="أسبوع">أسبوع</option>
+                  <option value="شهر">شهر</option>
+                </select>
+                <input type="number" min="1" id="goal_duration_value" style="flex:1;" placeholder="العدد">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row"><button type="submit" class="btn">حفظ استمارة التقييم</button></div>
+      </form>
+    </div>
+
+    <!-- PLAN TAB -->
+    <div class="tab-panel" id="tab-plan" style="display:none;">
+      <form id="planForm" class="card">
+        <h3>🔹 الخطة الغذائية (يضعها الطبيب)</h3>
+        <div id="calorieSuggestion" class="badge green" style="display:none; margin-bottom:12px;"></div>
+        <div class="grid-3">
+          <div class="field"><label>السعرات اليومية (kcal)</label><input type="number" id="daily_calories"></div>
+          <div class="field"><label>بروتين %</label><input type="number" id="protein_pct"></div>
+          <div class="field"><label>كاربوهيدرات %</label><input type="number" id="carbs_pct"></div>
+          <div class="field"><label>دهون %</label><input type="number" id="fat_pct"></div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>ملاحظات الخطة</label>
+          <textarea id="plan_notes" placeholder="تفاصيل إضافية عن الخطة، توصيات، وجبات مقترحة..."></textarea>
+        </div>
+        <div class="btn-row"><button type="submit" class="btn">حفظ الخطة الغذائية</button></div>
+      </form>
+    </div>
+
+    <!-- FOLLOW-UP FILE TAB -->
+    <div class="tab-panel" id="tab-followup" style="display:none;">
+      <form id="followupForm">
+        <div class="card">
+          <h3>🔹 مقاومة الانسولين</h3>
+          <div class="grid-3">
+            <div class="field"><label>القيمة (مثال: HOMA-IR)</label><input type="number" step="0.01" id="ir_value"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 التحاليل</h3>
+          <div class="grid-3" id="labResultsGrid"></div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 النظام الغذائي</h3>
+          <div class="grid">
+            <div class="field">
+              <label>نوع النظام</label>
+              <select id="diet_type"></select>
+            </div>
+            <div class="field" id="diet_type_other_field" style="display:none;">
+              <label>حدد النوع</label>
+              <input type="text" id="diet_type_other" placeholder="اكتب نوع النظام">
+            </div>
+            <div class="field"><label>السعرات (kcal) — تُعبّأ تلقائياً من السعرات المقترحة، وقابلة للتعديل</label><input type="number" id="diet_calories"></div>
+          </div>
+          <div class="field" style="margin-top:12px;">
+            <label>تفاصيل النظام</label>
+            <textarea id="diet_details" placeholder="تفاصيل النظام الغذائي..."></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 العلاج أو الوصفة الطبية</h3>
+          <div class="field">
+            <label>اختر واحداً أو أكثر (Ctrl/Cmd + نقر لاختيار أكثر من عنصر)</label>
+            <select id="treatments" multiple size="4" style="min-height:100px;"></select>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 موعد المتابعة القادم</h3>
+          <div class="field">
+            <label>المتابعة بعد</label>
+            <div style="display:flex; gap:8px; max-width:320px;">
+              <input type="number" min="1" id="followup_interval_value" style="flex:1;" placeholder="العدد">
+              <select id="followup_interval_unit" style="flex:1;">
+                <option value="يوم">يوم</option>
+                <option value="أسبوع">أسبوع</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row"><button type="submit" class="btn">حفظ ملف المتابعة</button></div>
+      </form>
+    </div>
+
+    <!-- MOUNJARO DOSE TRACKING TAB -->
+    <div class="tab-panel" id="tab-mounjaro" style="display:none;">
+      <div class="card">
+        <h3>🔹 متابعة جرعات المونجارو الأسبوعية</h3>
+        <div id="mounjaroSummary" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;"></div>
+      </div>
+      <form id="mounjaroForm" class="card">
+        <h3>🔹 إضافة جرعة جديدة</h3>
+        <div class="grid-3">
+          <div class="field"><label>الوزن (كغم)</label><input type="number" step="0.1" id="mj_weight" required></div>
+          <div class="field">
+            <label>الجرعة</label>
+            <select id="mj_dose" required>
+              <option value="2.5">2.5 ملغم</option>
+              <option value="5">5 ملغم</option>
+              <option value="7.5">7.5 ملغم</option>
+              <option value="10">10 ملغم</option>
+              <option value="12.5">12.5 ملغم</option>
+              <option value="15">15 ملغم</option>
+            </select>
+          </div>
+          <div class="field"><label>ملاحظات</label><input type="text" id="mj_notes"></div>
+        </div>
+        <div class="btn-row"><button type="submit" class="btn">إضافة الجرعة</button></div>
+      </form>
+      <div class="card">
+        <h3>🔹 سجل الجرعات</h3>
+        <div id="mounjaroTableWrap"></div>
+      </div>
+    </div>
+
+    <!-- PROGRESS TAB -->
+    <div class="tab-panel" id="tab-progress" style="display:none;">
+      <form id="progressForm" class="card">
+        <h3>🔹 إضافة زيارة متابعة</h3>
+        <div class="grid-3">
+          <div class="field"><label>الوزن (كغم)</label><input type="number" step="0.1" id="pw_weight" required></div>
+          <div class="field">
+            <label>الالتزام</label>
+            <select id="pw_commitment">
+              <option value="">-</option>
+              <option value="ممتاز">ممتاز</option>
+              <option value="جيد">جيد</option>
+              <option value="متوسط">متوسط</option>
+              <option value="ضعيف">ضعيف</option>
+            </select>
+          </div>
+          <div class="field"><label>ملاحظات</label><input type="text" id="pw_notes"></div>
+        </div>
+        <div class="btn-row"><button type="submit" class="btn">إضافة الزيارة</button></div>
+      </form>
+      <div class="card">
+        <h3>🔹 سجل زيارات المتابعة</h3>
+        <div id="progressTableWrap"></div>
+      </div>
+    </div>
+
+    <!-- NOTES TAB -->
+    <div class="tab-panel" id="tab-notes" style="display:none;">
+      <form id="noteForm" class="card">
+        <h3>🔹 إضافة ملاحظة</h3>
+        <div class="field"><textarea id="noteText" placeholder="اكتب ملاحظتك حول حالة المريض..." required></textarea></div>
+        <div class="btn-row"><button type="submit" class="btn">إضافة الملاحظة</button></div>
+      </form>
+      <div class="card">
+        <h3>🔹 الملاحظات السابقة</h3>
+        <div id="notesWrap"></div>
+      </div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("doctor")) { throw new Error("redirect"); }
+document.getElementById("userChip").textContent = "د. " + Auth.getName();
+
+const params = new URLSearchParams(location.search);
+const patientId = params.get("id");
+const msgEl = document.getElementById("msg");
+if (!patientId) location.href = "dashboard.html";
+let lastAssessment = null;
+
+// Keep these lists in sync with backend/clinic/utils.py (LAB_TEST_NAMES / TREATMENT_OPTIONS / DIET_TYPES).
+const LAB_TEST_NAMES = [
+  "سكر صائم (FBS)", "سكر تراكمي (HbA1c)", "كوليسترول", "دهون ثلاثية (Triglycerides)", "إنسولين صائم",
+  "TSH", "فيتامين D", "فيتامين B12", "حديد", "فيريتين",
+  "وظائف الكبد ALT", "وظائف الكبد AST", "كرياتينين", "يوريا",
+];
+const TREATMENT_OPTIONS = ["مونجارو", "أوزمبك", "إبر تذويب", "جلسات تكسير الشحوم"];
+// Common diets suited for Iraq — value stored is the clean name; the ⭐
+// rating is shown in the dropdown only, as a recommendation hint for the doctor.
+const DIET_TYPES = [
+  { name: "النظام الغذائي المتوسطي (Mediterranean Diet)", stars: 5 },
+  { name: "النظام منخفض الكربوهيدرات (Low Carb)", stars: 5 },
+  { name: "الصيام المتقطع (Intermittent Fasting)", stars: 4 },
+  { name: "نظام داش (DASH Diet)", stars: 4 },
+  { name: "النظام عالي البروتين (High Protein Diet)", stars: 4 },
+  { name: "النظام النباتي (Vegetarian Diet)", stars: 3 },
+  { name: "النظام النباتي الصرف (Vegan Diet)", stars: 3 },
+  { name: "النظام الكيتوني (Ketogenic Diet - Keto)", stars: 3 },
+  { name: "النظام منخفض الدهون (Low Fat Diet)", stars: 3 },
+  { name: "نظام السعرات الحرارية (Calorie Deficit / Calorie Counting)", stars: 5 },
+  { name: "نظام البحر الأبيض المتوسط منخفض الكربوهيدرات (Mediterranean Low-Carb)", stars: 5 },
+  { name: "نظام المؤشر الجلايسيمي المنخفض (Low Glycemic Index Diet)", stars: 0 },
+];
+const DIET_TYPE_OTHER = "أخرى";
+
+// Build the lab-results number boxes and the treatment multi-select once.
+const labGrid = document.getElementById("labResultsGrid");
+LAB_TEST_NAMES.forEach((name) => {
+  const field = document.createElement("div");
+  field.className = "field";
+  field.innerHTML = `<label>${escapeHtml(name)}</label><input type="number" step="0.01" data-lab="${escapeHtml(name)}">`;
+  labGrid.appendChild(field);
+});
+const treatmentsSelect = document.getElementById("treatments");
+TREATMENT_OPTIONS.forEach((opt) => {
+  const el = document.createElement("option");
+  el.value = opt;
+  el.textContent = opt;
+  treatmentsSelect.appendChild(el);
+});
+const dietTypeSelect = document.getElementById("diet_type");
+const dietTypeOtherField = document.getElementById("diet_type_other_field");
+const blankOpt = document.createElement("option");
+blankOpt.value = "";
+blankOpt.textContent = "-- اختر نوع النظام --";
+dietTypeSelect.appendChild(blankOpt);
+DIET_TYPES.forEach((d) => {
+  const el = document.createElement("option");
+  el.value = d.name;
+  el.textContent = d.name;
+  dietTypeSelect.appendChild(el);
+});
+const otherOpt = document.createElement("option");
+otherOpt.value = DIET_TYPE_OTHER;
+otherOpt.textContent = DIET_TYPE_OTHER;
+dietTypeSelect.appendChild(otherOpt);
+dietTypeSelect.addEventListener("change", () => {
+  dietTypeOtherField.style.display = dietTypeSelect.value === DIET_TYPE_OTHER ? "" : "none";
+});
+
+// tabs
+document.querySelectorAll(".tab-link").forEach(link => {
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    document.querySelectorAll(".tab-link").forEach(l => l.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.style.display = "none");
+    link.classList.add("active");
+    document.getElementById("tab-" + link.dataset.tab).style.display = "block";
+  });
+});
+
+function getCheckedValues(groupId) {
+  return Array.from(document.querySelectorAll(`#${groupId} input:checked`)).map(i => i.value);
+}
+function setCheckedValues(groupId, values) {
+  (values || []).forEach(v => {
+    const el = document.querySelector(`#${groupId} input[value="${CSS.escape(v)}"]`);
+    if (el) el.checked = true;
+  });
+}
+function getRadioValue(name) {
+  const el = document.querySelector(`input[name="${name}"]:checked`);
+  return el ? el.value : "";
+}
+function setRadioValue(name, value) {
+  if (value === null || value === undefined || value === "") return;
+  const el = document.querySelector(`input[name="${name}"][value="${CSS.escape(String(value))}"]`);
+  if (el) el.checked = true;
+}
+function updatePcosVisibility() {
+  const pcosItem = document.getElementById("pcosItem");
+  const isFemale = getRadioValue("gender") === "أنثى";
+  pcosItem.style.display = isFemale ? "" : "none";
+  if (!isFemale) {
+    const cb = pcosItem.querySelector("input");
+    if (cb) cb.checked = false;
+  }
+}
+document.querySelectorAll('input[name="gender"]').forEach((el) => {
+  el.addEventListener("change", updatePcosVisibility);
+});
+function setGoalDuration(value) {
+  const units = ["يوم", "أسبوع", "شهر"];
+  const str = (value || "").trim();
+  const match = str.match(/^(\d+)\s*(.+)$/);
+  if (match && units.includes(match[2].trim())) {
+    document.getElementById("goal_duration_value").value = match[1];
+    document.getElementById("goal_duration_unit").value = match[2].trim();
+  } else {
+    document.getElementById("goal_duration_value").value = "";
+  }
+}
+function getGoalDuration() {
+  const val = document.getElementById("goal_duration_value").value.trim();
+  const unit = document.getElementById("goal_duration_unit").value;
+  return val ? `${val} ${unit}` : "";
+}
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s || "";
+  return div.innerHTML;
+}
+function updateComputed(bmi, bmiClass, whr, whrClass, activityLevel) {
+  document.getElementById("bmiOut").textContent = bmi || "-";
+  document.getElementById("whrOut").textContent = whr || "-";
+  const badge = document.getElementById("bmiBadge");
+  badge.textContent = bmiClass || "-";
+  badge.className = "badge " + bmiBadgeClass(bmiClass);
+
+  const whrBadge = document.getElementById("whrBadge");
+  whrBadge.textContent = whrClass || "-";
+  whrBadge.className = "badge " + (whrClass === "طبيعي" ? "green" : whrClass ? "red" : "gray");
+
+  document.getElementById("activityLevelOut").textContent = activityLevel || "-";
+}
+
+async function loadProfile() {
+  const p = await apiFetch(`/api/patients/${patientId}`);
+  document.getElementById("patientTitle").textContent = p.full_name;
+  document.getElementById("fileNumber").textContent = p.file_number;
+  document.getElementById("name_first").value = p.name_first || "";
+  document.getElementById("name_father").value = p.name_father || "";
+  document.getElementById("name_grandfather").value = p.name_grandfather || "";
+  document.getElementById("age").value = p.age || "";
+  document.getElementById("phone").value = p.phone || "";
+  document.getElementById("address").value = p.address || "";
+  document.getElementById("occupation").value = p.occupation || "";
+  document.getElementById("email").value = p.email || "";
+  setRadioValue("gender", p.gender);
+  updatePcosVisibility();
+}
+
+async function loadAssessment() {
+  const a = await apiFetch(`/api/patients/${patientId}/assessment`);
+  document.getElementById("weight").value = a.weight || "";
+  document.getElementById("height").value = a.height || "";
+  document.getElementById("waist").value = a.waist || "";
+  document.getElementById("hip").value = a.hip || "";
+  updateComputed(a.bmi, a.bmi_class, a.whr, a.whr_class, a.activity_level);
+  setCheckedValues("medicalHistoryGroup", a.medical_history);
+  updatePcosVisibility();
+  document.getElementById("medical_other").value = a.medical_other || "";
+  document.getElementById("surgeries").value = a.surgeries || "";
+  document.getElementById("food_allergy").value = a.food_allergy || "";
+  setCheckedValues("digestiveGroup", a.digestive_issues);
+  document.getElementById("current_medications").value = a.current_medications || "";
+  setCheckedValues("weightLossMedsGroup", a.weight_loss_meds);
+  document.getElementById("weight_loss_meds_other").value = a.weight_loss_meds_other || "";
+  document.getElementById("supplements").value = a.supplements || "";
+  document.getElementById("sport_type").value = a.sport_type || "";
+  document.getElementById("sport_days_per_week").value = a.sport_days_per_week || "";
+  document.getElementById("sleep_hours").value = a.sleep_hours || "";
+  setRadioValue("sleep_quality", a.sleep_quality);
+  setRadioValue("stress_level", a.stress_level);
+  setRadioValue("appetite", a.appetite);
+  setRadioValue("night_hunger", a.night_hunger);
+  setRadioValue("sugar_craving", a.sugar_craving);
+  setRadioValue("insulin_resistance", a.insulin_resistance);
+  setRadioValue("hormonal_symptoms", a.hormonal_symptoms);
+  document.getElementById("meals_per_day").value = a.meals_per_day || "";
+  setRadioValue("snack", a.snack);
+  setRadioValue("eating_type", a.eating_type);
+  document.getElementById("favorite_foods").value = a.favorite_foods || "";
+  document.getElementById("disliked_foods").value = a.disliked_foods || "";
+  document.getElementById("water_liters").value = a.water_liters || "";
+  document.getElementById("coffee_per_day").value = a.coffee_per_day || "";
+  setRadioValue("sugar_intake", a.sugar_intake);
+  setRadioValue("goal_type", a.goal_type);
+  document.getElementById("current_weight").value = a.current_weight || a.weight || "";
+  document.getElementById("target_weight").value = a.target_weight || "";
+  setGoalDuration(a.goal_duration);
+  lastAssessment = a;
+}
+
+async function loadPlan() {
+  const plan = await apiFetch(`/api/patients/${patientId}/plan`);
+  document.getElementById("daily_calories").value = plan.daily_calories || "";
+  document.getElementById("protein_pct").value = plan.protein_pct || "";
+  document.getElementById("carbs_pct").value = plan.carbs_pct || "";
+  document.getElementById("fat_pct").value = plan.fat_pct || "";
+  document.getElementById("plan_notes").value = plan.plan_notes || "";
+  updateCalorieSuggestion(plan);
+}
+
+function updateCalorieSuggestion(plan) {
+  const box = document.getElementById("calorieSuggestion");
+  const suggested = lastAssessment ? lastAssessment.suggested_calories : 0;
+  const base = lastAssessment ? lastAssessment.base_calories : 0;
+  if (!suggested) {
+    box.style.display = "none";
+    return;
+  }
+  const goalLabels = {
+    "نزول وزن": "نزول وزن (-500 سعرة)",
+    "زيادة وزن": "زيادة وزن (+500 سعرة)",
+    "تثبيت": "تثبيت الوزن",
+    "تحسين صحي": "تحسين صحي",
+  };
+  const goalLabel = goalLabels[lastAssessment.goal_type] || "الحالة الحالية";
+  box.style.display = "inline-block";
+  box.textContent = `🔹 السعرات المقترحة حسب حالة المريض — السعرات الحقيقية ${base} (${goalLabel}): ${suggested} سعرة/يوم`;
+  if (!plan.daily_calories) {
+    document.getElementById("daily_calories").value = suggested;
+  }
+}
+
+async function loadFollowup() {
+  const f = await apiFetch(`/api/patients/${patientId}/followup`);
+  document.getElementById("ir_value").value = f.insulin_resistance_value || "";
+  const labResults = f.lab_results || {};
+  document.querySelectorAll("#labResultsGrid input[data-lab]").forEach((input) => {
+    const v = labResults[input.dataset.lab];
+    input.value = (v === undefined || v === null || v === 0) ? "" : v;
+  });
+  const knownDietNames = DIET_TYPES.map((d) => d.name);
+  if (f.diet_type && !knownDietNames.includes(f.diet_type)) {
+    dietTypeSelect.value = DIET_TYPE_OTHER;
+    dietTypeOtherField.style.display = "";
+    document.getElementById("diet_type_other").value = f.diet_type;
+  } else {
+    dietTypeSelect.value = f.diet_type || "";
+    dietTypeOtherField.style.display = "none";
+    document.getElementById("diet_type_other").value = "";
+  }
+  document.getElementById("diet_details").value = f.diet_details || "";
+  document.getElementById("diet_calories").value = f.diet_calories || (lastAssessment ? lastAssessment.suggested_calories || "" : "");
+  const treatments = f.treatments || [];
+  Array.from(treatmentsSelect.options).forEach((opt) => {
+    opt.selected = treatments.includes(opt.value);
+  });
+  document.getElementById("followup_interval_value").value = f.followup_interval_value || "";
+  document.getElementById("followup_interval_unit").value = f.followup_interval_unit || "يوم";
+}
+
+async function loadMounjaro() {
+  const entries = await apiFetch(`/api/patients/${patientId}/mounjaro`);
+  const summary = document.getElementById("mounjaroSummary");
+  const targetWeight = lastAssessment ? lastAssessment.target_weight : 0;
+  const latest = entries.length ? entries[entries.length - 1] : null;
+  const summaryCards = [];
+  if (latest) {
+    summaryCards.push(`<span class="badge green">آخر وزن مسجّل: ${latest.weight} كغم</span>`);
+    summaryCards.push(`<span class="badge green">آخر جرعة: ${latest.dose_mg} ملغم</span>`);
+  }
+  if (targetWeight) {
+    summaryCards.push(`<span class="badge gray">الوزن المستهدف: ${targetWeight} كغم</span>`);
+    if (latest) {
+      const remaining = Math.max(latest.weight - targetWeight, 0).toFixed(1);
+      summaryCards.push(remaining > 0
+        ? `<span class="badge orange">المتبقي للوصول للهدف: ${remaining} كغم</span>`
+        : `<span class="badge green">تم الوصول للوزن المستهدف 🎉</span>`);
+    }
+  }
+  summary.innerHTML = summaryCards.length ? summaryCards.join("") : `<span class="badge gray">لا توجد بيانات كافية بعد</span>`;
+
+  const wrap = document.getElementById("mounjaroTableWrap");
+  if (!entries.length) {
+    wrap.innerHTML = `<div class="empty-state">لا توجد جرعات مسجلة بعد.</div>`;
+    return;
+  }
+  const rows = entries.slice().reverse().map((e, idx) => {
+    const orderNum = entries.length - idx;
+    return `
+    <tr>
+      <td>${fmtDate(e.date)}</td>
+      <td>الوزن${orderNum}: ${e.weight} كغم</td>
+      <td>الجرعة${orderNum}: ${e.dose_mg} ملغم</td>
+      <td>${escapeHtml(e.notes) || "-"}</td>
+      <td><button class="btn small danger" onclick="deleteMounjaroDose(${e.id})">حذف</button></td>
+    </tr>`;
+  }).join("");
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>التاريخ</th><th>الوزن</th><th>الجرعة</th><th>ملاحظات</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+async function deleteMounjaroDose(entryId) {
+  if (!confirm("حذف هذه الجرعة؟")) return;
+  await apiFetch(`/api/patients/${patientId}/mounjaro/${entryId}`, { method: "DELETE" });
+  loadMounjaro();
+}
+
+async function loadProgress() {
+  const entries = await apiFetch(`/api/patients/${patientId}/progress`);
+  const wrap = document.getElementById("progressTableWrap");
+  if (!entries.length) {
+    wrap.innerHTML = `<div class="empty-state">لا توجد زيارات متابعة مسجلة بعد.</div>`;
+    return;
+  }
+  const rows = entries.slice().reverse().map(e => `
+    <tr>
+      <td>${fmtDate(e.date)}</td>
+      <td>${e.weight}</td>
+      <td>${e.bmi}</td>
+      <td>${e.commitment ? `<span class="badge green">${e.commitment}</span>` : "-"}</td>
+      <td>${escapeHtml(e.notes) || "-"}</td>
+      <td><button class="btn small danger" onclick="deleteProgress(${e.id})">حذف</button></td>
+    </tr>`).join("");
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>التاريخ</th><th>الوزن</th><th>BMI</th><th>الالتزام</th><th>ملاحظات</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+async function deleteProgress(entryId) {
+  if (!confirm("حذف هذه الزيارة؟")) return;
+  await apiFetch(`/api/patients/${patientId}/progress/${entryId}`, { method: "DELETE" });
+  loadProgress();
+}
+
+async function loadNotes() {
+  const notes = await apiFetch(`/api/patients/${patientId}/notes`);
+  const wrap = document.getElementById("notesWrap");
+  if (!notes.length) {
+    wrap.innerHTML = `<div class="empty-state">لا توجد ملاحظات بعد.</div>`;
+    return;
+  }
+  wrap.innerHTML = notes.map(n => `
+    <div class="note-item" id="note-${n.id}">
+      <div class="meta">${fmtDate(n.created_at)}</div>
+      <div class="note-view">
+        <div>${escapeHtml(n.note)}</div>
+        <div class="btn-row" style="margin-top:8px;">
+          <button type="button" class="btn small secondary" onclick="editNote(${n.id})">تعديل</button>
+          <button type="button" class="btn small danger" onclick="deleteNote(${n.id})">حذف</button>
+        </div>
+      </div>
+      <div class="note-edit" style="display:none;">
+        <textarea style="width:100%; min-height:70px; padding:9px 12px; border:2px solid #1a1a1a; border-radius:8px; font-family:inherit; font-size:.92rem; box-sizing:border-box;">${escapeHtml(n.note)}</textarea>
+        <div class="btn-row" style="margin-top:8px;">
+          <button type="button" class="btn small" onclick="saveNote(${n.id})">حفظ</button>
+          <button type="button" class="btn small secondary" onclick="cancelEditNote(${n.id})">إلغاء</button>
+        </div>
+      </div>
+    </div>`).join("");
+}
+
+function editNote(noteId) {
+  const item = document.getElementById(`note-${noteId}`);
+  item.querySelector(".note-view").style.display = "none";
+  item.querySelector(".note-edit").style.display = "block";
+}
+function cancelEditNote(noteId) {
+  const item = document.getElementById(`note-${noteId}`);
+  item.querySelector(".note-view").style.display = "block";
+  item.querySelector(".note-edit").style.display = "none";
+}
+async function saveNote(noteId) {
+  const item = document.getElementById(`note-${noteId}`);
+  const text = item.querySelector(".note-edit textarea").value.trim();
+  if (!text) return;
+  try {
+    await apiFetch(`/api/patients/${patientId}/notes/${noteId}`, {
+      method: "PUT",
+      body: JSON.stringify({ note: text }),
+    });
+    loadNotes();
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+async function deleteNote(noteId) {
+  if (!confirm("حذف هذه الملاحظة؟")) return;
+  try {
+    await apiFetch(`/api/patients/${patientId}/notes/${noteId}`, { method: "DELETE" });
+    loadNotes();
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+document.getElementById("profileForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    const result = await apiFetch(`/api/patients/${patientId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name_first: document.getElementById("name_first").value.trim(),
+        name_father: document.getElementById("name_father").value.trim(),
+        name_grandfather: document.getElementById("name_grandfather").value.trim(),
+        age: parseInt(document.getElementById("age").value) || 0,
+        gender: getRadioValue("gender"),
+        phone: document.getElementById("phone").value.trim(),
+        address: document.getElementById("address").value.trim(),
+        occupation: document.getElementById("occupation").value.trim(),
+      }),
+    });
+    document.getElementById("patientTitle").textContent = result.full_name;
+    showMsg(msgEl, "تم حفظ المعلومات الشخصية ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("assessForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    const payload = {
+      weight: parseFloat(document.getElementById("weight").value) || 0,
+      height: parseFloat(document.getElementById("height").value) || 0,
+      waist: parseFloat(document.getElementById("waist").value) || 0,
+      hip: parseFloat(document.getElementById("hip").value) || 0,
+      medical_history: getCheckedValues("medicalHistoryGroup"),
+      medical_other: document.getElementById("medical_other").value.trim(),
+      surgeries: document.getElementById("surgeries").value.trim(),
+      food_allergy: document.getElementById("food_allergy").value.trim(),
+      digestive_issues: getCheckedValues("digestiveGroup"),
+      current_medications: document.getElementById("current_medications").value.trim(),
+      weight_loss_meds: getCheckedValues("weightLossMedsGroup"),
+      weight_loss_meds_other: document.getElementById("weight_loss_meds_other").value.trim(),
+      supplements: document.getElementById("supplements").value.trim(),
+      sport_type: document.getElementById("sport_type").value.trim(),
+      sport_days_per_week: parseInt(document.getElementById("sport_days_per_week").value) || 0,
+      sleep_hours: parseFloat(document.getElementById("sleep_hours").value) || 0,
+      sleep_quality: getRadioValue("sleep_quality"),
+      stress_level: getRadioValue("stress_level"),
+      appetite: getRadioValue("appetite"),
+      night_hunger: getRadioValue("night_hunger") === "true",
+      sugar_craving: getRadioValue("sugar_craving") === "true",
+      insulin_resistance: getRadioValue("insulin_resistance") === "true",
+      hormonal_symptoms: getRadioValue("hormonal_symptoms") === "true",
+      meals_per_day: parseInt(document.getElementById("meals_per_day").value) || 0,
+      snack: getRadioValue("snack") === "true",
+      eating_type: getRadioValue("eating_type"),
+      favorite_foods: document.getElementById("favorite_foods").value.trim(),
+      disliked_foods: document.getElementById("disliked_foods").value.trim(),
+      water_liters: parseFloat(document.getElementById("water_liters").value) || 0,
+      coffee_per_day: parseInt(document.getElementById("coffee_per_day").value) || 0,
+      sugar_intake: getRadioValue("sugar_intake"),
+      goal_type: getRadioValue("goal_type"),
+      current_weight: parseFloat(document.getElementById("current_weight").value) || 0,
+      target_weight: parseFloat(document.getElementById("target_weight").value) || 0,
+      goal_duration: getGoalDuration(),
+    };
+    const result = await apiFetch(`/api/patients/${patientId}/assessment`, { method: "PUT", body: JSON.stringify(payload) });
+    updateComputed(result.bmi, result.bmi_class, result.whr, result.whr_class, result.activity_level);
+    lastAssessment = result;
+    showMsg(msgEl, "تم حفظ استمارة التقييم ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("planForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    await apiFetch(`/api/patients/${patientId}/plan`, {
+      method: "PUT",
+      body: JSON.stringify({
+        daily_calories: parseFloat(document.getElementById("daily_calories").value) || 0,
+        protein_pct: parseFloat(document.getElementById("protein_pct").value) || 0,
+        carbs_pct: parseFloat(document.getElementById("carbs_pct").value) || 0,
+        fat_pct: parseFloat(document.getElementById("fat_pct").value) || 0,
+        plan_notes: document.getElementById("plan_notes").value.trim(),
+      }),
+    });
+    showMsg(msgEl, "تم حفظ الخطة الغذائية ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("followupForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    const labResults = {};
+    document.querySelectorAll("#labResultsGrid input[data-lab]").forEach((input) => {
+      const val = input.value.trim();
+      if (val !== "") labResults[input.dataset.lab] = parseFloat(val);
+    });
+    const treatments = Array.from(treatmentsSelect.selectedOptions).map((o) => o.value);
+    await apiFetch(`/api/patients/${patientId}/followup`, {
+      method: "PUT",
+      body: JSON.stringify({
+        insulin_resistance_value: parseFloat(document.getElementById("ir_value").value) || 0,
+        lab_results: labResults,
+        diet_type: dietTypeSelect.value === DIET_TYPE_OTHER
+          ? document.getElementById("diet_type_other").value.trim()
+          : dietTypeSelect.value,
+        diet_details: document.getElementById("diet_details").value.trim(),
+        diet_calories: parseFloat(document.getElementById("diet_calories").value) || 0,
+        treatments: treatments,
+        followup_interval_value: parseInt(document.getElementById("followup_interval_value").value) || 0,
+        followup_interval_unit: document.getElementById("followup_interval_unit").value,
+      }),
+    });
+    showMsg(msgEl, "تم حفظ ملف المتابعة ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("mounjaroForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    await apiFetch(`/api/patients/${patientId}/mounjaro`, {
+      method: "POST",
+      body: JSON.stringify({
+        weight: parseFloat(document.getElementById("mj_weight").value),
+        dose_mg: parseFloat(document.getElementById("mj_dose").value),
+        notes: document.getElementById("mj_notes").value.trim(),
+      }),
+    });
+    document.getElementById("mounjaroForm").reset();
+    loadMounjaro();
+    showMsg(msgEl, "تمت إضافة الجرعة ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("progressForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    await apiFetch(`/api/patients/${patientId}/progress`, {
+      method: "POST",
+      body: JSON.stringify({
+        weight: parseFloat(document.getElementById("pw_weight").value),
+        commitment: document.getElementById("pw_commitment").value,
+        notes: document.getElementById("pw_notes").value.trim(),
+      }),
+    });
+    document.getElementById("progressForm").reset();
+    loadProgress();
+    showMsg(msgEl, "تمت إضافة زيارة المتابعة ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("noteForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    await apiFetch(`/api/patients/${patientId}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ note: document.getElementById("noteText").value.trim() }),
+    });
+    document.getElementById("noteForm").reset();
+    loadNotes();
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+(async function init() {
+  try {
+    await loadProfile();
+    await loadAssessment();
+    await loadPlan();
+    await loadFollowup();
+    await loadMounjaro();
+    await loadProgress();
+    await loadNotes();
+  } catch (err) {
+    showMsg(msgEl, err.message, "error");
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الخطة الغذائية — عيادة دكتورة ميس</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس"> عيادة دكتورة ميس</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="tabs-nav">
+      <a href="dashboard.html">الرئيسية</a>
+      <a href="assessment.html">استمارة التقييم</a>
+      <a href="plan.html" class="active">الخطة الغذائية</a>
+      <a href="followup.html">ملف المتابعة</a>
+      <a href="mounjaro.html">متابعة المونجارو</a>
+      <a href="progress.html">متابعة التقدم</a>
+    </div>
+
+    <div id="content"></div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("patient")) { throw new Error("redirect"); }
+document.getElementById("userChip").textContent = Auth.getName();
+const patientId = Auth.getPatientId();
+
+async function load() {
+  const content = document.getElementById("content");
+  try {
+    const plan = await apiFetch(`/api/patients/${patientId}/plan`);
+    if (!plan.daily_calories && !plan.plan_notes) {
+      content.innerHTML = `<div class="card"><div class="empty-state">لم يقم الطبيب بوضع خطة غذائية بعد. يرجى مراجعة الطبيب بعد إكمال استمارة التقييم.</div></div>`;
+      return;
+    }
+    content.innerHTML = `
+      <div class="card">
+        <h3>🔹 الخطة الغذائية الحالية</h3>
+        <div class="stats-row">
+          <div class="stat-card"><div class="value">${plan.daily_calories || 0}</div><div class="label">سعرة حرارية / يوم</div></div>
+          <div class="stat-card"><div class="value">${plan.protein_pct || 0}%</div><div class="label">بروتين</div></div>
+          <div class="stat-card"><div class="value">${plan.carbs_pct || 0}%</div><div class="label">كاربوهيدرات</div></div>
+          <div class="stat-card"><div class="value">${plan.fat_pct || 0}%</div><div class="label">دهون</div></div>
+        </div>
+        <h3 style="margin-top:20px;">ملاحظات الطبيب حول الخطة</h3>
+        <p style="white-space:pre-wrap; color:var(--text);">${plan.plan_notes ? escapeHtml(plan.plan_notes) : "لا توجد ملاحظات إضافية."}</p>
+        <p style="color:var(--muted); font-size:.8rem;">آخر تحديث: ${fmtDate(plan.updated_at)}</p>
+        <div class="btn-row">
+          <button type="button" class="btn danger" id="deletePlanBtn">حذف الخطة الغذائية</button>
+        </div>
+      </div>`;
+    document.getElementById("deletePlanBtn").addEventListener("click", deletePlan);
+  } catch (err) {
+    content.innerHTML = `<div class="msg error">${err.message}</div>`;
+  }
+}
+async function deletePlan() {
+  if (!confirm("هل أنت متأكد من حذف الخطة الغذائية؟ سيتوجب على الطبيب وضع خطة جديدة.")) return;
+  try {
+    await apiFetch(`/api/patients/${patientId}/plan`, { method: "DELETE" });
+    load();
+  } catch (err) {
+    document.getElementById("content").innerHTML = `<div class="msg error">${err.message}</div>`;
+  }
+}
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s;
+  return div.innerHTML;
+}
+load();
+</script>
+</body>
+</html>

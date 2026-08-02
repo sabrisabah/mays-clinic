@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة المريض — عيادة دكتورة ميس</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس"> عيادة دكتورة ميس</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="tabs-nav">
+      <a href="dashboard.html" class="active">الرئيسية</a>
+      <a href="assessment.html">استمارة التقييم</a>
+      <a href="plan.html">الخطة الغذائية</a>
+      <a href="followup.html">ملف المتابعة</a>
+      <a href="mounjaro.html">متابعة المونجارو</a>
+      <a href="progress.html">متابعة التقدم</a>
+    </div>
+
+    <div class="card">
+      <h2 id="welcomeTitle">أهلاً بك 👋</h2>
+      <p style="color:var(--muted); margin:0;">رقم الملف: <b id="fileNumber">-</b></p>
+    </div>
+
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card"><div class="value" id="statWeight">-</div><div class="label">الوزن الحالي (كغم)</div></div>
+      <div class="stat-card"><div class="value" id="statBmi">-</div><div class="label">مؤشر كتلة الجسم</div></div>
+      <div class="stat-card"><div class="value" id="statTarget">-</div><div class="label">الوزن المستهدف (كغم)</div></div>
+      <div class="stat-card"><div class="value" id="statEntries">-</div><div class="label">عدد زيارات المتابعة</div></div>
+    </div>
+
+    <div class="card">
+      <h3>خطواتك التالية</h3>
+      <p style="color:var(--muted); font-size:.9rem;">
+        إذا كانت هذه أول زيارة لك، الرجاء تعبئة <a class="plain" href="assessment.html">استمارة التقييم الأساسي</a> بدقة
+        ليتمكن الطبيب من وضع خطتك الغذائية المناسبة.
+      </p>
+      <div class="btn-row">
+        <a href="assessment.html" class="btn">تعبئة / تعديل استمارة التقييم</a>
+        <a href="plan.html" class="btn secondary">عرض الخطة الغذائية</a>
+        <a href="progress.html" class="btn secondary">عرض سجل المتابعة</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🔹 ملاحظات الطبيب</h3>
+      <div id="notesWrap"><div class="empty-state">جاري التحميل...</div></div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("patient")) { throw new Error("redirect"); }
+document.getElementById("userChip").textContent = Auth.getName();
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s || "";
+  return div.innerHTML;
+}
+
+async function load() {
+  const patientId = Auth.getPatientId();
+  try {
+    const profile = await apiFetch(`/api/patients/${patientId}`);
+    document.getElementById("welcomeTitle").textContent = `أهلاً بك، ${profile.full_name} 👋`;
+    document.getElementById("fileNumber").textContent = profile.file_number;
+
+    const assessment = await apiFetch(`/api/patients/${patientId}/assessment`);
+    document.getElementById("statWeight").textContent = assessment.weight || "-";
+    document.getElementById("statBmi").textContent = assessment.bmi || "-";
+    document.getElementById("statTarget").textContent = assessment.target_weight || "-";
+
+    const progress = await apiFetch(`/api/patients/${patientId}/progress`);
+    document.getElementById("statEntries").textContent = progress.length;
+
+    const notes = await apiFetch(`/api/patients/${patientId}/notes`);
+    const notesWrap = document.getElementById("notesWrap");
+    if (!notes.length) {
+      notesWrap.innerHTML = `<div class="empty-state">لا توجد ملاحظات من الطبيب بعد.</div>`;
+    } else {
+      notesWrap.innerHTML = notes.map((n) => `
+        <div class="note-item">
+          <div class="meta">${fmtDate(n.created_at)}</div>
+          <div>${escapeHtml(n.note)}</div>
+        </div>`).join("");
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+load();
+</script>
+</body>
+</html>
