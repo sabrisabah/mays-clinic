@@ -1,5 +1,8 @@
-# Root-level pointer so Railway (Railpack) detects this as a Python app
-# when building from the repo root, without needing a manually-configured
-# "Root Directory" service setting. The real dependency list lives in
-# backend/requirements.txt.
--r backend/requirements.txt
+# Root requirements so Railway (Railpack) can install from the repo root.
+# Keep in sync with backend/requirements.txt (used for local backend installs).
+Django==5.2.16
+djangorestframework==3.15.2
+djangorestframework-simplejwt==5.3.1
+django-cors-headers==4.4.0
+gunicorn>=21.2
+whitenoise==6.7.0
