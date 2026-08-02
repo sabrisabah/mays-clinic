@@ -1,0 +1,5 @@
+# Root-level pointer so Railway (Railpack) detects this as a Python app
+# when building from the repo root, without needing a manually-configured
+# "Root Directory" service setting. The real dependency list lives in
+# backend/requirements.txt.
+-r backend/requirements.txt

@@ -1,6 +1,14 @@
 // Dr. Mais Nutrition Clinic — shared API helper
-// Change this if your backend runs on a different host/port.
-const API_BASE = window.MAYS_API_BASE || "http://127.0.0.1:8000";
+// Local dev (frontend opened separately, e.g. via Live Server) talks to the
+// Django dev server on :8000. In production the frontend is served by the
+// same Django/WhiteNoise service as the API, so requests stay same-origin
+// (empty base = relative "/api/..." calls, no CORS needed).
+// Override by setting window.MAYS_API_BASE before this script loads.
+const API_BASE = window.MAYS_API_BASE || (
+  ["127.0.0.1", "localhost"].includes(window.location.hostname)
+    ? "http://127.0.0.1:8000"
+    : ""
+);
 
 const AUTH_KEYS = ["mays_token", "mays_role", "mays_name", "mays_patient_id"];
 

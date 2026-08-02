@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 backend/mays_clinic.db
 backend/mays_clinic.db-journal
+backend/staticfiles/
 .DS_Store

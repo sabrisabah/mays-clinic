@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = BASE_DIR.parent / "frontend"
 
 SECRET_KEY = os.environ.get(
     "MAYS_SECRET_KEY", "mays-clinic-dev-secret-change-me"
@@ -32,6 +33,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -60,10 +62,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "mays_clinic.wsgi.application"
 
+# MAYS_DB_PATH lets production point the SQLite file at a persistent volume
+# mount (e.g. Railway) so data survives redeploys. Defaults to the project
+# folder for local development, unchanged from before.
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "mays_clinic.db",
+        "NAME": os.environ.get("MAYS_DB_PATH", str(BASE_DIR / "mays_clinic.db")),
     }
 }
 
@@ -82,7 +87,14 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Serve the plain-HTML/JS frontend directly from this same Django service
+# (no separate host/CORS needed): WhiteNoise serves files under FRONTEND_DIR
+# at the site root, e.g. /index.html, /css/style.css, /patient/dashboard.html.
+WHITENOISE_ROOT = FRONTEND_DIR
+WHITENOISE_INDEX_FILE = True
 
 # ---- CORS (frontend runs on a different port) ----
 CORS_ALLOW_ALL_ORIGINS = True
