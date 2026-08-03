@@ -83,6 +83,8 @@
 
   .neu-hint { font-size: .72rem; color: rgba(234,244,255,.65); margin: 4px 0 16px; line-height: 1.5; }
 
+  .neu-mini-label { display: block; font-size: .72rem; color: rgba(234,244,255,.75); margin: -6px 4px 6px; }
+
   .neu-btn {
     display: block; width: 100%; border: none; border-radius: 999px; padding: 14px;
     background: #10294d; color: #fff; font-family: inherit; font-size: .92rem; font-weight: 700;
@@ -146,7 +148,7 @@
           <div class="neu-field"><input type="text" id="regNameFather" required placeholder="اسم الأب"></div>
           <div class="neu-field"><input type="text" id="regNameGrandfather" placeholder="اسم الجد"></div>
         </div>
-        <div class="neu-row-3">
+        <div class="neu-row-3" style="grid-template-columns: 1fr 1fr;">
           <div class="neu-field"><input type="number" id="regAge" min="0" max="120" required placeholder="العمر"></div>
           <div class="neu-field">
             <select id="regGender" required>
@@ -155,7 +157,11 @@
               <option value="أنثى">أنثى</option>
             </select>
           </div>
-          <div class="neu-field"><input type="date" id="regVisitDate" required></div>
+        </div>
+        <label class="neu-mini-label">تاريخ الزيارة</label>
+        <div class="neu-field">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M8 3.5v4M16 3.5v4M4 10h16"/></svg>
+          <input type="date" id="regVisitDate" required>
         </div>
         <div class="neu-field">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6.5 3.5c1 2 1.8 3.6 1 4.8-.8 1.2-2 1.4-1.6 2.6.8 2.4 3.3 4.9 5.7 5.7 1.2.4 1.4-.8 2.6-1.6 1.2-.8 2.8 0 4.8 1v2.3c0 1-.8 1.8-1.8 1.7-6.4-.6-12-6.2-12.6-12.6-.1-1 .7-1.8 1.7-1.8h.2Z"/></svg>
