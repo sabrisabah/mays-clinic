@@ -21,8 +21,6 @@
       <a href="assessment.html">استمارة التقييم</a>
       <a href="plan.html">الخطة الغذائية</a>
       <a href="followup.html" class="active">ملف المتابعة</a>
-      <a href="mounjaro.html">متابعة المونجارو</a>
-      <a href="progress.html">متابعة التقدم</a>
     </div>
 
     <div id="content"></div>
@@ -46,9 +44,12 @@ async function load() {
     const f = await apiFetch(`/api/patients/${patientId}/followup`);
     const labResults = f.lab_results || {};
     const labEntries = Object.entries(labResults).filter(([, v]) => v !== null && v !== undefined && v !== 0);
-    const treatments = f.treatments || [];
+    const injections = f.treatment_injections || [];
+    const medications = f.treatment_medications || "";
+    const fatBurningSessions = !!f.treatment_fat_burning_sessions;
+    const hasTreatment = injections.length || medications || fatBurningSessions;
 
-    const hasAnything = f.insulin_resistance_value || labEntries.length || treatments.length || f.followup_interval_value;
+    const hasAnything = f.insulin_resistance_value || labEntries.length || hasTreatment || f.followup_interval_value;
 
     if (!hasAnything) {
       content.innerHTML = `<div class="card"><div class="empty-state">لم يقم الطبيب بتعبئة ملف المتابعة بعد.</div></div>`;
@@ -61,9 +62,10 @@ async function load() {
         </tbody></table>`
       : `<div class="empty-state">لا توجد نتائج تحاليل مسجلة بعد.</div>`;
 
-    const treatmentBadges = treatments.length
-      ? treatments.map((t) => `<span class="badge green">${escapeHtml(t)}</span>`).join(" ")
-      : `<span class="badge gray">لا يوجد علاج محدد</span>`;
+    const treatmentBadges = [
+      ...injections.map((t) => `<span class="badge green">${escapeHtml(t)}</span>`),
+      fatBurningSessions ? `<span class="badge green">جلسات تكسير الشحم</span>` : "",
+    ].filter(Boolean);
 
     content.innerHTML = `
       <div class="card">
@@ -78,7 +80,12 @@ async function load() {
 
       <div class="card">
         <h3>🔹 العلاج أو الوصفة الطبية</h3>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">${treatmentBadges}</div>
+        <p style="margin:0 0 8px; color:var(--muted); font-size:.85rem;">الإبر</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+          ${treatmentBadges.length ? treatmentBadges.join(" ") : `<span class="badge gray">لا يوجد</span>`}
+        </div>
+        <p style="margin:0 0 8px; color:var(--muted); font-size:.85rem;">الأدوية والمكملات الغذائية</p>
+        <p style="white-space:pre-wrap; color:var(--text); margin:0;">${medications ? escapeHtml(medications) : "لا يوجد"}</p>
       </div>
 
       <div class="card">

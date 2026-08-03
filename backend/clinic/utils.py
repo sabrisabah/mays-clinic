@@ -112,14 +112,19 @@ LAB_TEST_NAMES = [
     "وظائف الكبد AST",
     "كرياتينين",
     "يوريا",
+    "برولاكتين",
+    "تيستوستيرون",
+    "Anti Glia Ab",
+    "H. Pylori",
 ]
 
-# Multi-select treatment/prescription options for the follow-up file.
-TREATMENT_OPTIONS = [
+# Injections group of the prescription (الوصفة الطبية — قسم الإبر).
+# Medications/supplements is a free-text field (no fixed list yet), and
+# "جلسات تكسير الشحم" is a standalone toggle kept separate from both groups.
+TREATMENT_INJECTION_OPTIONS = [
     "مونجارو",
     "أوزمبك",
     "إبر تذويب",
-    "جلسات تكسير الشحوم",
 ]
 
 # Diet type dropdown for the follow-up file — common diets suited for Iraq.

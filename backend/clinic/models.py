@@ -119,6 +119,10 @@ class Assessment(models.Model):
     target_weight = models.FloatField(default=0)
     goal_duration = models.CharField(max_length=50, blank=True, default="")
 
+    # Once the patient submits the form once, it locks — the patient can no
+    # longer edit it themselves; only a doctor can make further changes.
+    is_submitted = models.BooleanField(default=False)
+
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
@@ -157,8 +161,11 @@ class FollowUpRecord(models.Model):
     diet_details = models.TextField(blank=True, default="")
     diet_calories = models.FloatField(default=0)
 
-    # 4/6. العلاج أو الوصفة الطبية — قائمة منسدلة متعددة الاختيار
-    treatments = models.JSONField(default=list, blank=True)
+    # 4/6. العلاج أو الوصفة الطبية — مقسّم إلى: إبر (قائمة ثابتة متعددة
+    # الاختيار)، أدوية ومكملات غذائية (نص حر)، وجلسات تكسير الشحم (منفصلة).
+    treatment_injections = models.JSONField(default=list, blank=True)
+    treatment_medications = models.TextField(blank=True, default="")
+    treatment_fat_burning_sessions = models.BooleanField(default=False)
 
     # 5. المتابعة بعد ___ يوم/أسبوع
     followup_interval_value = models.IntegerField(default=0)
@@ -213,6 +220,24 @@ class MounjaroDose(models.Model):
 
     def __str__(self):
         return f"مونجارو - {self.patient.file_number} - {self.patient.user.full_name} ({self.date:%Y-%m-%d})"
+
+
+class LabTestEntry(models.Model):
+    """Monthly lab-test tracking log — labs are repeated roughly every month,
+    so each clinic visit gets its own dated row (like MounjaroDose/ProgressEntry)
+    instead of a single overwritten snapshot. Doctor-only: not shown to the
+    patient."""
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="lab_test_entries")
+    date = models.DateTimeField(auto_now_add=True)
+    lab_results = models.JSONField(default=dict, blank=True)
+    other_notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        ordering = ["date"]
+
+    def __str__(self):
+        return f"تحاليل - {self.patient.file_number} - {self.patient.user.full_name} ({self.date:%Y-%m-%d})"
 
 
 class DoctorNote(models.Model):

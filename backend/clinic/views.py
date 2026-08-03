@@ -9,7 +9,7 @@ from rest_framework.exceptions import PermissionDenied, NotFound, ValidationErro
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 
-from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose
+from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry
 from .permissions import IsDoctor
 from .utils import (
     compute_bmi,
@@ -213,6 +213,13 @@ class AssessmentView(APIView):
         patient = get_patient_or_403(request, patient_id)
         assessment, _ = Assessment.objects.get_or_create(patient=patient)
 
+        # Once a patient has submitted their assessment once, it locks —
+        # only a doctor can make further edits.
+        if request.user.role == "patient" and assessment.is_submitted:
+            raise PermissionDenied(
+                "تم حفظ الاستمارة مسبقاً ولا يمكن تعديلها إلا من قبل الطبيب. يرجى التواصل مع العيادة لإجراء أي تعديل."
+            )
+
         serializer = sz.AssessmentSerializer(assessment, data=request.data, partial=False)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -233,6 +240,8 @@ class AssessmentView(APIView):
         assessment.whr = whr
         assessment.whr_class = whr_class
         assessment.activity_level = activity_level
+        if request.user.role == "patient":
+            assessment.is_submitted = True
         assessment.save()
 
         return Response(sz.AssessmentSerializer(assessment).data)
@@ -366,6 +375,46 @@ class MounjaroDoseDeleteView(APIView):
             raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
         patient = get_patient_or_403(request, patient_id)
         MounjaroDose.objects.filter(id=entry_id, patient=patient).delete()
+        return Response({"ok": True})
+
+
+# ---------------- LAB TEST TRACKING (monthly, doctor-only) ----------------
+# Labs get repeated roughly every month, so this is a historical log (like
+# ProgressEntry/MounjaroDose) rather than a single overwritten snapshot.
+# Unlike those, this is doctor-only end to end — not shown to the patient.
+
+class LabTestEntryListView(APIView):
+    def get(self, request, patient_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        entries = patient.lab_test_entries.order_by("date")
+        return Response(sz.LabTestEntrySerializer(entries, many=True).data)
+
+    def post(self, request, patient_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+
+        serializer = sz.LabTestEntryCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        entry = LabTestEntry.objects.create(
+            patient=patient,
+            lab_results=data.get("lab_results", {}),
+            other_notes=data.get("other_notes", ""),
+            created_by=request.user,
+        )
+        return Response(sz.LabTestEntrySerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class LabTestEntryDeleteView(APIView):
+    def delete(self, request, patient_id, entry_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        LabTestEntry.objects.filter(id=entry_id, patient=patient).delete()
         return Response({"ok": True})
 
 

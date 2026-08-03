@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote
+from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, LabTestEntry
 
 # Custom login page (silver background) — see templates/clinic/admin_login.html
 admin.site.login_template = "clinic/admin_login.html"
@@ -50,6 +50,12 @@ class NutritionPlanAdmin(admin.ModelAdmin):
 @admin.register(ProgressEntry)
 class ProgressEntryAdmin(admin.ModelAdmin):
     list_display = ["patient", "date", "weight", "bmi", "commitment"]
+    search_fields = ["patient__file_number", "patient__user__full_name"]
+
+
+@admin.register(LabTestEntry)
+class LabTestEntryAdmin(admin.ModelAdmin):
+    list_display = ["patient", "date", "created_by"]
     search_fields = ["patient__file_number", "patient__user__full_name"]
 
 

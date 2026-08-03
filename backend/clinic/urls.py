@@ -17,4 +17,6 @@ urlpatterns = [
     path("patients/<int:patient_id>/notes/<int:note_id>", views.NoteDetailView.as_view()),
     path("patients/<int:patient_id>/mounjaro", views.MounjaroDoseListView.as_view()),
     path("patients/<int:patient_id>/mounjaro/<int:entry_id>", views.MounjaroDoseDeleteView.as_view()),
+    path("patients/<int:patient_id>/lab-tests", views.LabTestEntryListView.as_view()),
+    path("patients/<int:patient_id>/lab-tests/<int:entry_id>", views.LabTestEntryDeleteView.as_view()),
 ]

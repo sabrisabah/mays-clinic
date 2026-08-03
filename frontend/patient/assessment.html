@@ -21,11 +21,12 @@
       <a href="assessment.html" class="active">استمارة التقييم</a>
       <a href="plan.html">الخطة الغذائية</a>
       <a href="followup.html">ملف المتابعة</a>
-      <a href="mounjaro.html">متابعة المونجارو</a>
-      <a href="progress.html">متابعة التقدم</a>
     </div>
 
     <div id="msg" class="msg" style="display:none;"></div>
+    <div id="lockedNotice" class="msg success" style="display:none;">
+      تم حفظ الاستمارة مسبقاً ولا يمكن تعديلها من هنا. لتعديل أي بيانات يرجى التواصل مع الطبيب.
+    </div>
 
     <form id="assessForm">
       <!-- 1. المعلومات الشخصية -->
@@ -235,7 +236,6 @@
               <label class="radio-item"><input type="radio" name="goal_type" value="تحسين صحي"> تحسين صحي</label>
             </div>
           </div>
-          <div class="field"><label>الوزن الحالي</label><input type="number" step="0.1" id="current_weight"></div>
           <div class="field"><label>الوزن المستهدف</label><input type="number" step="0.1" id="target_weight"></div>
           <div class="field">
             <label>المدة المتوقعة</label>
@@ -369,12 +369,22 @@ async function load() {
     setRadioValue("sugar_intake", a.sugar_intake);
 
     setRadioValue("goal_type", a.goal_type);
-    document.getElementById("current_weight").value = a.current_weight || a.weight || "";
     document.getElementById("target_weight").value = a.target_weight || "";
     setGoalDuration(a.goal_duration);
+
+    lockFormIfSubmitted(a.is_submitted);
   } catch (err) {
     showMsg(msgEl, err.message, "error");
   }
+}
+
+function lockFormIfSubmitted(isSubmitted) {
+  const form = document.getElementById("assessForm");
+  document.getElementById("lockedNotice").style.display = isSubmitted ? "block" : "none";
+  form.querySelectorAll("input, select, textarea, button[type=submit]").forEach((el) => {
+    if (el.id === "file_number") return; // always read-only, regardless of lock state
+    el.disabled = !!isSubmitted;
+  });
 }
 
 function updateComputed(bmi, bmiClass, whr, whrClass, activityLevel) {
@@ -458,7 +468,6 @@ document.getElementById("assessForm").addEventListener("submit", async (e) => {
       coffee_per_day: parseInt(document.getElementById("coffee_per_day").value) || 0,
       sugar_intake: getRadioValue("sugar_intake"),
       goal_type: getRadioValue("goal_type"),
-      current_weight: parseFloat(document.getElementById("current_weight").value) || 0,
       target_weight: parseFloat(document.getElementById("target_weight").value) || 0,
       goal_duration: getGoalDuration(),
     };

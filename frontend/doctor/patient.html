@@ -30,6 +30,7 @@
       <a href="#" class="tab-link" data-tab="assessment">استمارة التقييم</a>
       <a href="#" class="tab-link" data-tab="plan">الخطة الغذائية</a>
       <a href="#" class="tab-link" data-tab="followup">ملف المتابعة</a>
+      <a href="#" class="tab-link" data-tab="labtests">متابعة التحاليل</a>
       <a href="#" class="tab-link" data-tab="mounjaro">متابعة المونجارو</a>
       <a href="#" class="tab-link" data-tab="progress">متابعة التقدم</a>
       <a href="#" class="tab-link" data-tab="notes">ملاحظات الطبيب</a>
@@ -285,9 +286,20 @@
 
         <div class="card">
           <h3>🔹 العلاج أو الوصفة الطبية</h3>
+          <div class="field" style="margin-bottom:14px;">
+            <label>الإبر</label>
+            <div class="check-group" id="treatmentInjectionsGroup">
+              <label class="check-item"><input type="checkbox" value="مونجارو"> مونجارو</label>
+              <label class="check-item"><input type="checkbox" value="أوزمبك"> أوزمبك</label>
+              <label class="check-item"><input type="checkbox" value="إبر تذويب"> إبر تذويب</label>
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:14px;">
+            <label>الأدوية والمكملات الغذائية</label>
+            <textarea id="treatment_medications" placeholder="اكتب الأدوية والمكملات الغذائية الموصوفة..."></textarea>
+          </div>
           <div class="field">
-            <label>اختر واحداً أو أكثر (Ctrl/Cmd + نقر لاختيار أكثر من عنصر)</label>
-            <select id="treatments" multiple size="4" style="min-height:100px;"></select>
+            <label class="check-item"><input type="checkbox" id="treatment_fat_burning_sessions"> جلسات تكسير الشحم</label>
           </div>
         </div>
 
@@ -307,6 +319,23 @@
 
         <div class="btn-row"><button type="submit" class="btn">حفظ ملف المتابعة</button></div>
       </form>
+    </div>
+
+    <!-- LAB TEST TRACKING TAB (monthly, doctor-only) -->
+    <div class="tab-panel" id="tab-labtests" style="display:none;">
+      <form id="labTestForm" class="card">
+        <h3>🔹 تسجيل تحاليل جديدة</h3>
+        <div class="grid-3" id="labTestGrid"></div>
+        <div class="field" style="margin-top:12px;">
+          <label>أخرى (ملاحظات حرة)</label>
+          <textarea id="labTestOtherNotes" placeholder="أي تحاليل أو ملاحظات إضافية غير مدرجة أعلاه..."></textarea>
+        </div>
+        <div class="btn-row"><button type="submit" class="btn">حفظ التحاليل</button></div>
+      </form>
+      <div class="card">
+        <h3>🔹 سجل التحاليل الشهرية</h3>
+        <div id="labTestTableWrap"></div>
+      </div>
     </div>
 
     <!-- MOUNJARO DOSE TRACKING TAB -->
@@ -362,6 +391,7 @@
       </form>
       <div class="card">
         <h3>🔹 سجل زيارات المتابعة</h3>
+        <div id="progressNextVisit" style="margin-bottom:14px;"></div>
         <div id="progressTableWrap"></div>
       </div>
     </div>
@@ -390,14 +420,15 @@ const patientId = params.get("id");
 const msgEl = document.getElementById("msg");
 if (!patientId) location.href = "dashboard.html";
 let lastAssessment = null;
+let lastFollowup = null;
 
-// Keep these lists in sync with backend/clinic/utils.py (LAB_TEST_NAMES / TREATMENT_OPTIONS / DIET_TYPES).
+// Keep these lists in sync with backend/clinic/utils.py (LAB_TEST_NAMES / TREATMENT_INJECTION_OPTIONS / DIET_TYPES).
 const LAB_TEST_NAMES = [
   "سكر صائم (FBS)", "سكر تراكمي (HbA1c)", "كوليسترول", "دهون ثلاثية (Triglycerides)", "إنسولين صائم",
   "TSH", "فيتامين D", "فيتامين B12", "حديد", "فيريتين",
   "وظائف الكبد ALT", "وظائف الكبد AST", "كرياتينين", "يوريا",
+  "برولاكتين", "تيستوستيرون", "Anti Glia Ab", "H. Pylori",
 ];
-const TREATMENT_OPTIONS = ["مونجارو", "أوزمبك", "إبر تذويب", "جلسات تكسير الشحوم"];
 // Common diets suited for Iraq — value stored is the clean name; the ⭐
 // rating is shown in the dropdown only, as a recommendation hint for the doctor.
 const DIET_TYPES = [
@@ -424,12 +455,13 @@ LAB_TEST_NAMES.forEach((name) => {
   field.innerHTML = `<label>${escapeHtml(name)}</label><input type="number" step="0.01" data-lab="${escapeHtml(name)}">`;
   labGrid.appendChild(field);
 });
-const treatmentsSelect = document.getElementById("treatments");
-TREATMENT_OPTIONS.forEach((opt) => {
-  const el = document.createElement("option");
-  el.value = opt;
-  el.textContent = opt;
-  treatmentsSelect.appendChild(el);
+// Lab test tracking tab reuses the same LAB_TEST_NAMES list.
+const labTestGrid = document.getElementById("labTestGrid");
+LAB_TEST_NAMES.forEach((name) => {
+  const field = document.createElement("div");
+  field.className = "field";
+  field.innerHTML = `<label>${escapeHtml(name)}</label><input type="number" step="0.01" data-labtest="${escapeHtml(name)}">`;
+  labTestGrid.appendChild(field);
 });
 const dietTypeSelect = document.getElementById("diet_type");
 const dietTypeOtherField = document.getElementById("diet_type_other_field");
@@ -634,6 +666,7 @@ function updateCalorieSuggestion(plan) {
 
 async function loadFollowup() {
   const f = await apiFetch(`/api/patients/${patientId}/followup`);
+  lastFollowup = f;
   document.getElementById("ir_value").value = f.insulin_resistance_value || "";
   const labResults = f.lab_results || {};
   document.querySelectorAll("#labResultsGrid input[data-lab]").forEach((input) => {
@@ -652,12 +685,44 @@ async function loadFollowup() {
   }
   document.getElementById("diet_details").value = f.diet_details || "";
   document.getElementById("diet_calories").value = f.diet_calories || (lastAssessment ? lastAssessment.suggested_calories || "" : "");
-  const treatments = f.treatments || [];
-  Array.from(treatmentsSelect.options).forEach((opt) => {
-    opt.selected = treatments.includes(opt.value);
-  });
+  setCheckedValues("treatmentInjectionsGroup", f.treatment_injections);
+  document.getElementById("treatment_medications").value = f.treatment_medications || "";
+  document.getElementById("treatment_fat_burning_sessions").checked = !!f.treatment_fat_burning_sessions;
   document.getElementById("followup_interval_value").value = f.followup_interval_value || "";
   document.getElementById("followup_interval_unit").value = f.followup_interval_unit || "يوم";
+}
+
+async function loadLabTests() {
+  const entries = await apiFetch(`/api/patients/${patientId}/lab-tests`);
+  const wrap = document.getElementById("labTestTableWrap");
+  if (!entries.length) {
+    wrap.innerHTML = `<div class="empty-state">لا توجد تحاليل مسجلة بعد.</div>`;
+    return;
+  }
+  const rows = entries.slice().reverse().map((e) => {
+    const results = e.lab_results || {};
+    const parts = Object.entries(results)
+      .filter(([, v]) => v !== null && v !== undefined && v !== 0)
+      .map(([name, v]) => `${escapeHtml(name)}: ${v}`);
+    if (e.other_notes) parts.push(`أخرى: ${escapeHtml(e.other_notes)}`);
+    return `
+    <tr>
+      <td>${fmtDate(e.date)}</td>
+      <td>${parts.length ? parts.join(" — ") : "-"}</td>
+      <td><button class="btn small danger" onclick="deleteLabTest(${e.id})">حذف</button></td>
+    </tr>`;
+  }).join("");
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>التاريخ</th><th>النتائج</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+async function deleteLabTest(entryId) {
+  if (!confirm("حذف هذا السجل؟")) return;
+  await apiFetch(`/api/patients/${patientId}/lab-tests/${entryId}`, { method: "DELETE" });
+  loadLabTests();
 }
 
 async function loadMounjaro() {
@@ -710,8 +775,34 @@ async function deleteMounjaroDose(entryId) {
   loadMounjaro();
 }
 
+function computeNextVisitDate(referenceDate, intervalValue, intervalUnit) {
+  if (!intervalValue) return null;
+  const d = new Date(referenceDate);
+  if (intervalUnit === "شهر") d.setMonth(d.getMonth() + intervalValue);
+  else if (intervalUnit === "أسبوع") d.setDate(d.getDate() + intervalValue * 7);
+  else d.setDate(d.getDate() + intervalValue); // يوم
+  return d;
+}
+
+function renderNextVisit(entries) {
+  const box = document.getElementById("progressNextVisit");
+  const intervalValue = lastFollowup ? lastFollowup.followup_interval_value : 0;
+  const intervalUnit = lastFollowup ? lastFollowup.followup_interval_unit : "";
+  if (!intervalValue) {
+    box.innerHTML = `<span class="badge gray">لم يتم تحديد موعد المتابعة القادم بعد (يُحدَّد من تبويب "ملف المتابعة")</span>`;
+    return;
+  }
+  const latestEntryDate = entries.length ? entries[entries.length - 1].date : null;
+  const referenceDate = latestEntryDate && lastFollowup.updated_at
+    ? (new Date(latestEntryDate) > new Date(lastFollowup.updated_at) ? latestEntryDate : lastFollowup.updated_at)
+    : (latestEntryDate || lastFollowup.updated_at || new Date().toISOString());
+  const nextDate = computeNextVisitDate(referenceDate, intervalValue, intervalUnit);
+  box.innerHTML = `<span class="badge orange">🔹 الموعد القادم المتوقع: ${fmtDate(nextDate.toISOString())} (بعد ${intervalValue} ${intervalUnit} من آخر تحديث)</span>`;
+}
+
 async function loadProgress() {
   const entries = await apiFetch(`/api/patients/${patientId}/progress`);
+  renderNextVisit(entries);
   const wrap = document.getElementById("progressTableWrap");
   if (!entries.length) {
     wrap.innerHTML = `<div class="empty-state">لا توجد زيارات متابعة مسجلة بعد.</div>`;
@@ -893,7 +984,6 @@ document.getElementById("followupForm").addEventListener("submit", async (e) => 
       const val = input.value.trim();
       if (val !== "") labResults[input.dataset.lab] = parseFloat(val);
     });
-    const treatments = Array.from(treatmentsSelect.selectedOptions).map((o) => o.value);
     await apiFetch(`/api/patients/${patientId}/followup`, {
       method: "PUT",
       body: JSON.stringify({
@@ -904,12 +994,38 @@ document.getElementById("followupForm").addEventListener("submit", async (e) => 
           : dietTypeSelect.value,
         diet_details: document.getElementById("diet_details").value.trim(),
         diet_calories: parseFloat(document.getElementById("diet_calories").value) || 0,
-        treatments: treatments,
+        treatment_injections: getCheckedValues("treatmentInjectionsGroup"),
+        treatment_medications: document.getElementById("treatment_medications").value.trim(),
+        treatment_fat_burning_sessions: document.getElementById("treatment_fat_burning_sessions").checked,
         followup_interval_value: parseInt(document.getElementById("followup_interval_value").value) || 0,
         followup_interval_unit: document.getElementById("followup_interval_unit").value,
       }),
     });
     showMsg(msgEl, "تم حفظ ملف المتابعة ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("labTestForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    const labResults = {};
+    document.querySelectorAll("#labTestGrid input[data-labtest]").forEach((input) => {
+      const val = input.value.trim();
+      if (val !== "") labResults[input.dataset.labtest] = parseFloat(val);
+    });
+    const otherNotes = document.getElementById("labTestOtherNotes").value.trim();
+    if (!Object.keys(labResults).length && !otherNotes) {
+      showMsg(msgEl, "أدخل قيمة تحليل واحدة على الأقل أو ملاحظة في أخرى", "error");
+      return;
+    }
+    await apiFetch(`/api/patients/${patientId}/lab-tests`, {
+      method: "POST",
+      body: JSON.stringify({ lab_results: labResults, other_notes: otherNotes }),
+    });
+    document.getElementById("labTestForm").reset();
+    loadLabTests();
+    showMsg(msgEl, "تم حفظ التحاليل ✅", "success");
   } catch (err) { showMsg(msgEl, err.message, "error"); }
 });
 
@@ -972,6 +1088,7 @@ document.getElementById("noteForm").addEventListener("submit", async (e) => {
     await loadAssessment();
     await loadPlan();
     await loadFollowup();
+    await loadLabTests();
     await loadMounjaro();
     await loadProgress();
     await loadNotes();

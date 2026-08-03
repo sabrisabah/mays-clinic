@@ -1,6 +1,6 @@
 import datetime
 from rest_framework import serializers
-from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose
+from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry
 from .utils import compute_suggested_calories
 
 
@@ -132,11 +132,11 @@ class AssessmentSerializer(serializers.ModelSerializer):
             "meals_per_day", "snack", "eating_type", "favorite_foods", "disliked_foods",
             "water_liters", "coffee_per_day", "sugar_intake",
             "goal_type", "current_weight", "target_weight", "goal_duration",
-            "base_calories", "suggested_calories", "updated_at",
+            "base_calories", "suggested_calories", "is_submitted", "updated_at",
         ]
         read_only_fields = [
             "id", "patient_id", "visit_date", "bmi", "bmi_class", "whr", "whr_class",
-            "activity_level", "base_calories", "suggested_calories", "updated_at",
+            "activity_level", "base_calories", "suggested_calories", "is_submitted", "updated_at",
         ]
 
 
@@ -158,11 +158,25 @@ class FollowUpRecordSerializer(serializers.ModelSerializer):
             "id", "patient_id",
             "insulin_resistance_value", "lab_results",
             "diet_type", "diet_details", "diet_calories",
-            "treatments",
+            "treatment_injections", "treatment_medications", "treatment_fat_burning_sessions",
             "followup_interval_value", "followup_interval_unit",
             "updated_at",
         ]
         read_only_fields = ["id", "patient_id", "updated_at"]
+
+
+class LabTestEntrySerializer(serializers.ModelSerializer):
+    patient_id = serializers.IntegerField(source="patient.id", read_only=True)
+
+    class Meta:
+        model = LabTestEntry
+        fields = ["id", "patient_id", "date", "lab_results", "other_notes"]
+        read_only_fields = ["id", "patient_id", "date"]
+
+
+class LabTestEntryCreateSerializer(serializers.Serializer):
+    lab_results = serializers.DictField(child=serializers.FloatField(), required=False, default=dict)
+    other_notes = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class ProgressEntrySerializer(serializers.ModelSerializer):
