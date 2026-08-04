@@ -75,11 +75,13 @@ function toTimeInputValue(iso) {
   return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 }
 
-// A visit is "upcoming" for this box as long as it's booked for today or
-// later (any newly-booked appointment shows here right away). Past-dated
-// appointments are excluded since they're stale bookings, not upcoming ones.
+// A visit is "upcoming" for this box only once staff has explicitly booked
+// it (appointment_booked) — this excludes every patient's default
+// registration visit_date, which otherwise would make everyone show up here
+// even without a real follow-up appointment. Booked-for-today-or-later only;
+// past-dated appointments are excluded since they're stale bookings.
 function isUpcoming(p) {
-  if (!p.next_visit_at) return false;
+  if (!p.next_visit_at || !p.appointment_booked) return false;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const visitDay = new Date(p.next_visit_at); visitDay.setHours(0, 0, 0, 0);
   return visitDay.getTime() >= today.getTime();

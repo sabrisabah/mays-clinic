@@ -69,6 +69,7 @@ class PatientListItemSerializer(serializers.Serializer):
     last_visit = serializers.DateTimeField(allow_null=True)
     next_visit_at = serializers.DateTimeField(allow_null=True)
     checked_in = serializers.BooleanField()
+    appointment_booked = serializers.BooleanField()
 
 
 class AppointmentUpdateSerializer(serializers.Serializer):

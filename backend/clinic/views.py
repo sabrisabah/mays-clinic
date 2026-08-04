@@ -152,6 +152,7 @@ class PatientListView(APIView):
                 "last_visit": last_visit,
                 "next_visit_at": assessment.visit_date if assessment else None,
                 "checked_in": assessment.checked_in if assessment else False,
+                "appointment_booked": assessment.appointment_booked if assessment else False,
             })
         return Response(sz.PatientListItemSerializer(results, many=True).data)
 
@@ -322,9 +323,14 @@ class AppointmentView(APIView):
         visit_time = data.get("visit_time") or datetime.min.time()
         assessment.visit_date = timezone.make_aware(datetime.combine(data["visit_date"], visit_time))
         assessment.checked_in = False
-        assessment.save(update_fields=["visit_date", "checked_in"])
+        assessment.appointment_booked = True
+        assessment.save(update_fields=["visit_date", "checked_in", "appointment_booked"])
 
-        return Response({"visit_date": assessment.visit_date, "checked_in": assessment.checked_in})
+        return Response({
+            "visit_date": assessment.visit_date,
+            "checked_in": assessment.checked_in,
+            "appointment_booked": assessment.appointment_booked,
+        })
 
     def post(self, request, patient_id):
         # Mark the patient as arrived — dismisses the "hasn't shown up" alert.

@@ -66,6 +66,12 @@ class Assessment(models.Model):
     # when a doctor/secretary marks the patient as arrived. Powers the
     # front-desk "patient hasn't arrived" red alert.
     checked_in = models.BooleanField(default=False)
+    # True once a doctor/secretary has explicitly (re)booked this patient's
+    # visit_date via the appointment-scheduling endpoint — stays False for
+    # the default visit_date set automatically at registration. Lets the
+    # secretary dashboard's "متابعة المراجعين" box show only patients with a
+    # real follow-up booking, not every patient's original registration date.
+    appointment_booked = models.BooleanField(default=False)
 
     # Anthropometrics
     weight = models.FloatField(default=0)
