@@ -1,8 +1,9 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from import_export import fields, resources
+from import_export import fields, resources, widgets
 from import_export.admin import ImportExportModelAdmin
 from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, LabTestEntry
+from .utils import compute_bmi, compute_whr, compute_whr_class, compute_activity_level, normalize_height_m
 
 # Custom login page (silver background) — see templates/clinic/admin_login.html
 admin.site.login_template = "clinic/admin_login.html"
@@ -77,8 +78,63 @@ class PatientAdmin(admin.ModelAdmin):
     search_fields = ["file_number", "user__full_name", "user__email"]
 
 
+class AssessmentResource(resources.ModelResource):
+    """Bulk import/export of assessment forms (استمارة التقييم) as Excel,
+    from within /admin only.
+
+    - Matched/updated by the patient's رقم الملف (file_number) — the patient
+      must already exist (register them first); this can't create a new
+      patient/file, only fill in or bulk-edit an existing one's assessment.
+    - bmi/bmi_class/whr/whr_class/activity_level are exported for reference
+      but are recomputed automatically on import from
+      weight/height/waist/hip/sport_days_per_week (same formulas the app
+      itself uses) — editing those columns directly in the sheet has no
+      effect, so the data can't drift out of sync with its inputs.
+    - List-type columns (medical_history, digestive_issues, weight_loss_meds)
+      are JSON arrays, e.g. ["سكري", "ضغط دم"] — keep that exact format.
+    """
+    file_number = fields.Field(
+        column_name="file_number", attribute="patient",
+        widget=widgets.ForeignKeyWidget(Patient, "file_number"),
+    )
+    patient_name = fields.Field(column_name="patient_name", attribute="patient__user__full_name", readonly=True)
+    bmi = fields.Field(column_name="bmi", attribute="bmi", readonly=True)
+    bmi_class = fields.Field(column_name="bmi_class", attribute="bmi_class", readonly=True)
+    whr = fields.Field(column_name="whr", attribute="whr", readonly=True)
+    whr_class = fields.Field(column_name="whr_class", attribute="whr_class", readonly=True)
+    activity_level = fields.Field(column_name="activity_level", attribute="activity_level", readonly=True)
+
+    class Meta:
+        model = Assessment
+        import_id_fields = ("file_number",)
+        fields = (
+            "id", "file_number", "patient_name", "visit_date", "checked_in", "is_submitted",
+            "weight", "height", "bmi", "bmi_class", "waist", "hip", "whr", "whr_class",
+            "medical_history", "medical_other", "surgeries", "food_allergy", "digestive_issues",
+            "current_medications", "weight_loss_meds", "weight_loss_meds_other", "supplements",
+            "activity_level", "sport_type", "sport_days_per_week", "sleep_hours", "sleep_quality", "stress_level",
+            "appetite", "night_hunger", "sugar_craving", "insulin_resistance", "hormonal_symptoms",
+            "meals_per_day", "snack", "eating_type", "favorite_foods", "disliked_foods",
+            "water_liters", "coffee_per_day", "sugar_intake",
+            "goal_type", "current_weight", "target_weight", "goal_duration", "updated_at",
+        )
+        export_order = fields
+
+    def import_instance(self, instance, row, **kwargs):
+        super().import_instance(instance, row, **kwargs)
+        # Recompute derived fields the same way AssessmentView.put does, so a
+        # bulk edit of weight/height/waist/hip can't leave stale BMI/WHR text
+        # sitting in the database.
+        instance.height = normalize_height_m(instance.height)
+        instance.bmi, instance.bmi_class = compute_bmi(instance.weight, instance.height)
+        instance.whr = compute_whr(instance.waist, instance.hip)
+        instance.whr_class = compute_whr_class(instance.whr, instance.patient.gender if instance.patient_id else "")
+        instance.activity_level = compute_activity_level(instance.sport_days_per_week)
+
+
 @admin.register(Assessment)
-class AssessmentAdmin(admin.ModelAdmin):
+class AssessmentAdmin(ImportExportModelAdmin, admin.ModelAdmin):
+    resource_class = AssessmentResource
     list_display = ["patient", "goal_type", "bmi", "bmi_class", "updated_at"]
     search_fields = ["patient__file_number", "patient__user__full_name"]
 
