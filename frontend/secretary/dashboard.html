@@ -33,7 +33,7 @@
     <div class="card">
       <h3>🔹 متابعة المراجعين — المواعيد القادمة</h3>
       <p style="color:var(--muted); font-size:.8rem; margin:0 0 10px;">
-        المرضى الذين لديهم موعد محجوز لاحقاً (بعد اليوم)، مرتّبين حسب الأقرب أولاً.
+        كل المرضى الذين لديهم موعد محجوز (اليوم أو لاحقاً)، مرتّبين حسب الأقرب أولاً — يظهر الموعد هنا فوراً بمجرد حجزه.
       </p>
       <div id="upcomingWrap"></div>
     </div>
@@ -75,14 +75,14 @@ function toTimeInputValue(iso) {
   return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 }
 
-// A visit is "upcoming" for this box once its calendar date is strictly
-// after today — i.e. a follow-up booked for a later day, not today's queue
-// (today's/overdue visits are handled by the main table + red alert above).
+// A visit is "upcoming" for this box as long as it's booked for today or
+// later (any newly-booked appointment shows here right away). Past-dated
+// appointments are excluded since they're stale bookings, not upcoming ones.
 function isUpcoming(p) {
   if (!p.next_visit_at) return false;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const visitDay = new Date(p.next_visit_at); visitDay.setHours(0, 0, 0, 0);
-  return visitDay.getTime() > today.getTime();
+  return visitDay.getTime() >= today.getTime();
 }
 
 function renderUpcoming(patients) {
