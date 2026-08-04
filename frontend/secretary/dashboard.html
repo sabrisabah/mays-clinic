@@ -73,6 +73,14 @@ async function load() {
   try {
     const qs = search ? `?search=${encodeURIComponent(search)}` : "";
     const patients = await apiFetch(`/api/patients${qs}`);
+    // Secretary view only: soonest/most-overdue appointment first, so
+    // whoever has the next visit (or is already late) surfaces at the top.
+    // Patients with no scheduled appointment sort to the bottom.
+    patients.sort((a, b) => {
+      const ta = a.next_visit_at ? new Date(a.next_visit_at).getTime() : Infinity;
+      const tb = b.next_visit_at ? new Date(b.next_visit_at).getTime() : Infinity;
+      return ta - tb;
+    });
     patientsCache = patients;
 
     if (!patients.length) {
