@@ -792,16 +792,34 @@ function renderNextVisit(entries) {
   const box = document.getElementById("progressNextVisit");
   const intervalValue = lastFollowup ? lastFollowup.followup_interval_value : 0;
   const intervalUnit = lastFollowup ? lastFollowup.followup_interval_unit : "";
+
+  let estimateHtml;
   if (!intervalValue) {
-    box.innerHTML = `<span class="badge gray">لم يتم تحديد موعد المتابعة القادم بعد (يُحدَّد من تبويب "ملف المتابعة")</span>`;
-    return;
+    estimateHtml = `<span class="badge gray">لم يتم تحديد موعد المتابعة القادم بعد (يُحدَّد من تبويب "ملف المتابعة")</span>`;
+  } else {
+    const latestEntryDate = entries.length ? entries[entries.length - 1].date : null;
+    const referenceDate = latestEntryDate && lastFollowup.updated_at
+      ? (new Date(latestEntryDate) > new Date(lastFollowup.updated_at) ? latestEntryDate : lastFollowup.updated_at)
+      : (latestEntryDate || lastFollowup.updated_at || new Date().toISOString());
+    const nextDate = computeNextVisitDate(referenceDate, intervalValue, intervalUnit);
+    estimateHtml = `<span class="badge orange">🔹 الموعد القادم المتوقع: ${fmtDate(nextDate.toISOString())} (بعد ${intervalValue} ${intervalUnit} من آخر تحديث)</span>`;
   }
-  const latestEntryDate = entries.length ? entries[entries.length - 1].date : null;
-  const referenceDate = latestEntryDate && lastFollowup.updated_at
-    ? (new Date(latestEntryDate) > new Date(lastFollowup.updated_at) ? latestEntryDate : lastFollowup.updated_at)
-    : (latestEntryDate || lastFollowup.updated_at || new Date().toISOString());
-  const nextDate = computeNextVisitDate(referenceDate, intervalValue, intervalUnit);
-  box.innerHTML = `<span class="badge orange">🔹 الموعد القادم المتوقع: ${fmtDate(nextDate.toISOString())} (بعد ${intervalValue} ${intervalUnit} من آخر تحديث)</span>`;
+
+  // The actual booked appointment (exact date + time), set by the secretary
+  // or doctor from the appointment scheduling system — shown here as extra
+  // information alongside the estimate above, not a replacement for it.
+  let bookedHtml = `<span class="badge gray">لا يوجد موعد محجوز فعلياً بعد</span>`;
+  if (lastAssessment && lastAssessment.visit_date) {
+    const d = new Date(lastAssessment.visit_date);
+    const dateStr = d.toLocaleDateString("ar-EG", { year: "numeric", month: "2-digit", day: "2-digit" });
+    const timeStr = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    const statusBadge = lastAssessment.checked_in
+      ? `<span class="badge green">وصل</span>`
+      : `<span class="badge gray">لم يصل بعد</span>`;
+    bookedHtml = `<span class="badge blue">📅 الموعد الفعلي المحجوز: ${dateStr} — ${timeStr}</span> ${statusBadge}`;
+  }
+
+  box.innerHTML = `<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">${estimateHtml}${bookedHtml}</div>`;
 }
 
 async function loadProgress() {

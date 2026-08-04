@@ -141,11 +141,11 @@ class AssessmentSerializer(serializers.ModelSerializer):
             "meals_per_day", "snack", "eating_type", "favorite_foods", "disliked_foods",
             "water_liters", "coffee_per_day", "sugar_intake",
             "goal_type", "current_weight", "target_weight", "goal_duration",
-            "base_calories", "suggested_calories", "is_submitted", "updated_at",
+            "base_calories", "suggested_calories", "is_submitted", "checked_in", "updated_at",
         ]
         read_only_fields = [
             "id", "patient_id", "visit_date", "bmi", "bmi_class", "whr", "whr_class",
-            "activity_level", "base_calories", "suggested_calories", "is_submitted", "updated_at",
+            "activity_level", "base_calories", "suggested_calories", "is_submitted", "checked_in", "updated_at",
         ]
 
 
