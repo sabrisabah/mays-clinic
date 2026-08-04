@@ -45,8 +45,13 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "corsheaders",
+    "import_export",
     "clinic",
 ]
+
+# django-import-export: default export format is xlsx (Excel), matching what
+# clinic staff expect when exporting the user list from /admin.
+IMPORT_EXPORT_USE_TRANSACTIONS = True
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
