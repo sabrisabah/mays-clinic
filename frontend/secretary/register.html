@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تسجيل مريض جديد — عيادة دكتورة ميس</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .grid-3 { margin-bottom: 14px; }
+  .field input[type=time] {
+    padding: 9px 12px; border: 2px solid #1a1a1a; border-radius: 8px;
+    font-size: .92rem; font-family: inherit; background: #fff; color: var(--text);
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس"> عيادة دكتورة ميس — واجهة السكرتيرة</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <a href="dashboard.html" class="btn secondary small">→ العودة للوحة</a>
+
+    <div class="card" style="margin-top:12px;">
+      <h2>تسجيل مريض جديد</h2>
+      <div id="msg" class="msg" style="display:none;"></div>
+      <div id="successBox" class="card" style="display:none; background:#e2f5e9; border-color:#1c7a3d;">
+        <p style="margin:0 0 8px;">تم تسجيل المريض بنجاح. بيانات الدخول الخاصة به:</p>
+        <p style="margin:0;">رقم الهاتف: <b id="successPhone"></b> — كلمة المرور: <b id="successPassword"></b></p>
+        <p style="margin:10px 0 0;">
+          <a class="btn small" id="successOpenFile" href="#">فتح ملف المريض</a>
+          <button class="btn small secondary" onclick="resetForm()">تسجيل مريض آخر</button>
+        </p>
+      </div>
+
+      <form id="registerForm">
+        <div class="grid-3">
+          <div class="field"><label>الاسم</label><input type="text" id="regNameFirst" required></div>
+          <div class="field"><label>اسم الأب</label><input type="text" id="regNameFather" required></div>
+          <div class="field"><label>اسم الجد</label><input type="text" id="regNameGrandfather"></div>
+        </div>
+        <div class="grid-3">
+          <div class="field"><label>العمر</label><input type="number" id="regAge" min="0" max="120" required></div>
+          <div class="field">
+            <label>الجنس</label>
+            <select id="regGender" required>
+              <option value="" disabled selected>اختر</option>
+              <option value="ذكر">ذكر</option>
+              <option value="أنثى">أنثى</option>
+            </select>
+          </div>
+          <div class="field"><label>رقم الهاتف</label><input type="text" id="regPhone" required></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>تاريخ الزيارة</label><input type="date" id="regVisitDate" required></div>
+          <div class="field"><label>وقت الزيارة</label><input type="time" id="regVisitTime"></div>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>العنوان (اختياري)</label><input type="text" id="regAddress"></div>
+          <div class="field"><label>المهنة (اختياري)</label><input type="text" id="regOccupation"></div>
+        </div>
+        <div class="field">
+          <label>كلمة مرور المريض (أرقام، 4 على الأقل)</label>
+          <input type="password" id="regPassword" required minlength="4" inputmode="numeric" pattern="[0-9]{4,}">
+        </div>
+        <button type="submit" class="btn">تسجيل المريض</button>
+      </form>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("secretary")) { throw new Error("redirect"); }
+document.getElementById("userChip").textContent = Auth.getName();
+
+const msgEl = document.getElementById("msg");
+
+const visitDateInput = document.getElementById("regVisitDate");
+const todayStr = new Date().toISOString().slice(0, 10);
+visitDateInput.min = todayStr;
+visitDateInput.value = todayStr;
+
+function digitsOnly(e) {
+  e.target.value = e.target.value.replace(/[^0-9]/g, "");
+}
+document.getElementById("regPassword").addEventListener("input", digitsOnly);
+
+function resetForm() {
+  document.getElementById("registerForm").reset();
+  document.getElementById("registerForm").style.display = "block";
+  document.getElementById("successBox").style.display = "none";
+  visitDateInput.value = todayStr;
+  hideMsg(msgEl);
+}
+
+document.getElementById("registerForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  const phone = document.getElementById("regPhone").value.trim();
+  const password = document.getElementById("regPassword").value;
+  const payload = {
+    name_first: document.getElementById("regNameFirst").value.trim(),
+    name_father: document.getElementById("regNameFather").value.trim(),
+    name_grandfather: document.getElementById("regNameGrandfather").value.trim(),
+    age: parseInt(document.getElementById("regAge").value, 10),
+    gender: document.getElementById("regGender").value,
+    phone,
+    address: document.getElementById("regAddress").value.trim(),
+    occupation: document.getElementById("regOccupation").value.trim(),
+    visit_date: document.getElementById("regVisitDate").value,
+    visit_time: document.getElementById("regVisitTime").value || null,
+    password,
+  };
+  try {
+    // Uses the public registration endpoint but deliberately does NOT call
+    // Auth.save() with the response — that would log the secretary out and
+    // log in as the newly created patient instead.
+    const data = await apiFetch("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    document.getElementById("registerForm").style.display = "none";
+    document.getElementById("successPhone").textContent = phone;
+    document.getElementById("successPassword").textContent = password;
+    document.getElementById("successOpenFile").href = `../doctor/patient.html?id=${data.patient_id}`;
+    document.getElementById("successBox").style.display = "block";
+  } catch (err) {
+    showMsg(msgEl, err.message, "error");
+  }
+});
+</script>
+</body>
+</html>

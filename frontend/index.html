@@ -189,7 +189,7 @@
 <script src="js/api.js"></script>
 <script>
 if (Auth.isLoggedIn()) {
-  window.location.href = Auth.getRole() === "doctor" ? "doctor/dashboard.html" : "patient/dashboard.html";
+  window.location.href = dashboardPathForRole(Auth.getRole());
 }
 
 const msgEl = document.getElementById("msg");
@@ -233,7 +233,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
       body: JSON.stringify({ identifier, password }),
     });
     Auth.save(data, remember);
-    window.location.href = data.role === "doctor" ? "doctor/dashboard.html" : "patient/dashboard.html";
+    window.location.href = dashboardPathForRole(data.role);
   } catch (err) {
     showMsg(msgEl, err.message, "error");
   }
@@ -260,7 +260,7 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
       body: JSON.stringify(payload),
     });
     Auth.save(data, true);
-    window.location.href = data.role === "doctor" ? "doctor/dashboard.html" : "patient/dashboard.html";
+    window.location.href = dashboardPathForRole(data.role);
   } catch (err) {
     showMsg(msgEl, err.message, "error");
   }

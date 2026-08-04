@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 
 from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry
-from .permissions import IsDoctor
+from .permissions import IsDoctor, IsClinicStaff
 from .utils import (
     compute_bmi,
     compute_whr,
@@ -81,7 +81,8 @@ class RegisterView(APIView):
             gender=data["gender"],
             occupation=data.get("occupation", ""),
         )
-        visit_datetime = timezone.make_aware(datetime.combine(data["visit_date"], datetime.min.time()))
+        visit_time = data.get("visit_time") or datetime.min.time()
+        visit_datetime = timezone.make_aware(datetime.combine(data["visit_date"], visit_time))
         Assessment.objects.create(patient=patient, visit_date=visit_datetime)
 
         return Response(issue_token_response(user, patient.id), status=status.HTTP_201_CREATED)
@@ -120,7 +121,7 @@ class MeView(APIView):
 # ---------------- PATIENTS ----------------
 
 class PatientListView(APIView):
-    permission_classes = [IsAuthenticated, IsDoctor]
+    permission_classes = [IsAuthenticated, IsClinicStaff]
 
     def get(self, request):
         search = request.query_params.get("search")
@@ -149,6 +150,8 @@ class PatientListView(APIView):
                 "latest_weight": latest_weight,
                 "latest_bmi": latest_bmi,
                 "last_visit": last_visit,
+                "next_visit_at": assessment.visit_date if assessment else None,
+                "checked_in": assessment.checked_in if assessment else False,
             })
         return Response(sz.PatientListItemSerializer(results, many=True).data)
 
@@ -288,8 +291,8 @@ class FollowUpRecordView(APIView):
         return Response(sz.FollowUpRecordSerializer(record).data)
 
     def put(self, request, patient_id):
-        if request.user.role != "doctor":
-            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح لطاقم العيادة فقط")
         patient = get_patient_or_403(request, patient_id)
         record, _ = FollowUpRecord.objects.get_or_create(patient=patient)
 
@@ -298,6 +301,40 @@ class FollowUpRecordView(APIView):
         record = serializer.save(created_by=request.user)
 
         return Response(sz.FollowUpRecordSerializer(record).data)
+
+
+# ---------------- APPOINTMENT SCHEDULING ----------------
+# Doctor/secretary-only: (re)schedule a patient's next visit date+time, and
+# mark them as checked-in/arrived. Powers the front-desk schedule and the
+# "patient hasn't arrived" red alert on the secretary/doctor dashboards.
+
+class AppointmentView(APIView):
+    def put(self, request, patient_id):
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح لطاقم العيادة فقط")
+        patient = get_patient_or_403(request, patient_id)
+        assessment, _ = Assessment.objects.get_or_create(patient=patient)
+
+        serializer = sz.AppointmentUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        visit_time = data.get("visit_time") or datetime.min.time()
+        assessment.visit_date = timezone.make_aware(datetime.combine(data["visit_date"], visit_time))
+        assessment.checked_in = False
+        assessment.save(update_fields=["visit_date", "checked_in"])
+
+        return Response({"visit_date": assessment.visit_date, "checked_in": assessment.checked_in})
+
+    def post(self, request, patient_id):
+        # Mark the patient as arrived — dismisses the "hasn't shown up" alert.
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح لطاقم العيادة فقط")
+        patient = get_patient_or_403(request, patient_id)
+        assessment, _ = Assessment.objects.get_or_create(patient=patient)
+        assessment.checked_in = True
+        assessment.save(update_fields=["checked_in"])
+        return Response({"visit_date": assessment.visit_date, "checked_in": assessment.checked_in})
 
 
 # ---------------- PROGRESS ----------------

@@ -23,7 +23,7 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
-    ROLE_CHOICES = (("patient", "patient"), ("doctor", "doctor"))
+    ROLE_CHOICES = (("patient", "patient"), ("doctor", "doctor"), ("secretary", "secretary"))
 
     username = None
     email = models.EmailField(unique=True)
@@ -61,6 +61,11 @@ class Assessment(models.Model):
     """Page 1 + dietary/goal sections of page 2 of the clinic form."""
     patient = models.OneToOneField(Patient, on_delete=models.CASCADE, related_name="assessment")
     visit_date = models.DateTimeField(default=timezone.now)
+    # Whether the patient has checked in / arrived for the visit_date above.
+    # Reset to False whenever the appointment is (re)scheduled; set to True
+    # when a doctor/secretary marks the patient as arrived. Powers the
+    # front-desk "patient hasn't arrived" red alert.
+    checked_in = models.BooleanField(default=False)
 
     # Anthropometrics
     weight = models.FloatField(default=0)

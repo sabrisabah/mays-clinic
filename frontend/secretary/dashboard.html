@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة السكرتيرة — عيادة دكتورة ميس</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  tr.row-alert td { background: #fbe4e1; }
+  tr.row-alert:hover td { background: #f7d3ce; }
+  .appt-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .appt-cell input[type=date], .appt-cell input[type=time] {
+    padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: .8rem;
+  }
+  .alert-note { font-size: .74rem; color: var(--danger); font-weight: 700; margin-top: 2px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس"> عيادة دكتورة ميس — واجهة السكرتيرة</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin:0;">قائمة المراجعين والمواعيد</h2>
+      <a href="register.html" class="btn">+ تسجيل مريض جديد</a>
+    </div>
+
+    <div class="card">
+      <div class="search-row">
+        <input type="text" id="searchBox" placeholder="ابحث بالاسم، رقم الملف، أو الهاتف...">
+        <button class="btn secondary" onclick="load()">بحث</button>
+      </div>
+      <p style="color:var(--muted); font-size:.8rem; margin:0 0 10px;">
+        الصفوف باللون الأحمر: مريض لم يصل بعد وموعده خلال ساعة أو أقل (أو فات موعده). اضغط "المريض وصل" لإلغاء التنبيه.
+      </p>
+      <div id="tableWrap"></div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("secretary")) { throw new Error("redirect"); }
+document.getElementById("userChip").textContent = Auth.getName();
+
+let patientsCache = [];
+
+function isAlertActive(p) {
+  if (p.checked_in || !p.next_visit_at) return false;
+  const apptTime = new Date(p.next_visit_at).getTime();
+  const oneHourBefore = apptTime - 60 * 60 * 1000;
+  return Date.now() >= oneHourBefore;
+}
+
+function toDateInputValue(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toISOString().slice(0, 10);
+}
+function toTimeInputValue(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+}
+
+async function load() {
+  const search = document.getElementById("searchBox").value.trim();
+  const wrap = document.getElementById("tableWrap");
+  try {
+    const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+    const patients = await apiFetch(`/api/patients${qs}`);
+    patientsCache = patients;
+
+    if (!patients.length) {
+      wrap.innerHTML = `<div class="empty-state">لا يوجد مراجعون بعد.</div>`;
+      return;
+    }
+
+    const rows = patients.map(p => {
+      const alert = isAlertActive(p);
+      return `
+      <tr class="${alert ? "row-alert" : ""}" data-pid="${p.patient_id}">
+        <td>${p.file_number}</td>
+        <td>${p.full_name}</td>
+        <td>${p.phone || "-"}</td>
+        <td>
+          <div class="appt-cell">
+            <input type="date" class="appt-date" value="${toDateInputValue(p.next_visit_at)}">
+            <input type="time" class="appt-time" value="${toTimeInputValue(p.next_visit_at)}">
+            <button class="btn small secondary" onclick="saveAppointment(${p.patient_id})">حفظ الموعد</button>
+          </div>
+          ${alert ? `<div class="alert-note">⚠ المريض لم يصل بعد</div>` : ""}
+        </td>
+        <td>
+          ${p.checked_in
+            ? `<span class="badge green">وصل</span>`
+            : `<span class="badge gray">لم يصل</span>`}
+        </td>
+        <td>
+          <button class="btn small ${alert ? "" : "secondary"}" onclick="markArrived(${p.patient_id})" ${p.checked_in ? "disabled" : ""}>المريض وصل</button>
+          <a class="btn small secondary" href="../doctor/patient.html?id=${p.patient_id}">فتح الملف</a>
+        </td>
+      </tr>`;
+    }).join("");
+
+    wrap.innerHTML = `
+      <table>
+        <thead><tr><th>رقم الملف</th><th>الاسم</th><th>الهاتف</th><th>الموعد القادم</th><th>الحالة</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (err) {
+    wrap.innerHTML = `<div class="msg error">${err.message}</div>`;
+  }
+}
+
+async function saveAppointment(patientId) {
+  const row = document.querySelector(`tr[data-pid="${patientId}"]`);
+  const dateVal = row.querySelector(".appt-date").value;
+  const timeVal = row.querySelector(".appt-time").value;
+  if (!dateVal) { alert("الرجاء تحديد تاريخ الموعد"); return; }
+  try {
+    await apiFetch(`/api/patients/${patientId}/appointment`, {
+      method: "PUT",
+      body: JSON.stringify({ visit_date: dateVal, visit_time: timeVal || null }),
+    });
+    load();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function markArrived(patientId) {
+  try {
+    await apiFetch(`/api/patients/${patientId}/appointment`, { method: "POST" });
+    load();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+document.getElementById("searchBox").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+load();
+// Refresh periodically so the "hasn't arrived" alert reflects the current time.
+setInterval(load, 60000);
+</script>
+</body>
+</html>

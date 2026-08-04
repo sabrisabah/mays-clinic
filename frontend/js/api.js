@@ -102,14 +102,23 @@ function extractErrorMessage(data) {
   return parts.length ? parts.join(" — ") : "حدث خطأ غير متوقع";
 }
 
-// Redirect helpers used at the top of protected pages
-function requireRole(role) {
+// Maps a role to its dashboard, for redirects.
+function dashboardPathForRole(role) {
+  if (role === "doctor") return "doctor/dashboard.html";
+  if (role === "secretary") return "secretary/dashboard.html";
+  return "patient/dashboard.html";
+}
+
+// Redirect helpers used at the top of protected pages.
+// `allowed` may be a single role string or an array of allowed roles.
+function requireRole(allowed) {
+  const allowedList = Array.isArray(allowed) ? allowed : [allowed];
   if (!Auth.isLoggedIn()) {
     window.location.href = rootPath() + "index.html";
     return false;
   }
-  if (Auth.getRole() !== role) {
-    window.location.href = rootPath() + (Auth.getRole() === "doctor" ? "doctor/dashboard.html" : "patient/dashboard.html");
+  if (!allowedList.includes(Auth.getRole())) {
+    window.location.href = rootPath() + dashboardPathForRole(Auth.getRole());
     return false;
   }
   return true;

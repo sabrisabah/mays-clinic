@@ -16,7 +16,7 @@
   </div>
 
   <div class="container">
-    <a href="dashboard.html" class="btn secondary small">→ العودة لقائمة المراجعين</a>
+    <a href="dashboard.html" id="backLink" class="btn secondary small">→ العودة لقائمة المراجعين</a>
 
     <div class="card" style="margin-top:12px;">
       <h2 id="patientTitle">جاري التحميل...</h2>
@@ -412,13 +412,24 @@
 
 <script src="../js/api.js"></script>
 <script>
-if (!requireRole("doctor")) { throw new Error("redirect"); }
-document.getElementById("userChip").textContent = "د. " + Auth.getName();
+if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
+const role = Auth.getRole();
+document.getElementById("userChip").textContent = (role === "doctor" ? "د. " : "") + Auth.getName();
+
+// Secretary gets the same page, but only the front-desk tabs — medical-only
+// tabs (plan/labtests/mounjaro/progress/notes) are doctor-exclusive.
+const SECRETARY_HIDDEN_TABS = ["plan", "labtests", "mounjaro", "progress", "notes"];
+if (role === "secretary") {
+  document.getElementById("backLink").href = "../secretary/dashboard.html";
+  document.querySelectorAll(".tab-link").forEach((link) => {
+    if (SECRETARY_HIDDEN_TABS.includes(link.dataset.tab)) link.style.display = "none";
+  });
+}
 
 const params = new URLSearchParams(location.search);
 const patientId = params.get("id");
 const msgEl = document.getElementById("msg");
-if (!patientId) location.href = "dashboard.html";
+if (!patientId) location.href = role === "secretary" ? "../secretary/dashboard.html" : "dashboard.html";
 let lastAssessment = null;
 let lastFollowup = null;
 
@@ -1086,12 +1097,14 @@ document.getElementById("noteForm").addEventListener("submit", async (e) => {
   try {
     await loadProfile();
     await loadAssessment();
-    await loadPlan();
     await loadFollowup();
-    await loadLabTests();
-    await loadMounjaro();
-    await loadProgress();
-    await loadNotes();
+    if (role !== "secretary") {
+      await loadPlan();
+      await loadLabTests();
+      await loadMounjaro();
+      await loadProgress();
+      await loadNotes();
+    }
   } catch (err) {
     showMsg(msgEl, err.message, "error");
   }

@@ -17,6 +17,7 @@ class RegisterSerializer(serializers.Serializer):
     phone = serializers.CharField(max_length=30)
     occupation = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
     visit_date = serializers.DateField()
+    visit_time = serializers.TimeField(required=False, allow_null=True, default=None)
     password = serializers.RegexField(
         regex=r"^\d{4,}$",
         write_only=True,
@@ -66,6 +67,14 @@ class PatientListItemSerializer(serializers.Serializer):
     latest_weight = serializers.FloatField(allow_null=True)
     latest_bmi = serializers.FloatField(allow_null=True)
     last_visit = serializers.DateTimeField(allow_null=True)
+    next_visit_at = serializers.DateTimeField(allow_null=True)
+    checked_in = serializers.BooleanField()
+
+
+class AppointmentUpdateSerializer(serializers.Serializer):
+    """Doctor/secretary reschedule a patient's next visit date+time."""
+    visit_date = serializers.DateField()
+    visit_time = serializers.TimeField(required=False, allow_null=True, default=None)
 
 
 class PatientProfileSerializer(serializers.Serializer):
