@@ -31,6 +31,14 @@
     </div>
 
     <div class="card">
+      <h3>🔹 متابعة المراجعين — المواعيد القادمة</h3>
+      <p style="color:var(--muted); font-size:.8rem; margin:0 0 10px;">
+        المرضى الذين لديهم موعد محجوز لاحقاً (بعد اليوم)، مرتّبين حسب الأقرب أولاً.
+      </p>
+      <div id="upcomingWrap"></div>
+    </div>
+
+    <div class="card">
       <div class="search-row">
         <input type="text" id="searchBox" placeholder="ابحث بالاسم، رقم الملف، أو الهاتف...">
         <button class="btn secondary" onclick="load()">بحث</button>
@@ -67,6 +75,38 @@ function toTimeInputValue(iso) {
   return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
 }
 
+// A visit is "upcoming" for this box once its calendar date is strictly
+// after today — i.e. a follow-up booked for a later day, not today's queue
+// (today's/overdue visits are handled by the main table + red alert above).
+function isUpcoming(p) {
+  if (!p.next_visit_at) return false;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const visitDay = new Date(p.next_visit_at); visitDay.setHours(0, 0, 0, 0);
+  return visitDay.getTime() > today.getTime();
+}
+
+function renderUpcoming(patients) {
+  const wrap = document.getElementById("upcomingWrap");
+  const upcoming = patients.filter(isUpcoming); // already sorted ascending by caller
+  if (!upcoming.length) {
+    wrap.innerHTML = `<div class="empty-state">لا توجد مواعيد قادمة محجوزة بعد.</div>`;
+    return;
+  }
+  const rows = upcoming.map(p => `
+    <tr>
+      <td>${p.file_number}</td>
+      <td>${p.full_name}</td>
+      <td>${p.phone || "-"}</td>
+      <td>${toDateInputValue(p.next_visit_at)} — ${toTimeInputValue(p.next_visit_at)}</td>
+      <td><a class="btn small secondary" href="../doctor/patient.html?id=${p.patient_id}">فتح الملف</a></td>
+    </tr>`).join("");
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>رقم الملف</th><th>الاسم</th><th>الهاتف</th><th>الموعد</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
 async function load() {
   const search = document.getElementById("searchBox").value.trim();
   const wrap = document.getElementById("tableWrap");
@@ -82,6 +122,7 @@ async function load() {
       return ta - tb;
     });
     patientsCache = patients;
+    renderUpcoming(patients);
 
     if (!patients.length) {
       wrap.innerHTML = `<div class="empty-state">لا يوجد مراجعون بعد.</div>`;
