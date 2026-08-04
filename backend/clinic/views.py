@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.db import IntegrityError
 from django.db.models import Q
 from django.utils import timezone
@@ -300,6 +300,25 @@ class FollowUpRecordView(APIView):
         serializer = sz.FollowUpRecordSerializer(record, data=request.data)
         serializer.is_valid(raise_exception=True)
         record = serializer.save(created_by=request.user)
+
+        # Setting "المتابعة بعد ___ يوم/أسبوع" here is how doctors/secretaries
+        # actually expect to book the next visit — not just an informational
+        # estimate. So automatically (re)book the real appointment (same
+        # fields the secretary's "حفظ الموعد" button sets) from today +
+        # the interval, so it shows up immediately on the secretary dashboard
+        # without a second manual step. Only acts when an interval was given;
+        # clearing it back to 0 doesn't touch any appointment already booked.
+        if record.followup_interval_value and record.followup_interval_value > 0:
+            days = (
+                record.followup_interval_value * 7
+                if record.followup_interval_unit == "أسبوع"
+                else record.followup_interval_value
+            )
+            assessment, _ = Assessment.objects.get_or_create(patient=patient)
+            assessment.visit_date = timezone.now() + timedelta(days=days)
+            assessment.checked_in = False
+            assessment.appointment_booked = True
+            assessment.save(update_fields=["visit_date", "checked_in", "appointment_booked"])
 
         return Response(sz.FollowUpRecordSerializer(record).data)
 
