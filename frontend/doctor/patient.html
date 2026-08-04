@@ -254,13 +254,6 @@
     <div class="tab-panel" id="tab-followup" style="display:none;">
       <form id="followupForm">
         <div class="card">
-          <h3>🔹 مقاومة الانسولين</h3>
-          <div class="grid-3">
-            <div class="field"><label>القيمة (مثال: HOMA-IR)</label><input type="number" step="0.01" id="ir_value"></div>
-          </div>
-        </div>
-
-        <div class="card">
           <h3>🔹 التحاليل</h3>
           <div class="grid-3" id="labResultsGrid"></div>
         </div>
@@ -435,6 +428,7 @@ let lastFollowup = null;
 
 // Keep these lists in sync with backend/clinic/utils.py (LAB_TEST_NAMES / TREATMENT_INJECTION_OPTIONS / DIET_TYPES).
 const LAB_TEST_NAMES = [
+  "مقاومة الانسولين (HOMA-IR)",
   "سكر صائم (FBS)", "سكر تراكمي (HbA1c)", "كوليسترول", "دهون ثلاثية (Triglycerides)", "إنسولين صائم",
   "TSH", "فيتامين D", "فيتامين B12", "حديد", "فيريتين",
   "وظائف الكبد ALT", "وظائف الكبد AST", "كرياتينين", "يوريا",
@@ -678,7 +672,6 @@ function updateCalorieSuggestion(plan) {
 async function loadFollowup() {
   const f = await apiFetch(`/api/patients/${patientId}/followup`);
   lastFollowup = f;
-  document.getElementById("ir_value").value = f.insulin_resistance_value || "";
   const labResults = f.lab_results || {};
   document.querySelectorAll("#labResultsGrid input[data-lab]").forEach((input) => {
     const v = labResults[input.dataset.lab];
@@ -998,7 +991,6 @@ document.getElementById("followupForm").addEventListener("submit", async (e) => 
     await apiFetch(`/api/patients/${patientId}/followup`, {
       method: "PUT",
       body: JSON.stringify({
-        insulin_resistance_value: parseFloat(document.getElementById("ir_value").value) || 0,
         lab_results: labResults,
         diet_type: dietTypeSelect.value === DIET_TYPE_OTHER
           ? document.getElementById("diet_type_other").value.trim()

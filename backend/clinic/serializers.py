@@ -165,7 +165,7 @@ class FollowUpRecordSerializer(serializers.ModelSerializer):
         model = FollowUpRecord
         fields = [
             "id", "patient_id",
-            "insulin_resistance_value", "lab_results",
+            "lab_results",
             "diet_type", "diet_details", "diet_calories",
             "treatment_injections", "treatment_medications", "treatment_fat_burning_sessions",
             "followup_interval_value", "followup_interval_unit",

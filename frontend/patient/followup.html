@@ -49,7 +49,7 @@ async function load() {
     const fatBurningSessions = !!f.treatment_fat_burning_sessions;
     const hasTreatment = injections.length || medications || fatBurningSessions;
 
-    const hasAnything = f.insulin_resistance_value || labEntries.length || hasTreatment || f.followup_interval_value;
+    const hasAnything = labEntries.length || hasTreatment || f.followup_interval_value;
 
     if (!hasAnything) {
       content.innerHTML = `<div class="card"><div class="empty-state">لم يقم الطبيب بتعبئة ملف المتابعة بعد.</div></div>`;
@@ -68,11 +68,6 @@ async function load() {
     ].filter(Boolean);
 
     content.innerHTML = `
-      <div class="card">
-        <h3>🔹 مقاومة الانسولين</h3>
-        <p>${f.insulin_resistance_value ? f.insulin_resistance_value : "لم تُسجَّل قيمة بعد"}</p>
-      </div>
-
       <div class="card">
         <h3>🔹 التحاليل</h3>
         ${labRows}

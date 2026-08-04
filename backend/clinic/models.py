@@ -155,10 +155,9 @@ class FollowUpRecord(models.Model):
     interval. Doctor-editable, patient-viewable (read-only)."""
     patient = models.OneToOneField(Patient, on_delete=models.CASCADE, related_name="followup")
 
-    # 1. مقاومة الانسولين (رقم، مثال: HOMA-IR)
-    insulin_resistance_value = models.FloatField(default=0)
-
-    # 2. التحاليل — قاموس {اسم التحليل: القيمة الرقمية}
+    # التحاليل — قاموس {اسم التحليل: القيمة الرقمية}. مقاومة الانسولين
+    # (HOMA-IR) أصبحت أحد عناصر هذا القاموس (وأيضاً تُسجَّل شهرياً ضمن
+    # LabTestEntry) بدل حقل مستقل، لأنها تحليل يُعاد دورياً مثل بقية التحاليل.
     lab_results = models.JSONField(default=dict, blank=True)
 
     # 3. نظام غذائي

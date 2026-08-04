@@ -98,6 +98,7 @@ def next_file_number():
 # Fixed lab test panel shown as numeric boxes in the follow-up file.
 # Keep this list in sync with the frontend (doctor/patient.html + patient/followup.html).
 LAB_TEST_NAMES = [
+    "مقاومة الانسولين (HOMA-IR)",
     "سكر صائم (FBS)",
     "سكر تراكمي (HbA1c)",
     "كوليسترول",
