@@ -48,8 +48,9 @@ async function load() {
     const medications = f.treatment_medications || "";
     const fatBurningSessions = !!f.treatment_fat_burning_sessions;
     const hasTreatment = injections.length || medications || fatBurningSessions;
+    const purpose = f.followup_purpose || [];
 
-    const hasAnything = labEntries.length || hasTreatment || f.followup_interval_value;
+    const hasAnything = labEntries.length || hasTreatment || f.followup_interval_value || purpose.length;
 
     if (!hasAnything) {
       content.innerHTML = `<div class="card"><div class="empty-state">لم يقم الطبيب بتعبئة ملف المتابعة بعد.</div></div>`;
@@ -86,6 +87,11 @@ async function load() {
       <div class="card">
         <h3>🔹 موعد المتابعة القادم</h3>
         <p>${f.followup_interval_value ? `بعد ${f.followup_interval_value} ${f.followup_interval_unit || ""}` : "لم يُحدَّد بعد"}</p>
+        ${purpose.length ? `
+        <p style="margin:0 0 8px; color:var(--muted); font-size:.85rem;">الغرض من المتابعة</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+          ${purpose.map((v) => `<span class="badge green">${escapeHtml(v)}</span>`).join("")}
+        </div>` : ""}
         <p style="color:var(--muted); font-size:.8rem;">آخر تحديث: ${fmtDate(f.updated_at)}</p>
       </div>`;
   } catch (err) {

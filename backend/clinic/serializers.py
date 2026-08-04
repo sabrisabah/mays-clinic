@@ -168,7 +168,7 @@ class FollowUpRecordSerializer(serializers.ModelSerializer):
             "lab_results",
             "diet_type", "diet_details", "diet_calories",
             "treatment_injections", "treatment_medications", "treatment_fat_burning_sessions",
-            "followup_interval_value", "followup_interval_unit",
+            "followup_interval_value", "followup_interval_unit", "followup_purpose",
             "updated_at",
         ]
         read_only_fields = ["id", "patient_id", "updated_at"]

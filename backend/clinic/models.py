@@ -171,9 +171,11 @@ class FollowUpRecord(models.Model):
     treatment_medications = models.TextField(blank=True, default="")
     treatment_fat_burning_sessions = models.BooleanField(default=False)
 
-    # 5. المتابعة بعد ___ يوم/أسبوع
+    # 5. المتابعة بعد ___ يوم/أسبوع + الغرض من المتابعة (قائمة ثابتة متعددة
+    # الاختيار: مونجارو، أوزمبك، نظام غذائي، حالة صحية).
     followup_interval_value = models.IntegerField(default=0)
     followup_interval_unit = models.CharField(max_length=10, blank=True, default="")
+    followup_purpose = models.JSONField(default=list, blank=True)
 
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
     updated_at = models.DateTimeField(auto_now=True)

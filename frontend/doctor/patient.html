@@ -298,6 +298,15 @@
 
         <div class="card">
           <h3>🔹 موعد المتابعة القادم</h3>
+          <div class="field" style="margin-bottom:14px;">
+            <label>الغرض من المتابعة</label>
+            <div class="check-group" id="followupPurposeGroup">
+              <label class="check-item"><input type="checkbox" value="مونجارو"> مونجارو</label>
+              <label class="check-item"><input type="checkbox" value="أوزمبك"> أوزمبك</label>
+              <label class="check-item"><input type="checkbox" value="نظام غذائي"> نظام غذائي</label>
+              <label class="check-item"><input type="checkbox" value="حالة صحية"> حالة صحية</label>
+            </div>
+          </div>
           <div class="field">
             <label>المتابعة بعد</label>
             <div style="display:flex; gap:8px; max-width:320px;">
@@ -694,6 +703,7 @@ async function loadFollowup() {
   document.getElementById("treatment_fat_burning_sessions").checked = !!f.treatment_fat_burning_sessions;
   document.getElementById("followup_interval_value").value = f.followup_interval_value || "";
   document.getElementById("followup_interval_unit").value = f.followup_interval_unit || "يوم";
+  setCheckedValues("followupPurposeGroup", f.followup_purpose);
 }
 
 async function loadLabTests() {
@@ -819,7 +829,10 @@ function renderNextVisit(entries) {
     bookedHtml = `<span class="badge blue">📅 الموعد الفعلي المحجوز: ${dateStr} — ${timeStr}</span> ${statusBadge}`;
   }
 
-  box.innerHTML = `<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">${estimateHtml}${bookedHtml}</div>`;
+  const purpose = (lastFollowup && lastFollowup.followup_purpose) || [];
+  const purposeHtml = purpose.map((v) => `<span class="badge green">🎯 ${escapeHtml(v)}</span>`).join("");
+
+  box.innerHTML = `<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">${estimateHtml}${bookedHtml}${purposeHtml}</div>`;
 }
 
 async function loadProgress() {
@@ -1020,6 +1033,7 @@ document.getElementById("followupForm").addEventListener("submit", async (e) => 
         treatment_fat_burning_sessions: document.getElementById("treatment_fat_burning_sessions").checked,
         followup_interval_value: parseInt(document.getElementById("followup_interval_value").value) || 0,
         followup_interval_unit: document.getElementById("followup_interval_unit").value,
+        followup_purpose: getCheckedValues("followupPurposeGroup"),
       }),
     });
     showMsg(msgEl, "تم حفظ ملف المتابعة ✅", "success");
