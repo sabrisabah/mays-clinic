@@ -4,8 +4,8 @@ from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, Doc
 
 # Custom login page (silver background) — see templates/clinic/admin_login.html
 admin.site.login_template = "clinic/admin_login.html"
-admin.site.site_header = "عيادة دكتورة ميس للتغذية"
-admin.site.site_title = "إدارة عيادة دكتورة ميس"
+admin.site.site_header = "عيادة دكتورة ميس الربيعي للتغذية"
+admin.site.site_title = "إدارة عيادة دكتورة ميس الربيعي"
 admin.site.index_title = "لوحة التحكم"
 
 
