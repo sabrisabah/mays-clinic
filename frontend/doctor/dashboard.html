@@ -23,6 +23,13 @@
       <div class="stat-card"><div class="value" id="statNormal">-</div><div class="label">وزن طبيعي</div></div>
     </div>
 
+    <div class="stats-row" id="goalStatsRow">
+      <div class="stat-card"><div class="value" id="statGoalLoss">-</div><div class="label">🔹 الهدف: نزول وزن</div></div>
+      <div class="stat-card"><div class="value" id="statGoalGain">-</div><div class="label">🔹 الهدف: زيادة وزن</div></div>
+      <div class="stat-card"><div class="value" id="statGoalMaintain">-</div><div class="label">🔹 الهدف: تثبيت</div></div>
+      <div class="stat-card"><div class="value" id="statGoalHealth">-</div><div class="label">🔹 الهدف: تحسين صحي</div></div>
+    </div>
+
     <div class="card">
       <h2>قائمة المراجعين</h2>
       <div class="search-row">
@@ -52,6 +59,11 @@ async function load() {
     document.getElementById("statObese").textContent = patients.filter(p => bmiClassOf(p.latest_bmi).startsWith("السمنة")).length;
     document.getElementById("statOverweight").textContent = patients.filter(p => bmiClassOf(p.latest_bmi) === "زيادة الوزن").length;
     document.getElementById("statNormal").textContent = patients.filter(p => bmiClassOf(p.latest_bmi) === "وزن طبيعي").length;
+
+    document.getElementById("statGoalLoss").textContent = patients.filter(p => p.goal_type === "نزول وزن").length;
+    document.getElementById("statGoalGain").textContent = patients.filter(p => p.goal_type === "زيادة وزن").length;
+    document.getElementById("statGoalMaintain").textContent = patients.filter(p => p.goal_type === "تثبيت").length;
+    document.getElementById("statGoalHealth").textContent = patients.filter(p => p.goal_type === "تحسين صحي").length;
 
     if (!patients.length) {
       wrap.innerHTML = `<div class="empty-state">لا يوجد مراجعون بعد.</div>`;

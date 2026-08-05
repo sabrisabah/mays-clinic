@@ -153,6 +153,7 @@ class PatientListView(APIView):
                 "next_visit_at": assessment.visit_date if assessment else None,
                 "checked_in": assessment.checked_in if assessment else False,
                 "appointment_booked": assessment.appointment_booked if assessment else False,
+                "goal_type": assessment.goal_type if assessment else "",
             })
         return Response(sz.PatientListItemSerializer(results, many=True).data)
 
