@@ -545,8 +545,28 @@ class DoctorDashboardStatsView(APIView):
         days = self.PERIOD_DAYS.get(period, 30)
         since = timezone.now() - timedelta(days=days)
 
-        # New patient registrations in the period (Patient.created_at).
-        new_patients = Patient.objects.filter(created_at__gte=since).count()
+        # Patients registered within the period (Patient.created_at). This is
+        # also the base population for the BMI-classification and
+        # treatment-goal breakdowns below, so all of these numbers describe
+        # "of the patients who joined in this period, how many are ...".
+        period_patients = Patient.objects.filter(created_at__gte=since)
+        total_patients = period_patients.count()
+
+        obese = overweight = normal = 0
+        goal_counts = {"نزول وزن": 0, "زيادة وزن": 0, "تثبيت": 0, "تحسين صحي": 0}
+        for pt in period_patients.select_related("assessment"):
+            last_entry = pt.progress_entries.order_by("-date").first()
+            assessment = getattr(pt, "assessment", None)
+            bmi = last_entry.bmi if last_entry else (assessment.bmi if assessment else None)
+            if bmi:
+                if bmi >= 30:
+                    obese += 1
+                elif bmi >= 25:
+                    overweight += 1
+                elif bmi >= 18.5:
+                    normal += 1
+            if assessment and assessment.goal_type in goal_counts:
+                goal_counts[assessment.goal_type] += 1
 
         # Appointments actually booked/rebooked in the period — uses
         # appointment_booked_at (when the booking action happened), not
@@ -580,7 +600,14 @@ class DoctorDashboardStatsView(APIView):
 
         return Response({
             "period": period,
-            "new_patients": new_patients,
+            "total_patients": total_patients,
+            "obese": obese,
+            "overweight": overweight,
+            "normal": normal,
+            "goal_loss": goal_counts["نزول وزن"],
+            "goal_gain": goal_counts["زيادة وزن"],
+            "goal_maintain": goal_counts["تثبيت"],
+            "goal_health": goal_counts["تحسين صحي"],
             "bookings": bookings,
             "followups": followups,
             "mounjaro": mounjaro,

@@ -37,20 +37,6 @@
   </div>
 
   <div class="container">
-    <div class="stats-row" id="statsRow">
-      <div class="stat-card"><div class="value" id="statTotal">-</div><div class="label">إجمالي المراجعين</div></div>
-      <div class="stat-card"><div class="value" id="statObese">-</div><div class="label">تصنيف سمنة</div></div>
-      <div class="stat-card"><div class="value" id="statOverweight">-</div><div class="label">زيادة وزن</div></div>
-      <div class="stat-card"><div class="value" id="statNormal">-</div><div class="label">وزن طبيعي</div></div>
-    </div>
-
-    <div class="stats-row" id="goalStatsRow">
-      <div class="stat-card"><div class="value" id="statGoalLoss">-</div><div class="label">🔹 الهدف: نزول وزن</div></div>
-      <div class="stat-card"><div class="value" id="statGoalGain">-</div><div class="label">🔹 الهدف: زيادة وزن</div></div>
-      <div class="stat-card"><div class="value" id="statGoalMaintain">-</div><div class="label">🔹 الهدف: تثبيت</div></div>
-      <div class="stat-card"><div class="value" id="statGoalHealth">-</div><div class="label">🔹 الهدف: تحسين صحي</div></div>
-    </div>
-
     <div class="card">
       <h2>📊 إحصائيات الفترة</h2>
       <div class="period-toggle" id="periodToggle">
@@ -59,13 +45,20 @@
         <button data-period="year">آخر سنة</button>
       </div>
       <div class="grad-stats-row" id="gradStatsRow">
-        <div class="grad-card blue1"><div class="value" id="statNewPatients">-</div><div class="label">مرضى جدد</div></div>
-        <div class="grad-card green1"><div class="value" id="statBookings">-</div><div class="label">عدد الحجوزات</div></div>
-        <div class="grad-card blue2"><div class="value" id="statFollowups">-</div><div class="label">مراجعين للمتابعة</div></div>
-        <div class="grad-card green2"><div class="value" id="statMounjaro">-</div><div class="label">مراجعين مونجارو</div></div>
-        <div class="grad-card blue1"><div class="value" id="statOzempic">-</div><div class="label">مراجعين أوزمبك</div></div>
-        <div class="grad-card green1"><div class="value" id="statDiet">-</div><div class="label">مراجعين نظام غذائي</div></div>
-        <div class="grad-card blue2"><div class="value" id="statFatBurning">-</div><div class="label">مراجعين للتذويب</div></div>
+        <div class="grad-card blue1"><div class="value" id="statTotal">-</div><div class="label">إجمالي المراجعين</div></div>
+        <div class="grad-card green1"><div class="value" id="statObese">-</div><div class="label">تصنيف سمنة</div></div>
+        <div class="grad-card blue2"><div class="value" id="statOverweight">-</div><div class="label">زيادة وزن</div></div>
+        <div class="grad-card green2"><div class="value" id="statNormal">-</div><div class="label">وزن طبيعي</div></div>
+        <div class="grad-card blue1"><div class="value" id="statBookings">-</div><div class="label">عدد الحجوزات</div></div>
+        <div class="grad-card green1"><div class="value" id="statFollowups">-</div><div class="label">مراجعين للمتابعة</div></div>
+        <div class="grad-card blue2"><div class="value" id="statMounjaro">-</div><div class="label">مراجعين مونجارو</div></div>
+        <div class="grad-card green2"><div class="value" id="statOzempic">-</div><div class="label">مراجعين أوزمبك</div></div>
+        <div class="grad-card blue1"><div class="value" id="statDiet">-</div><div class="label">مراجعين نظام غذائي</div></div>
+        <div class="grad-card green1"><div class="value" id="statFatBurning">-</div><div class="label">مراجعين للتذويب</div></div>
+        <div class="grad-card blue2"><div class="value" id="statGoalLoss">-</div><div class="label">🔹 الهدف: نزول وزن</div></div>
+        <div class="grad-card green2"><div class="value" id="statGoalGain">-</div><div class="label">🔹 الهدف: زيادة وزن</div></div>
+        <div class="grad-card blue1"><div class="value" id="statGoalMaintain">-</div><div class="label">🔹 الهدف: تثبيت</div></div>
+        <div class="grad-card green1"><div class="value" id="statGoalHealth">-</div><div class="label">🔹 الهدف: تحسين صحي</div></div>
       </div>
     </div>
 
@@ -92,13 +85,20 @@ let currentPeriod = "month";
 async function loadPeriodStats() {
   try {
     const s = await apiFetch(`/api/dashboard/stats?period=${currentPeriod}`);
-    document.getElementById("statNewPatients").textContent = s.new_patients;
+    document.getElementById("statTotal").textContent = s.total_patients;
+    document.getElementById("statObese").textContent = s.obese;
+    document.getElementById("statOverweight").textContent = s.overweight;
+    document.getElementById("statNormal").textContent = s.normal;
     document.getElementById("statBookings").textContent = s.bookings;
     document.getElementById("statFollowups").textContent = s.followups;
     document.getElementById("statMounjaro").textContent = s.mounjaro;
     document.getElementById("statOzempic").textContent = s.ozempic;
     document.getElementById("statDiet").textContent = s.diet;
     document.getElementById("statFatBurning").textContent = s.fat_burning;
+    document.getElementById("statGoalLoss").textContent = s.goal_loss;
+    document.getElementById("statGoalGain").textContent = s.goal_gain;
+    document.getElementById("statGoalMaintain").textContent = s.goal_maintain;
+    document.getElementById("statGoalHealth").textContent = s.goal_health;
   } catch (err) {
     console.error(err);
   }
@@ -118,16 +118,6 @@ async function load() {
   try {
     const qs = search ? `?search=${encodeURIComponent(search)}` : "";
     const patients = await apiFetch(`/api/patients${qs}`);
-
-    document.getElementById("statTotal").textContent = patients.length;
-    document.getElementById("statObese").textContent = patients.filter(p => bmiClassOf(p.latest_bmi).startsWith("السمنة")).length;
-    document.getElementById("statOverweight").textContent = patients.filter(p => bmiClassOf(p.latest_bmi) === "زيادة الوزن").length;
-    document.getElementById("statNormal").textContent = patients.filter(p => bmiClassOf(p.latest_bmi) === "وزن طبيعي").length;
-
-    document.getElementById("statGoalLoss").textContent = patients.filter(p => p.goal_type === "نزول وزن").length;
-    document.getElementById("statGoalGain").textContent = patients.filter(p => p.goal_type === "زيادة وزن").length;
-    document.getElementById("statGoalMaintain").textContent = patients.filter(p => p.goal_type === "تثبيت").length;
-    document.getElementById("statGoalHealth").textContent = patients.filter(p => p.goal_type === "تحسين صحي").length;
 
     if (!patients.length) {
       wrap.innerHTML = `<div class="empty-state">لا يوجد مراجعون بعد.</div>`;
