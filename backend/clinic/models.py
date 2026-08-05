@@ -72,6 +72,11 @@ class Assessment(models.Model):
     # secretary dashboard's "متابعة المراجعين" box show only patients with a
     # real follow-up booking, not every patient's original registration date.
     appointment_booked = models.BooleanField(default=False)
+    # Timestamp of the moment appointment_booked was last set True — lets the
+    # doctor dashboard's period stats (week/month/year) count how many
+    # bookings were actually MADE within a window, separate from visit_date
+    # (which is WHEN the visit is scheduled to happen).
+    appointment_booked_at = models.DateTimeField(null=True, blank=True)
 
     # Anthropometrics
     weight = models.FloatField(default=0)

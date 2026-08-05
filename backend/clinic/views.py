@@ -319,7 +319,8 @@ class FollowUpRecordView(APIView):
             assessment.visit_date = timezone.now() + timedelta(days=days)
             assessment.checked_in = False
             assessment.appointment_booked = True
-            assessment.save(update_fields=["visit_date", "checked_in", "appointment_booked"])
+            assessment.appointment_booked_at = timezone.now()
+            assessment.save(update_fields=["visit_date", "checked_in", "appointment_booked", "appointment_booked_at"])
 
         return Response(sz.FollowUpRecordSerializer(record).data)
 
@@ -344,7 +345,8 @@ class AppointmentView(APIView):
         assessment.visit_date = timezone.make_aware(datetime.combine(data["visit_date"], visit_time))
         assessment.checked_in = False
         assessment.appointment_booked = True
-        assessment.save(update_fields=["visit_date", "checked_in", "appointment_booked"])
+        assessment.appointment_booked_at = timezone.now()
+        assessment.save(update_fields=["visit_date", "checked_in", "appointment_booked", "appointment_booked_at"])
 
         return Response({
             "visit_date": assessment.visit_date,
@@ -526,3 +528,63 @@ class NoteDetailView(APIView):
         patient = get_patient_or_403(request, patient_id)
         DoctorNote.objects.filter(id=note_id, patient=patient).delete()
         return Response({"ok": True})
+
+
+# ---------------- DOCTOR DASHBOARD — PERIOD STATS ----------------
+# Powers the doctor dashboard's "إحصائيات الفترة" section: activity counts
+# filterable by week / month / year, computed from whatever dated record
+# best represents each metric (see comments below).
+
+class DoctorDashboardStatsView(APIView):
+    permission_classes = [IsAuthenticated, IsClinicStaff]
+
+    PERIOD_DAYS = {"week": 7, "month": 30, "year": 365}
+
+    def get(self, request):
+        period = request.query_params.get("period", "month")
+        days = self.PERIOD_DAYS.get(period, 30)
+        since = timezone.now() - timedelta(days=days)
+
+        # New patient registrations in the period (Patient.created_at).
+        new_patients = Patient.objects.filter(created_at__gte=since).count()
+
+        # Appointments actually booked/rebooked in the period — uses
+        # appointment_booked_at (when the booking action happened), not
+        # visit_date (when the visit itself is scheduled to occur).
+        bookings = Assessment.objects.filter(
+            appointment_booked=True, appointment_booked_at__gte=since
+        ).count()
+
+        # Distinct patients with a follow-up weight-tracking entry in the
+        # period (ProgressEntry is created every time a follow-up visit is
+        # logged).
+        followups = ProgressEntry.objects.filter(date__gte=since).values("patient_id").distinct().count()
+
+        # Distinct patients with a Mounjaro dose logged in the period.
+        mounjaro = MounjaroDose.objects.filter(date__gte=since).values("patient_id").distinct().count()
+
+        # Ozempic / diet-plan / fat-dissolving patients: there's no separate
+        # dated log for these (unlike Mounjaro/ProgressEntry), so we use each
+        # patient's follow-up record and treat "updated_at within the period"
+        # as a proxy for "seen/updated during this window". This can miss a
+        # patient if their record was set up before the window and never
+        # touched again, but is the best signal available without adding new
+        # tracking tables.
+        recent_followups = FollowUpRecord.objects.filter(updated_at__gte=since)
+        ozempic = sum(1 for f in recent_followups if "أوزمبك" in (f.treatment_injections or []))
+        diet = sum(1 for f in recent_followups if (f.diet_type or "").strip())
+        fat_burning = sum(
+            1 for f in recent_followups
+            if f.treatment_fat_burning_sessions or "إبر تذويب" in (f.treatment_injections or [])
+        )
+
+        return Response({
+            "period": period,
+            "new_patients": new_patients,
+            "bookings": bookings,
+            "followups": followups,
+            "mounjaro": mounjaro,
+            "ozempic": ozempic,
+            "diet": diet,
+            "fat_burning": fat_burning,
+        })

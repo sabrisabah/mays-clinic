@@ -5,6 +5,27 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>لوحة الطبيب — عيادة دكتورة ميس الربيعي</title>
 <link rel="stylesheet" href="../css/style.css">
+<style>
+  .period-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+  .period-toggle button {
+    padding: 8px 18px; border: 1px solid var(--border); background: #fff; color: var(--muted);
+    border-radius: 20px; cursor: pointer; font-family: inherit; font-size: .88rem;
+  }
+  .period-toggle button.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; }
+  .grad-stats-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 14px; margin-bottom: 18px;
+  }
+  .grad-card {
+    border-radius: var(--radius); padding: 18px 16px; text-align: center; box-shadow: var(--shadow);
+    color: #fff;
+  }
+  .grad-card .value { font-size: 1.8rem; font-weight: 800; }
+  .grad-card .label { font-size: .82rem; margin-top: 6px; opacity: .95; }
+  .grad-card.blue1 { background: linear-gradient(135deg, #2f80c4, #1a5fa8); }
+  .grad-card.blue2 { background: linear-gradient(135deg, #4aa3d9, #2f80c4); }
+  .grad-card.green1 { background: linear-gradient(135deg, #4a7a46, #283d26); }
+  .grad-card.green2 { background: linear-gradient(135deg, #6fae5f, #3d5a3a); }
+</style>
 </head>
 <body>
   <div class="topbar">
@@ -31,6 +52,24 @@
     </div>
 
     <div class="card">
+      <h2>📊 إحصائيات الفترة</h2>
+      <div class="period-toggle" id="periodToggle">
+        <button data-period="week">آخر أسبوع</button>
+        <button data-period="month" class="active">آخر شهر</button>
+        <button data-period="year">آخر سنة</button>
+      </div>
+      <div class="grad-stats-row" id="gradStatsRow">
+        <div class="grad-card blue1"><div class="value" id="statNewPatients">-</div><div class="label">مرضى جدد</div></div>
+        <div class="grad-card green1"><div class="value" id="statBookings">-</div><div class="label">عدد الحجوزات</div></div>
+        <div class="grad-card blue2"><div class="value" id="statFollowups">-</div><div class="label">مراجعين للمتابعة</div></div>
+        <div class="grad-card green2"><div class="value" id="statMounjaro">-</div><div class="label">مراجعين مونجارو</div></div>
+        <div class="grad-card blue1"><div class="value" id="statOzempic">-</div><div class="label">مراجعين أوزمبك</div></div>
+        <div class="grad-card green1"><div class="value" id="statDiet">-</div><div class="label">مراجعين نظام غذائي</div></div>
+        <div class="grad-card blue2"><div class="value" id="statFatBurning">-</div><div class="label">مراجعين للتذويب</div></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>قائمة المراجعين</h2>
       <div class="search-row">
         <input type="text" id="searchBox" placeholder="ابحث بالاسم، رقم الملف، أو الهاتف...">
@@ -47,6 +86,31 @@
 <script>
 if (!requireRole("doctor")) { throw new Error("redirect"); }
 document.getElementById("userChip").textContent = "د. " + Auth.getName();
+
+let currentPeriod = "month";
+
+async function loadPeriodStats() {
+  try {
+    const s = await apiFetch(`/api/dashboard/stats?period=${currentPeriod}`);
+    document.getElementById("statNewPatients").textContent = s.new_patients;
+    document.getElementById("statBookings").textContent = s.bookings;
+    document.getElementById("statFollowups").textContent = s.followups;
+    document.getElementById("statMounjaro").textContent = s.mounjaro;
+    document.getElementById("statOzempic").textContent = s.ozempic;
+    document.getElementById("statDiet").textContent = s.diet;
+    document.getElementById("statFatBurning").textContent = s.fat_burning;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+document.getElementById("periodToggle").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-period]");
+  if (!btn) return;
+  currentPeriod = btn.dataset.period;
+  document.querySelectorAll("#periodToggle button").forEach((b) => b.classList.toggle("active", b === btn));
+  loadPeriodStats();
+});
 
 async function load() {
   const search = document.getElementById("searchBox").value.trim();
@@ -100,6 +164,7 @@ function bmiClassOf(bmi) {
 }
 document.getElementById("searchBox").addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
 load();
+loadPeriodStats();
 </script>
 </body>
 </html>
