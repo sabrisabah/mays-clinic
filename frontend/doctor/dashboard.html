@@ -78,7 +78,7 @@
 <script src="../js/api.js"></script>
 <script>
 if (!requireRole("doctor")) { throw new Error("redirect"); }
-renderUserChip("userChip", "د. " + Auth.getName());
+refreshUserChip("userChip", "د. " + Auth.getName());
 
 let currentPeriod = "month";
 

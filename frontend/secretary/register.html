@@ -76,7 +76,7 @@
 <script src="../js/api.js"></script>
 <script>
 if (!requireRole("secretary")) { throw new Error("redirect"); }
-renderUserChip("userChip", Auth.getName());
+refreshUserChip("userChip", Auth.getName());
 
 const msgEl = document.getElementById("msg");
 

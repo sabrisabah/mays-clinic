@@ -144,6 +144,22 @@ function renderUserChip(elId, displayName) {
   el.innerHTML = avatarHtml + `<span>${safeName}</span>`;
 }
 
+// Renders the chip immediately from cached (login-time) data, then quietly
+// re-fetches the current profile photo from the server and re-renders if it
+// changed. This is needed because the photo is uploaded from /admin at any
+// time — a page that was already logged in would otherwise keep showing the
+// stale/placeholder avatar until the next login refreshed localStorage.
+function refreshUserChip(elId, displayName) {
+  renderUserChip(elId, displayName);
+  apiFetch("/api/auth/me").then((me) => {
+    if (!me) return;
+    const store = Auth._store();
+    if (me.profile_photo_url) store.setItem("mays_photo", me.profile_photo_url);
+    else store.removeItem("mays_photo");
+    renderUserChip(elId, displayName);
+  }).catch(() => {});
+}
+
 function bmiBadgeClass(bmiClass) {
   switch (bmiClass) {
     case "وزن طبيعي": return "green";
