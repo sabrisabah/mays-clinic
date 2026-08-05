@@ -47,7 +47,15 @@ body {
 }
 .topbar a:hover, .topbar button.link:hover { opacity: 1; text-decoration: underline; }
 .topbar .user-chip {
-  background: rgba(255,255,255,.15); padding: 6px 12px; border-radius: 20px; font-size: .85rem;
+  background: rgba(255,255,255,.15); padding: 4px 14px; border-radius: 20px; font-size: .85rem;
+  display: flex; align-items: center; gap: 8px;
+}
+.chip-avatar {
+  width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+}
+.chip-avatar-placeholder {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,.35); color: #fff; font-weight: 700; font-size: .8rem;
 }
 
 /* Cards */

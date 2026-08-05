@@ -59,7 +59,7 @@
 <script src="../js/api.js"></script>
 <script>
 if (!requireRole("patient")) { throw new Error("redirect"); }
-document.getElementById("userChip").textContent = Auth.getName();
+renderUserChip("userChip", Auth.getName());
 
 function escapeHtml(s) {
   const div = document.createElement("div");

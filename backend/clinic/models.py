@@ -30,6 +30,9 @@ class User(AbstractUser):
     full_name = models.CharField(max_length=150)
     phone = models.CharField(max_length=30, unique=True, null=True, blank=True)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default="patient")
+    # Uploaded from /admin only (see UserAdmin) — shown as a small avatar
+    # next to the user's name in the topbar across the app.
+    profile_photo = models.ImageField(upload_to="profile_photos/", null=True, blank=True)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["full_name"]

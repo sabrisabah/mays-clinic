@@ -53,7 +53,7 @@
 <script src="../js/api.js"></script>
 <script>
 if (!requireRole("secretary")) { throw new Error("redirect"); }
-document.getElementById("userChip").textContent = Auth.getName();
+renderUserChip("userChip", Auth.getName());
 
 let patientsCache = [];
 

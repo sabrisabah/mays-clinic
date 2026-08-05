@@ -61,7 +61,7 @@ class UserAdmin(ImportExportModelAdmin, BaseUserAdmin):
     search_fields = ["email", "full_name"]
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        ("معلومات شخصية", {"fields": ("full_name", "phone", "role")}),
+        ("معلومات شخصية", {"fields": ("full_name", "phone", "role", "profile_photo")}),
         ("صلاحيات", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
     )
     add_fieldsets = (

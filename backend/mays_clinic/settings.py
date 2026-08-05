@@ -114,6 +114,14 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# User-uploaded files (currently: profile photos, uploaded from /admin only).
+# On Railway, default under the same persistent volume as the SQLite DB
+# (mounted at /data) so uploads survive redeploys; MAYS_MEDIA_ROOT can
+# override this explicitly if needed.
+MEDIA_URL = "media/"
+_default_media_root = "/data/media" if ON_RAILWAY else str(BASE_DIR / "media")
+MEDIA_ROOT = os.environ.get("MAYS_MEDIA_ROOT", _default_media_root)
+
 # Serve the plain-HTML/JS frontend directly from this same Django service
 # (no separate host/CORS needed): WhiteNoise serves files under FRONTEND_DIR
 # at the site root, e.g. /index.html, /css/style.css, /patient/dashboard.html.

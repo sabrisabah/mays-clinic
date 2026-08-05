@@ -10,7 +10,7 @@ const API_BASE = window.MAYS_API_BASE || (
     : ""
 );
 
-const AUTH_KEYS = ["mays_token", "mays_role", "mays_name", "mays_patient_id"];
+const AUTH_KEYS = ["mays_token", "mays_role", "mays_name", "mays_patient_id", "mays_photo"];
 
 const Auth = {
   // "Remember me" checked -> localStorage (persists after the browser closes).
@@ -22,6 +22,7 @@ const Auth = {
   getRole() { return this._store().getItem("mays_role"); },
   getName() { return this._store().getItem("mays_name"); },
   getPatientId() { return this._store().getItem("mays_patient_id"); },
+  getPhotoUrl() { return this._store().getItem("mays_photo") || null; },
   isLoggedIn() { return !!this._store().getItem("mays_token"); },
   save(data, remember) {
     const store = remember ? localStorage : sessionStorage;
@@ -31,6 +32,8 @@ const Auth = {
     store.setItem("mays_name", data.full_name);
     if (data.patient_id) store.setItem("mays_patient_id", data.patient_id);
     else store.removeItem("mays_patient_id");
+    if (data.profile_photo_url) store.setItem("mays_photo", data.profile_photo_url);
+    else store.removeItem("mays_photo");
     AUTH_KEYS.forEach((k) => other.removeItem(k));
   },
   clear() {
@@ -122,6 +125,23 @@ function requireRole(allowed) {
     return false;
   }
   return true;
+}
+
+// Renders the topbar "user-chip" with an avatar (uploaded from /admin —
+// see User.profile_photo) next to the display name. Falls back to a plain
+// initial-letter circle when no photo has been uploaded.
+function renderUserChip(elId, displayName) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const name = displayName || "";
+  const photo = Auth.getPhotoUrl();
+  const div = document.createElement("div");
+  div.textContent = name;
+  const safeName = div.innerHTML;
+  const avatarHtml = photo
+    ? `<img src="${API_BASE}${photo}" alt="" class="chip-avatar">`
+    : `<span class="chip-avatar chip-avatar-placeholder">${(name.trim().charAt(0) || "?")}</span>`;
+  el.innerHTML = avatarHtml + `<span>${safeName}</span>`;
 }
 
 function bmiBadgeClass(bmiClass) {

@@ -46,15 +46,19 @@ class LoginSerializer(serializers.Serializer):
 
 class MeSerializer(serializers.ModelSerializer):
     patient_id = serializers.SerializerMethodField()
+    profile_photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "phone", "role", "patient_id"]
+        fields = ["id", "email", "full_name", "phone", "role", "patient_id", "profile_photo_url"]
 
     def get_patient_id(self, obj):
         if obj.role == "patient" and hasattr(obj, "patient"):
             return obj.patient.id
         return None
+
+    def get_profile_photo_url(self, obj):
+        return obj.profile_photo.url if obj.profile_photo else None
 
 
 class PatientListItemSerializer(serializers.Serializer):

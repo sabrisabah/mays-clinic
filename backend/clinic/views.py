@@ -30,6 +30,7 @@ def issue_token_response(user, patient_id=None):
         "role": user.role,
         "full_name": user.full_name,
         "patient_id": patient_id,
+        "profile_photo_url": user.profile_photo.url if user.profile_photo else None,
     }
 
 

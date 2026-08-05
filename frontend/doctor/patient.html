@@ -419,7 +419,7 @@
 <script>
 if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
 const role = Auth.getRole();
-document.getElementById("userChip").textContent = (role === "doctor" ? "د. " : "") + Auth.getName();
+renderUserChip("userChip", (role === "doctor" ? "د. " : "") + Auth.getName());
 
 // Secretary gets the same page, but only the front-desk tabs — medical-only
 // tabs (plan/labtests/mounjaro/progress/notes) are doctor-exclusive.
