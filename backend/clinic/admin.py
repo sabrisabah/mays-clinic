@@ -2,7 +2,10 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from import_export import fields, resources, widgets
 from import_export.admin import ImportExportModelAdmin
-from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, LabTestEntry
+from .models import (
+    User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, LabTestEntry,
+    MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
+)
 from .utils import compute_bmi, compute_whr, compute_whr_class, compute_activity_level, normalize_height_m
 
 # Custom login page (silver background) — see templates/clinic/admin_login.html
@@ -161,3 +164,51 @@ class LabTestEntryAdmin(admin.ModelAdmin):
 class DoctorNoteAdmin(admin.ModelAdmin):
     list_display = ["patient", "created_at", "created_by"]
     search_fields = ["patient__file_number", "patient__user__full_name"]
+
+
+# ---------------- MEDICATIONS CATALOG (العلاج والوصفة الطبية) ----------------
+# Main catalog is imported from the clinic's Excel reference sheet via
+# `python manage.py import_medications` — /admin is only for reviewing that
+# import, activating a doctor's custom (is_custom) entries so they join the
+# shared picker, or making manual corrections.
+
+class MedicationDoseInline(admin.TabularInline):
+    model = MedicationDose
+    extra = 1
+
+
+@admin.register(MedicationCategory)
+class MedicationCategoryAdmin(admin.ModelAdmin):
+    list_display = ["name", "group", "type", "is_active"]
+    list_filter = ["type", "group", "is_active"]
+    search_fields = ["name", "group"]
+
+
+@admin.register(Medication)
+class MedicationAdmin(admin.ModelAdmin):
+    inlines = [MedicationDoseInline]
+    list_display = ["name", "category", "medication_type", "is_custom", "is_active", "created_by"]
+    list_filter = ["medication_type", "is_custom", "is_active", "category"]
+    search_fields = ["name", "generic_name", "brand_name"]
+    # Custom (doctor-entered) medications land here inactive — flip
+    # is_active on once reviewed so they appear in the shared picker for
+    # every doctor, not just the one who typed it in.
+    actions = ["activate_medications"]
+
+    def activate_medications(self, request, queryset):
+        queryset.update(is_active=True)
+    activate_medications.short_description = "تفعيل الأدوية المحددة (إظهارها للجميع)"
+
+
+class PrescriptionItemInline(admin.TabularInline):
+    model = PrescriptionItem
+    extra = 0
+    readonly_fields = ["created_at", "updated_at"]
+
+
+@admin.register(Prescription)
+class PrescriptionAdmin(admin.ModelAdmin):
+    inlines = [PrescriptionItemInline]
+    list_display = ["patient", "prescription_date", "created_by"]
+    search_fields = ["patient__file_number", "patient__user__full_name"]
+    date_hierarchy = "prescription_date"

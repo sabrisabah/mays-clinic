@@ -22,4 +22,10 @@ urlpatterns = [
     path("patients/<int:patient_id>/appointment", views.AppointmentView.as_view()),
 
     path("dashboard/stats", views.DoctorDashboardStatsView.as_view()),
+
+    path("medications/catalog", views.MedicationCatalogView.as_view()),
+    path("medications/custom", views.CustomMedicationCreateView.as_view()),
+    path("patients/<int:patient_id>/prescriptions", views.PrescriptionListCreateView.as_view()),
+    path("patients/<int:patient_id>/prescriptions/<int:prescription_id>/items", views.PrescriptionItemListCreateView.as_view()),
+    path("patients/<int:patient_id>/prescriptions/<int:prescription_id>/items/<int:item_id>", views.PrescriptionItemDetailView.as_view()),
 ]

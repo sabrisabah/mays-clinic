@@ -260,6 +260,143 @@ class LabTestEntry(models.Model):
         return f"تحاليل - {self.patient.file_number} - {self.patient.user.full_name} ({self.date:%Y-%m-%d})"
 
 
+class MedicationCategory(models.Model):
+    """Drug/supplement classification (e.g. GLP-1, SGLT2, المكملات الغذائية),
+    imported from the clinic's medications reference spreadsheet. `group`
+    keeps the original spreadsheet section (e.g. "أدوية السمنة ومقاومة
+    الإنسولين") for traceability/display, separate from `name` which is the
+    actual selectable classification used to filter the medication list."""
+    MEDICATION = "دواء"
+    SUPPLEMENT = "مكمل غذائي"
+    TYPE_CHOICES = [(MEDICATION, "دواء"), (SUPPLEMENT, "مكمل غذائي")]
+
+    name = models.CharField(max_length=150)
+    group = models.CharField(max_length=150, blank=True, default="")
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=MEDICATION)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = [("name", "group")]
+        ordering = ["group", "name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.group})" if self.group else self.name
+
+
+class Medication(models.Model):
+    """A prescribable drug or supplement. `is_custom` marks a one-off entry
+    typed in by a doctor for a specific patient (not yet part of the vetted
+    catalog) — kept inactive/hidden from the shared picker until an admin
+    reviews and activates it from /admin."""
+    category = models.ForeignKey(
+        MedicationCategory, on_delete=models.PROTECT, related_name="medications",
+        null=True, blank=True,
+    )
+    name = models.CharField(max_length=200)
+    generic_name = models.CharField(max_length=200, blank=True, default="")
+    brand_name = models.CharField(max_length=200, blank=True, default="")
+    medication_type = models.CharField(max_length=20, choices=MedicationCategory.TYPE_CHOICES, default=MedicationCategory.MEDICATION)
+    dosage_form = models.CharField(max_length=100, blank=True, default="", help_text="مثال: أقراص، حقنة، شراب")
+    is_custom = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="custom_medications")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class MedicationDose(models.Model):
+    """One selectable dose/strength for a medication. Stored as text
+    (dose_value) rather than a strict number because the source data mixes
+    plain numbers (5, 10), combo-drug ratios (50/500), and non-numeric forms
+    (sachets, tab, amp) — display_name is the ready-to-show label."""
+    medication = models.ForeignKey(Medication, on_delete=models.CASCADE, related_name="doses")
+    dose_value = models.CharField(max_length=50)
+    dose_unit = models.CharField(max_length=20, blank=True, default="")
+    display_name = models.CharField(max_length=100, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return self.display_name or f"{self.dose_value} {self.dose_unit}".strip()
+
+    def save(self, *args, **kwargs):
+        if not self.display_name:
+            self.display_name = f"{self.dose_value} {self.dose_unit}".strip()
+        super().save(*args, **kwargs)
+
+
+class Prescription(models.Model):
+    """One prescribing event ('visit') for a patient — like MounjaroDose /
+    LabTestEntry / ProgressEntry, this is an append-only dated log, never
+    overwritten, so the full treatment history stays intact. Holds one or
+    more PrescriptionItem rows (the individual drugs/supplements given that
+    visit)."""
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="prescriptions")
+    prescription_date = models.DateTimeField(auto_now_add=True)
+    general_notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="prescriptions_written")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-prescription_date"]
+
+    def __str__(self):
+        return f"وصفة طبية - {self.patient.file_number} - {self.patient.user.full_name} ({self.prescription_date:%Y-%m-%d})"
+
+
+class PrescriptionItem(models.Model):
+    ROUTE_CHOICES = [
+        ("عن طريق الفم", "عن طريق الفم"), ("حقن", "حقن"),
+        ("شراب", "شراب"), ("موضعي", "موضعي"), ("أخرى", "أخرى"),
+    ]
+    STATUS_CHOICES = [
+        ("مستمر", "مستمر"), ("مكتمل", "مكتمل"),
+        ("متوقف", "متوقف"), ("تم تغيير الجرعة", "تم تغيير الجرعة"),
+    ]
+
+    prescription = models.ForeignKey(Prescription, on_delete=models.CASCADE, related_name="items")
+    medication = models.ForeignKey(Medication, null=True, blank=True, on_delete=models.SET_NULL, related_name="prescription_items")
+    medication_dose = models.ForeignKey(MedicationDose, null=True, blank=True, on_delete=models.SET_NULL, related_name="prescription_items")
+    # Used instead of medication/medication_dose when the doctor typed a
+    # one-off entry not (yet) in the catalog.
+    custom_medication_name = models.CharField(max_length=200, blank=True, default="")
+    custom_dose = models.CharField(max_length=100, blank=True, default="")
+
+    route = models.CharField(max_length=30, blank=True, default="")
+    frequency = models.CharField(max_length=50, blank=True, default="")
+    timing = models.CharField(max_length=50, blank=True, default="")
+    duration_value = models.PositiveIntegerField(null=True, blank=True)
+    duration_unit = models.CharField(max_length=20, blank=True, default="")
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    quantity = models.CharField(max_length=100, blank=True, default="")
+    instructions = models.TextField(blank=True, default="")
+    notes = models.TextField(blank=True, default="")
+    treatment_status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="مستمر")
+    stop_reason = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def display_name(self):
+        if self.medication_id:
+            return self.medication.name
+        return self.custom_medication_name
+
+    def __str__(self):
+        return f"{self.display_name()} - وصفة #{self.prescription_id}"
+
+
 class DoctorNote(models.Model):
     """Free-form doctor notes, doctor-only visibility."""
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="notes")

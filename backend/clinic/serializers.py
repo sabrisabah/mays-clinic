@@ -1,6 +1,9 @@
 import datetime
 from rest_framework import serializers
-from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry
+from .models import (
+    User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry,
+    MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
+)
 from .utils import compute_suggested_calories
 
 
@@ -231,3 +234,93 @@ class DoctorNoteSerializer(serializers.ModelSerializer):
         model = DoctorNote
         fields = ["id", "patient_id", "note", "created_at"]
         read_only_fields = ["id", "patient_id", "created_at"]
+
+
+# ---------------- MEDICATIONS / PRESCRIPTIONS (العلاج والوصفة الطبية) ----------------
+
+class MedicationDoseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MedicationDose
+        fields = ["id", "dose_value", "dose_unit", "display_name"]
+
+
+class MedicationCatalogSerializer(serializers.ModelSerializer):
+    """One medication + its available doses — used inside the nested catalog
+    response (category -> medications -> doses) that the frontend loads once
+    and filters client-side for the cascading dropdowns."""
+    doses = MedicationDoseSerializer(many=True, read_only=True)
+    category_id = serializers.IntegerField(source="category.id", read_only=True, allow_null=True)
+
+    class Meta:
+        model = Medication
+        fields = [
+            "id", "category_id", "name", "generic_name", "brand_name",
+            "medication_type", "dosage_form", "is_custom", "doses",
+        ]
+
+
+class MedicationCategorySerializer(serializers.ModelSerializer):
+    medications = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MedicationCategory
+        fields = ["id", "name", "group", "type", "medications"]
+
+    def get_medications(self, obj):
+        meds = [m for m in obj.medications.all() if m.is_active]
+        return MedicationCatalogSerializer(meds, many=True).data
+
+
+class CustomMedicationCreateSerializer(serializers.Serializer):
+    """Doctor typing in a drug/supplement that isn't in the catalog yet
+    (spec: '+ إضافة دواء أو مكمل غير موجود بالقائمة'). Created inactive
+    (is_custom=True, is_active=False) so it stays private to this
+    prescription until an admin reviews and activates it from /admin."""
+    name = serializers.CharField(max_length=200)
+    dose = serializers.CharField(max_length=100, required=False, allow_blank=True, default="")
+    unit = serializers.CharField(max_length=20, required=False, allow_blank=True, default="")
+    medication_type = serializers.ChoiceField(choices=[c[0] for c in MedicationCategory.TYPE_CHOICES], default=MedicationCategory.MEDICATION)
+
+
+class PrescriptionItemSerializer(serializers.ModelSerializer):
+    medication_name = serializers.SerializerMethodField()
+    dose_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PrescriptionItem
+        fields = [
+            "id", "prescription", "medication", "medication_dose",
+            "custom_medication_name", "custom_dose",
+            "medication_name", "dose_display",
+            "route", "frequency", "timing",
+            "duration_value", "duration_unit", "start_date", "end_date",
+            "quantity", "instructions", "notes", "treatment_status", "stop_reason",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "prescription", "created_at", "updated_at"]
+
+    def get_medication_name(self, obj):
+        return obj.medication.name if obj.medication_id else obj.custom_medication_name
+
+    def get_dose_display(self, obj):
+        if obj.medication_dose_id:
+            return obj.medication_dose.display_name
+        return obj.custom_dose
+
+    def validate(self, attrs):
+        medication = attrs.get("medication", getattr(self.instance, "medication", None))
+        custom_name = attrs.get("custom_medication_name", getattr(self.instance, "custom_medication_name", ""))
+        if not medication and not (custom_name or "").strip():
+            raise serializers.ValidationError("اختر دواءً من القائمة أو أدخل اسم دواء مخصص")
+        return attrs
+
+
+class PrescriptionSerializer(serializers.ModelSerializer):
+    patient_id = serializers.IntegerField(source="patient.id", read_only=True)
+    doctor_name = serializers.CharField(source="created_by.full_name", read_only=True, default="")
+    items = PrescriptionItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Prescription
+        fields = ["id", "patient_id", "prescription_date", "general_notes", "doctor_name", "items", "updated_at"]
+        read_only_fields = ["id", "patient_id", "prescription_date", "doctor_name", "items", "updated_at"]

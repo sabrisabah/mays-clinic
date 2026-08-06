@@ -9,7 +9,10 @@ from rest_framework.exceptions import PermissionDenied, NotFound, ValidationErro
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 
-from .models import User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry
+from .models import (
+    User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry,
+    MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
+)
 from .permissions import IsDoctor, IsClinicStaff
 from .utils import (
     compute_bmi,
@@ -616,3 +619,154 @@ class DoctorDashboardStatsView(APIView):
             "diet": diet,
             "fat_burning": fat_burning,
         })
+
+
+# ---------------- MEDICATIONS / PRESCRIPTIONS (العلاج والوصفة الطبية) ----------------
+# Lives inside the doctor's "ملف المتابعة" tab for a patient. Prescriptions
+# are an append-only dated log (like MounjaroDose/LabTestEntry) so the full
+# treatment history survives every new visit — never overwritten in place.
+# Viewing is clinic-staff level (doctor + secretary); writing is doctor-only.
+
+class MedicationCatalogView(APIView):
+    """Full nested catalog (category -> medications -> doses), loaded once by
+    the frontend and filtered client-side for the cascading dropdowns —
+    the catalog is small enough (~90 medications) that this is simpler and
+    faster than several round trips per keystroke."""
+    def get(self, request):
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح لطاقم العيادة فقط")
+        categories = (
+            MedicationCategory.objects.filter(is_active=True)
+            .prefetch_related("medications__doses")
+            .order_by("group", "name")
+        )
+        return Response(sz.MedicationCategorySerializer(categories, many=True).data)
+
+
+class CustomMedicationCreateView(APIView):
+    """'+ إضافة دواء أو مكمل غير موجود بالقائمة' — creates an inactive,
+    doctor-specific Medication row (is_custom=True) that this prescription
+    can reference immediately, without appearing in other doctors' pickers
+    until an admin activates it from /admin."""
+    def post(self, request):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        serializer = sz.CustomMedicationCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        medication = Medication.objects.create(
+            name=data["name"],
+            medication_type=data["medication_type"],
+            is_custom=True,
+            is_active=False,
+            created_by=request.user,
+        )
+        dose = None
+        if data.get("dose"):
+            dose = MedicationDose.objects.create(
+                medication=medication, dose_value=data["dose"], dose_unit=data.get("unit", ""),
+            )
+        return Response({
+            "medication": sz.MedicationCatalogSerializer(medication).data,
+            "dose_id": dose.id if dose else None,
+        }, status=status.HTTP_201_CREATED)
+
+
+class PrescriptionListCreateView(APIView):
+    def get(self, request, patient_id):
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح لطاقم العيادة فقط")
+        patient = get_patient_or_403(request, patient_id)
+        prescriptions = patient.prescriptions.prefetch_related(
+            "items", "items__medication", "items__medication_dose"
+        )
+        return Response(sz.PrescriptionSerializer(prescriptions, many=True).data)
+
+    def post(self, request, patient_id):
+        """Creates a new prescription ('visit'). With `copy_from` set to a
+        previous prescription's id, its items are copied over (fresh ids,
+        status reset to مستمر) so the doctor can then edit/remove/add before
+        the visit is done — implements 'نسخ الوصفة السابقة'."""
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+
+        prescription = Prescription.objects.create(
+            patient=patient,
+            general_notes=(request.data.get("general_notes") or "").strip(),
+            created_by=request.user,
+        )
+
+        copy_from_id = request.data.get("copy_from")
+        if copy_from_id:
+            try:
+                source = patient.prescriptions.get(id=copy_from_id)
+            except Prescription.DoesNotExist:
+                raise NotFound("الوصفة المطلوب نسخها غير موجودة")
+            for item in source.items.all():
+                PrescriptionItem.objects.create(
+                    prescription=prescription,
+                    medication=item.medication,
+                    medication_dose=item.medication_dose,
+                    custom_medication_name=item.custom_medication_name,
+                    custom_dose=item.custom_dose,
+                    route=item.route,
+                    frequency=item.frequency,
+                    timing=item.timing,
+                    duration_value=item.duration_value,
+                    duration_unit=item.duration_unit,
+                    start_date=item.start_date,
+                    end_date=item.end_date,
+                    quantity=item.quantity,
+                    instructions=item.instructions,
+                    notes=item.notes,
+                    treatment_status="مستمر",
+                )
+
+        prescription.refresh_from_db()
+        return Response(sz.PrescriptionSerializer(prescription).data, status=status.HTTP_201_CREATED)
+
+
+class PrescriptionItemListCreateView(APIView):
+    def post(self, request, patient_id, prescription_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        try:
+            prescription = patient.prescriptions.get(id=prescription_id)
+        except Prescription.DoesNotExist:
+            raise NotFound("الوصفة غير موجودة")
+
+        serializer = sz.PrescriptionItemSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save(prescription=prescription)
+        return Response(sz.PrescriptionItemSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+class PrescriptionItemDetailView(APIView):
+    def _get_item(self, patient, prescription_id, item_id):
+        try:
+            return PrescriptionItem.objects.get(
+                id=item_id, prescription_id=prescription_id, prescription__patient=patient
+            )
+        except PrescriptionItem.DoesNotExist:
+            raise NotFound("العلاج غير موجود")
+
+    def put(self, request, patient_id, prescription_id, item_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        item = self._get_item(patient, prescription_id, item_id)
+        serializer = sz.PrescriptionItemSerializer(item, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, patient_id, prescription_id, item_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        item = self._get_item(patient, prescription_id, item_id)
+        item.delete()
+        return Response({"ok": True})

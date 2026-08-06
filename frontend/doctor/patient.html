@@ -324,6 +324,139 @@
 
         <div class="btn-row"><button type="submit" class="btn">حفظ ملف المتابعة</button></div>
       </form>
+
+      <!-- DETAILED PRESCRIPTION SYSTEM — structured per-visit treatment
+           record, backed by the medications catalog imported from Excel.
+           Separate from the quick fields above (which stay as-is and still
+           feed the dashboard stats); this is the full "الوصفة الطبية". -->
+      <div class="card" id="rxCard">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+          <h3 style="margin:0;">🔹 الوصفة الطبية التفصيلية</h3>
+          <div class="btn-row" style="margin:0;">
+            <button type="button" class="btn secondary small" id="rxCopyBtn" style="display:none;">نسخ الوصفة السابقة</button>
+            <button type="button" class="btn small" id="rxAddToggleBtn">+ إضافة علاج أو دواء</button>
+          </div>
+        </div>
+
+        <form id="rxItemForm" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+          <div class="grid">
+            <div class="field">
+              <label>نوع المادة</label>
+              <div class="radio-row">
+                <label class="radio-item"><input type="radio" name="rx_med_type" value="دواء" checked> دواء</label>
+                <label class="radio-item"><input type="radio" name="rx_med_type" value="مكمل غذائي"> مكمل غذائي</label>
+              </div>
+            </div>
+            <div class="field">
+              <label>الفئة</label>
+              <select id="rx_category"><option value="">-- اختر الفئة --</option></select>
+            </div>
+            <div class="field">
+              <label>اسم الدواء أو المكمل</label>
+              <input type="text" id="rx_medication_search" list="rx_medication_list" placeholder="اكتب للبحث..." autocomplete="off">
+              <datalist id="rx_medication_list"></datalist>
+            </div>
+            <div class="field">
+              <label>الجرعة أو التركيز</label>
+              <select id="rx_dose"><option value="">-- اختر الجرعة --</option></select>
+            </div>
+          </div>
+          <div class="btn-row" style="margin:10px 0;">
+            <button type="button" class="btn secondary small" id="rxCustomToggleBtn">+ إضافة دواء أو مكمل غير موجود بالقائمة</button>
+          </div>
+          <div class="grid" id="rxCustomFields" style="display:none;">
+            <div class="field"><label>اسم الدواء أو المكمل (مخصص)</label><input type="text" id="rx_custom_name"></div>
+            <div class="field"><label>الجرعة (مخصصة)</label><input type="text" id="rx_custom_dose" placeholder="مثال: 250 mg"></div>
+          </div>
+
+          <div class="grid">
+            <div class="field">
+              <label>طريقة الاستخدام</label>
+              <select id="rx_route">
+                <option value="">-</option>
+                <option value="عن طريق الفم">عن طريق الفم</option>
+                <option value="حقن">حقن</option>
+                <option value="شراب">شراب</option>
+                <option value="موضعي">موضعي</option>
+                <option value="أخرى">أخرى (حدد)</option>
+              </select>
+              <input type="text" id="rx_route_other" style="display:none; margin-top:6px;" placeholder="حدد طريقة الاستخدام">
+            </div>
+            <div class="field">
+              <label>عدد مرات الاستخدام</label>
+              <select id="rx_frequency">
+                <option value="">-</option>
+                <option value="مرة يومياً">مرة يومياً</option>
+                <option value="مرتان يومياً">مرتان يومياً</option>
+                <option value="ثلاث مرات يومياً">ثلاث مرات يومياً</option>
+                <option value="أسبوعياً">أسبوعياً</option>
+                <option value="حسب الحاجة">حسب الحاجة</option>
+                <option value="أخرى">أخرى (حدد)</option>
+              </select>
+              <input type="text" id="rx_frequency_other" style="display:none; margin-top:6px;" placeholder="حدد عدد مرات الاستخدام">
+            </div>
+            <div class="field">
+              <label>توقيت الاستخدام</label>
+              <select id="rx_timing">
+                <option value="">-</option>
+                <option value="قبل الطعام">قبل الطعام</option>
+                <option value="بعد الطعام">بعد الطعام</option>
+                <option value="مع الطعام">مع الطعام</option>
+                <option value="صباحاً">صباحاً</option>
+                <option value="مساءً">مساءً</option>
+                <option value="قبل النوم">قبل النوم</option>
+                <option value="أخرى">أخرى (حدد)</option>
+              </select>
+              <input type="text" id="rx_timing_other" style="display:none; margin-top:6px;" placeholder="حدد توقيت الاستخدام">
+            </div>
+            <div class="field">
+              <label>مدة العلاج</label>
+              <div style="display:flex; gap:8px;">
+                <input type="number" min="1" id="rx_duration_value" style="flex:1;" placeholder="العدد">
+                <select id="rx_duration_unit" style="flex:1;">
+                  <option value="يوم">يوم</option>
+                  <option value="أسبوع">أسبوع</option>
+                  <option value="شهر">شهر</option>
+                </select>
+              </div>
+            </div>
+            <div class="field"><label>تاريخ بدء العلاج</label><input type="date" id="rx_start_date"></div>
+            <div class="field"><label>تاريخ انتهاء العلاج</label><input type="date" id="rx_end_date"></div>
+            <div class="field"><label>الكمية الموصوفة</label><input type="text" id="rx_quantity" placeholder="مثال: علبة واحدة"></div>
+            <div class="field">
+              <label>حالة العلاج</label>
+              <select id="rx_status">
+                <option value="مستمر">مستمر</option>
+                <option value="مكتمل">مكتمل</option>
+                <option value="متوقف">متوقف</option>
+                <option value="تم تغيير الجرعة">تم تغيير الجرعة</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <label>تعليمات الطبيب</label>
+            <textarea id="rx_instructions" placeholder="تعليمات الاستخدام..."></textarea>
+          </div>
+          <div class="field" style="margin-top:10px;">
+            <label>ملاحظات (اختياري)</label>
+            <textarea id="rx_notes"></textarea>
+          </div>
+          <div class="btn-row">
+            <button type="button" class="btn" id="rxSaveBtn">حفظ الدواء بالوصفة</button>
+            <button type="button" class="btn secondary" id="rxCancelBtn">إلغاء</button>
+          </div>
+        </form>
+
+        <div style="margin-top:16px;">
+          <h4 style="margin:0 0 8px;">أدوية زيارة اليوم</h4>
+          <div id="rxCurrentItemsWrap"><div class="empty-state">لم تتم إضافة أي علاج لهذه الزيارة بعد.</div></div>
+        </div>
+
+        <div style="margin-top:20px;">
+          <h4 style="margin:0 0 8px;">🔹 سجل العلاج للمريض (الزيارات السابقة)</h4>
+          <div id="rxHistoryWrap"><div class="empty-state">لا يوجد سجل وصفات سابقة.</div></div>
+        </div>
+      </div>
     </div>
 
     <!-- LAB TEST TRACKING TAB (monthly, doctor-only) -->
@@ -1043,6 +1176,404 @@ document.getElementById("followupForm").addEventListener("submit", async (e) => 
   } catch (err) { showMsg(msgEl, err.message, "error"); }
 });
 
+// ================= DETAILED PRESCRIPTION SYSTEM (الوصفة الطبية) =================
+// Catalog (categories -> medications -> doses) is loaded once and filtered
+// client-side for the cascading dropdowns. Prescriptions are per-visit
+// historical records (like Mounjaro/lab-test logs) — "today's" one (if any)
+// is editable; anything older is read-only history, with a "نسخ الوصفة
+// السابقة" action to start today's from it.
+let rxCatalog = [];
+let rxMedById = {};              // medication id -> {..., categoryType, doses:[...]}
+let rxFilteredMeds = [];         // currently selectable meds (by type+category)
+let rxPrescriptions = [];        // this patient's full prescription history, newest first
+let rxCurrentPrescription = null; // today's prescription, or null if none started yet
+let rxEditingItemId = null;      // set while editing an existing item
+
+function isSameDay(iso) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+}
+
+async function loadRxCatalog() {
+  rxCatalog = await apiFetch(`/api/medications/catalog`);
+  rxMedById = {};
+  rxCatalog.forEach((cat) => {
+    (cat.medications || []).forEach((med) => {
+      rxMedById[med.id] = Object.assign({}, med, { categoryType: cat.type });
+    });
+  });
+}
+
+function rxMedLabel(med) {
+  return med.dosage_form ? `${med.name} (${med.dosage_form})` : med.name;
+}
+
+function rxPopulateCategories() {
+  const type = document.querySelector('input[name="rx_med_type"]:checked').value;
+  const sel = document.getElementById("rx_category");
+  sel.innerHTML = `<option value="">-- اختر الفئة --</option>`;
+  rxCatalog.filter((c) => c.type === type).forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.name;
+    sel.appendChild(opt);
+  });
+  rxFilteredMeds = [];
+  document.getElementById("rx_medication_search").value = "";
+  document.getElementById("rx_medication_list").innerHTML = "";
+  document.getElementById("rx_dose").innerHTML = `<option value="">-- اختر الجرعة --</option>`;
+}
+
+function rxPopulateMedications() {
+  const catId = document.getElementById("rx_category").value;
+  const cat = rxCatalog.find((c) => String(c.id) === String(catId));
+  rxFilteredMeds = cat ? (cat.medications || []) : [];
+  const list = document.getElementById("rx_medication_list");
+  list.innerHTML = rxFilteredMeds.map((m) => `<option value="${escapeHtml(rxMedLabel(m))}">`).join("");
+  document.getElementById("rx_medication_search").value = "";
+  document.getElementById("rx_dose").innerHTML = `<option value="">-- اختر الجرعة --</option>`;
+}
+
+function rxPopulateDoses() {
+  const val = document.getElementById("rx_medication_search").value.trim();
+  const med = rxFilteredMeds.find((m) => rxMedLabel(m) === val);
+  const sel = document.getElementById("rx_dose");
+  if (!med) {
+    sel.innerHTML = `<option value="">-- اختر الجرعة --</option>`;
+    return;
+  }
+  const doses = med.doses || [];
+  sel.innerHTML = doses.length
+    ? doses.map((d) => `<option value="${d.id}">${escapeHtml(d.display_name)}</option>`).join("")
+    : `<option value="">لا توجد جرعات محددة لهذا الدواء</option>`;
+}
+
+function rxSelectedMedication() {
+  const val = document.getElementById("rx_medication_search").value.trim();
+  return rxFilteredMeds.find((m) => rxMedLabel(m) === val) || null;
+}
+
+document.querySelectorAll('input[name="rx_med_type"]').forEach((el) => el.addEventListener("change", rxPopulateCategories));
+document.getElementById("rx_category").addEventListener("change", rxPopulateMedications);
+document.getElementById("rx_medication_search").addEventListener("input", rxPopulateDoses);
+
+document.getElementById("rxCustomToggleBtn").addEventListener("click", () => {
+  const box = document.getElementById("rxCustomFields");
+  const showing = box.style.display !== "none";
+  box.style.display = showing ? "none" : "";
+  document.getElementById("rxCustomToggleBtn").textContent = showing
+    ? "+ إضافة دواء أو مكمل غير موجود بالقائمة"
+    : "إلغاء الإدخال المخصص";
+});
+
+["route", "frequency", "timing"].forEach((key) => {
+  document.getElementById(`rx_${key}`).addEventListener("change", (e) => {
+    document.getElementById(`rx_${key}_other`).style.display = e.target.value === "أخرى" ? "" : "none";
+  });
+});
+
+function rxResolveOtherSelect(key) {
+  const sel = document.getElementById(`rx_${key}`);
+  if (sel.value === "أخرى") return document.getElementById(`rx_${key}_other`).value.trim();
+  return sel.value;
+}
+
+function rxResetForm() {
+  document.getElementById("rxItemForm").reset();
+  rxPopulateCategories();
+  document.getElementById("rxCustomFields").style.display = "none";
+  document.getElementById("rxCustomToggleBtn").textContent = "+ إضافة دواء أو مكمل غير موجود بالقائمة";
+  ["route", "frequency", "timing"].forEach((k) => { document.getElementById(`rx_${k}_other`).style.display = "none"; });
+  document.getElementById("rx_start_date").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("rx_end_date").value = "";
+  rxEditingItemId = null;
+  // Re-enable identity fields in case a previous edit disabled them.
+  ["rx_category", "rx_medication_search", "rx_dose", "rxCustomToggleBtn"].forEach((id) => {
+    document.getElementById(id).disabled = false;
+  });
+  document.querySelectorAll('input[name="rx_med_type"]').forEach((el) => { el.disabled = false; });
+}
+
+document.getElementById("rxAddToggleBtn").addEventListener("click", () => {
+  rxResetForm();
+  document.getElementById("rxItemForm").style.display = "";
+  document.getElementById("rxItemForm").scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+document.getElementById("rxCancelBtn").addEventListener("click", () => {
+  document.getElementById("rxItemForm").style.display = "none";
+});
+
+// Duration/start date auto-compute an end date suggestion (doctor can still edit it).
+function rxRecomputeEndDate() {
+  const startVal = document.getElementById("rx_start_date").value;
+  const durVal = parseInt(document.getElementById("rx_duration_value").value) || 0;
+  const durUnit = document.getElementById("rx_duration_unit").value;
+  if (!startVal || !durVal) return;
+  const d = new Date(startVal);
+  if (durUnit === "شهر") d.setMonth(d.getMonth() + durVal);
+  else if (durUnit === "أسبوع") d.setDate(d.getDate() + durVal * 7);
+  else d.setDate(d.getDate() + durVal);
+  document.getElementById("rx_end_date").value = d.toISOString().slice(0, 10);
+}
+["rx_start_date", "rx_duration_value", "rx_duration_unit"].forEach((id) => {
+  document.getElementById(id).addEventListener("change", rxRecomputeEndDate);
+});
+
+async function ensureCurrentPrescription() {
+  if (rxCurrentPrescription) return rxCurrentPrescription;
+  const created = await apiFetch(`/api/patients/${patientId}/prescriptions`, { method: "POST", body: JSON.stringify({}) });
+  rxCurrentPrescription = created;
+  rxPrescriptions.unshift(created);
+  return created;
+}
+
+document.getElementById("rxSaveBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    const isCustom = document.getElementById("rxCustomFields").style.display !== "none"
+      && document.getElementById("rx_custom_name").value.trim();
+
+    let medicationId = null;
+    let doseId = null;
+
+    if (!rxEditingItemId || isCustom) {
+      if (isCustom) {
+        const medType = document.querySelector('input[name="rx_med_type"]:checked').value;
+        const created = await apiFetch(`/api/medications/custom`, {
+          method: "POST",
+          body: JSON.stringify({
+            name: document.getElementById("rx_custom_name").value.trim(),
+            dose: document.getElementById("rx_custom_dose").value.trim(),
+            unit: "",
+            medication_type: medType,
+          }),
+        });
+        medicationId = created.medication.id;
+        doseId = created.dose_id;
+        rxMedById[medicationId] = Object.assign({}, created.medication, { categoryType: medType });
+      } else {
+        const med = rxSelectedMedication();
+        if (!med) { showMsg(msgEl, "اختر دواءً من القائمة أو أدخل اسم دواء مخصص", "error"); return; }
+        medicationId = med.id;
+        doseId = document.getElementById("rx_dose").value || null;
+      }
+    }
+
+    const payload = {
+      route: rxResolveOtherSelect("route"),
+      frequency: rxResolveOtherSelect("frequency"),
+      timing: rxResolveOtherSelect("timing"),
+      duration_value: parseInt(document.getElementById("rx_duration_value").value) || null,
+      duration_unit: document.getElementById("rx_duration_unit").value,
+      start_date: document.getElementById("rx_start_date").value || null,
+      end_date: document.getElementById("rx_end_date").value || null,
+      quantity: document.getElementById("rx_quantity").value.trim(),
+      instructions: document.getElementById("rx_instructions").value.trim(),
+      notes: document.getElementById("rx_notes").value.trim(),
+      treatment_status: document.getElementById("rx_status").value,
+    };
+    if (medicationId) {
+      payload.medication = medicationId;
+      payload.medication_dose = doseId || null;
+    } else if (rxEditingItemId && !document.getElementById("rx_dose").disabled) {
+      // Editing an existing item: drug identity is locked, but the dose
+      // select stays editable (covers spec's "تغيير الجرعة" action).
+      payload.medication_dose = document.getElementById("rx_dose").value || null;
+    }
+
+    if (rxEditingItemId) {
+      await apiFetch(`/api/patients/${patientId}/prescriptions/${rxCurrentPrescription.id}/items/${rxEditingItemId}`, {
+        method: "PUT", body: JSON.stringify(payload),
+      });
+      showMsg(msgEl, "تم تعديل الدواء ✅", "success");
+    } else {
+      await ensureCurrentPrescription();
+      await apiFetch(`/api/patients/${patientId}/prescriptions/${rxCurrentPrescription.id}/items`, {
+        method: "POST", body: JSON.stringify(payload),
+      });
+      showMsg(msgEl, "تمت إضافة الدواء للوصفة ✅", "success");
+    }
+    document.getElementById("rxItemForm").style.display = "none";
+    await loadRx();
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+function rxEditItem(itemId) {
+  const item = (rxCurrentPrescription.items || []).find((i) => i.id === itemId);
+  if (!item) return;
+  rxResetForm();
+  rxEditingItemId = itemId;
+  document.getElementById("rxItemForm").style.display = "";
+
+  // The drug/dose identity isn't changed from the edit form — only its
+  // usage details and status. Lock the identity controls and show what's
+  // already prescribed as a read-only hint via the disabled search field.
+  ["rx_category", "rx_medication_search", "rxCustomToggleBtn"].forEach((id) => { document.getElementById(id).disabled = true; });
+  document.querySelectorAll('input[name="rx_med_type"]').forEach((el) => { el.disabled = true; });
+  document.getElementById("rx_medication_search").value = item.medication_name;
+  if (item.medication && rxMedById[item.medication]) {
+    const med = rxMedById[item.medication];
+    document.getElementById("rx_dose").innerHTML = (med.doses || []).map((d) =>
+      `<option value="${d.id}" ${d.id === item.medication_dose ? "selected" : ""}>${escapeHtml(d.display_name)}</option>`
+    ).join("") || `<option value="">لا توجد جرعات محددة</option>`;
+  } else {
+    document.getElementById("rx_dose").innerHTML = `<option value="">${escapeHtml(item.dose_display || "-")}</option>`;
+    document.getElementById("rx_dose").disabled = true;
+  }
+
+  const setOrOther = (key, value) => {
+    const sel = document.getElementById(`rx_${key}`);
+    const opts = Array.from(sel.options).map((o) => o.value);
+    if (value && opts.includes(value)) {
+      sel.value = value;
+    } else if (value) {
+      sel.value = "أخرى";
+      document.getElementById(`rx_${key}_other`).style.display = "";
+      document.getElementById(`rx_${key}_other`).value = value;
+    }
+  };
+  setOrOther("route", item.route);
+  setOrOther("frequency", item.frequency);
+  setOrOther("timing", item.timing);
+  document.getElementById("rx_duration_value").value = item.duration_value || "";
+  document.getElementById("rx_duration_unit").value = item.duration_unit || "يوم";
+  document.getElementById("rx_start_date").value = item.start_date || "";
+  document.getElementById("rx_end_date").value = item.end_date || "";
+  document.getElementById("rx_quantity").value = item.quantity || "";
+  document.getElementById("rx_instructions").value = item.instructions || "";
+  document.getElementById("rx_notes").value = item.notes || "";
+  document.getElementById("rx_status").value = item.treatment_status || "مستمر";
+  document.getElementById("rxItemForm").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function rxDeleteItem(itemId) {
+  if (!confirm("حذف هذا الدواء من الوصفة؟")) return;
+  try {
+    await apiFetch(`/api/patients/${patientId}/prescriptions/${rxCurrentPrescription.id}/items/${itemId}`, { method: "DELETE" });
+    await loadRx();
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+async function rxStopItem(itemId) {
+  const reason = prompt("سبب إيقاف العلاج (اختياري):", "") || "";
+  try {
+    await apiFetch(`/api/patients/${patientId}/prescriptions/${rxCurrentPrescription.id}/items/${itemId}`, {
+      method: "PUT", body: JSON.stringify({ treatment_status: "متوقف", stop_reason: reason.trim() }),
+    });
+    await loadRx();
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+function rxShowDetails(itemId) {
+  const item = (rxCurrentPrescription.items || []).find((i) => i.id === itemId);
+  if (!item) return;
+  const lines = [
+    `الدواء: ${item.medication_name}`,
+    `الجرعة: ${item.dose_display || "-"}`,
+    `طريقة الاستخدام: ${item.route || "-"}`,
+    `عدد المرات: ${item.frequency || "-"}`,
+    `التوقيت: ${item.timing || "-"}`,
+    `المدة: ${item.duration_value ? item.duration_value + " " + (item.duration_unit || "") : "-"}`,
+    `تاريخ البدء: ${item.start_date || "-"}`,
+    `تاريخ الانتهاء: ${item.end_date || "-"}`,
+    `الكمية: ${item.quantity || "-"}`,
+    `تعليمات الطبيب: ${item.instructions || "-"}`,
+    `ملاحظات: ${item.notes || "-"}`,
+    `الحالة: ${item.treatment_status}${item.stop_reason ? " (" + item.stop_reason + ")" : ""}`,
+  ];
+  alert(lines.join("\n"));
+}
+
+function rxStatusBadgeClass(status) {
+  if (status === "مستمر") return "green";
+  if (status === "متوقف") return "red";
+  if (status === "مكتمل") return "gray";
+  return "orange";
+}
+
+function rxRenderCurrentItems() {
+  const wrap = document.getElementById("rxCurrentItemsWrap");
+  const items = rxCurrentPrescription ? (rxCurrentPrescription.items || []) : [];
+  if (!items.length) {
+    wrap.innerHTML = `<div class="empty-state">لم تتم إضافة أي علاج لهذه الزيارة بعد.</div>`;
+    return;
+  }
+  const canEdit = role === "doctor";
+  const rows = items.map((it) => `
+    <tr>
+      <td>${escapeHtml(it.medication_name)}</td>
+      <td>${escapeHtml(it.dose_display || "-")}</td>
+      <td>${escapeHtml(it.frequency || "-")}</td>
+      <td>${it.duration_value ? escapeHtml(it.duration_value + " " + (it.duration_unit || "")) : "-"}</td>
+      <td>${escapeHtml(it.start_date || "-")}</td>
+      <td><span class="badge ${rxStatusBadgeClass(it.treatment_status)}">${escapeHtml(it.treatment_status)}</span></td>
+      <td>
+        <div class="btn-row" style="margin:0;">
+          <button type="button" class="btn small secondary" onclick="rxShowDetails(${it.id})">التفاصيل</button>
+          ${canEdit ? `
+            <button type="button" class="btn small secondary" onclick="rxEditItem(${it.id})">تعديل</button>
+            ${it.treatment_status === "مستمر" ? `<button type="button" class="btn small secondary" onclick="rxStopItem(${it.id})">إيقاف</button>` : ""}
+            <button type="button" class="btn small danger" onclick="rxDeleteItem(${it.id})">حذف</button>
+          ` : ""}
+        </div>
+      </td>
+    </tr>`).join("");
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>الدواء أو المكمل</th><th>الجرعة</th><th>عدد المرات</th><th>المدة</th><th>تاريخ البدء</th><th>الحالة</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+async function rxCopyPrescription(prescriptionId) {
+  if (!confirm("نسخ هذه الوصفة إلى زيارة اليوم؟ يمكنك تعديلها بعد النسخ.")) return;
+  try {
+    const created = await apiFetch(`/api/patients/${patientId}/prescriptions`, {
+      method: "POST", body: JSON.stringify({ copy_from: prescriptionId }),
+    });
+    rxCurrentPrescription = created;
+    await loadRx();
+    showMsg(msgEl, "تم نسخ الوصفة — يمكنك الآن تعديل الجرعات أو حذف/إضافة أدوية ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+function rxRenderHistory() {
+  const wrap = document.getElementById("rxHistoryWrap");
+  const history = rxPrescriptions.filter((p) => !rxCurrentPrescription || p.id !== rxCurrentPrescription.id);
+  const copyBtn = document.getElementById("rxCopyBtn");
+  copyBtn.style.display = (role === "doctor" && history.length) ? "" : "none";
+  if (copyBtn) {
+    copyBtn.onclick = () => rxCopyPrescription(history[0].id);
+  }
+  if (!history.length) {
+    wrap.innerHTML = `<div class="empty-state">لا يوجد سجل وصفات سابقة.</div>`;
+    return;
+  }
+  wrap.innerHTML = history.map((p) => {
+    const itemsSummary = (p.items || []).map((it) =>
+      `<span class="badge ${rxStatusBadgeClass(it.treatment_status)}">${escapeHtml(it.medication_name)} — ${escapeHtml(it.dose_display || "-")}</span>`
+    ).join(" ") || `<span class="badge gray">بدون أدوية</span>`;
+    return `
+    <div class="note-item">
+      <div class="meta">${fmtDate(p.prescription_date)}${p.doctor_name ? " — د. " + escapeHtml(p.doctor_name) : ""}</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px; margin:6px 0;">${itemsSummary}</div>
+      ${p.general_notes ? `<div style="color:var(--muted); font-size:.85rem;">${escapeHtml(p.general_notes)}</div>` : ""}
+      ${role === "doctor" ? `<div class="btn-row" style="margin-top:8px;"><button type="button" class="btn small secondary" onclick="rxCopyPrescription(${p.id})">نسخ هذه الوصفة</button></div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+async function loadRx() {
+  rxPrescriptions = await apiFetch(`/api/patients/${patientId}/prescriptions`);
+  rxCurrentPrescription = rxPrescriptions.find((p) => isSameDay(p.prescription_date)) || null;
+  rxRenderCurrentItems();
+  rxRenderHistory();
+}
+
+document.getElementById("rxAddToggleBtn").style.display = role === "doctor" ? "" : "none";
+
 document.getElementById("labTestForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideMsg(msgEl);
@@ -1125,6 +1656,9 @@ document.getElementById("noteForm").addEventListener("submit", async (e) => {
     await loadProfile();
     await loadAssessment();
     await loadFollowup();
+    await loadRxCatalog();
+    rxPopulateCategories();
+    await loadRx();
     if (role !== "secretary") {
       await loadPlan();
       await loadLabTests();
