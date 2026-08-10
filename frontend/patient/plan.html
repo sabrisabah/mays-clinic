@@ -32,48 +32,81 @@ if (!requireRole("patient")) { throw new Error("redirect"); }
 refreshUserChip("userChip", Auth.getName());
 const patientId = Auth.getPatientId();
 
-async function load() {
-  const content = document.getElementById("content");
-  try {
-    const plan = await apiFetch(`/api/patients/${patientId}/plan`);
-    if (!plan.daily_calories && !plan.plan_notes) {
-      content.innerHTML = `<div class="card"><div class="empty-state">لم يقم الطبيب بوضع خطة غذائية بعد. يرجى مراجعة الطبيب بعد إكمال استمارة التقييم.</div></div>`;
-      return;
-    }
-    content.innerHTML = `
-      <div class="card">
-        <h3>🔹 الخطة الغذائية الحالية</h3>
-        <div class="stats-row">
-          <div class="stat-card"><div class="value">${plan.daily_calories || 0}</div><div class="label">سعرة حرارية / يوم</div></div>
-          <div class="stat-card"><div class="value">${plan.protein_pct || 0}%</div><div class="label">بروتين</div></div>
-          <div class="stat-card"><div class="value">${plan.carbs_pct || 0}%</div><div class="label">كاربوهيدرات</div></div>
-          <div class="stat-card"><div class="value">${plan.fat_pct || 0}%</div><div class="label">دهون</div></div>
-        </div>
-        <h3 style="margin-top:20px;">ملاحظات الطبيب حول الخطة</h3>
-        <p style="white-space:pre-wrap; color:var(--text);">${plan.plan_notes ? escapeHtml(plan.plan_notes) : "لا توجد ملاحظات إضافية."}</p>
-        <p style="color:var(--muted); font-size:.8rem;">آخر تحديث: ${fmtDate(plan.updated_at)}</p>
-        <div class="btn-row">
-          <button type="button" class="btn danger" id="deletePlanBtn">حذف الخطة الغذائية</button>
-        </div>
-      </div>`;
-    document.getElementById("deletePlanBtn").addEventListener("click", deletePlan);
-  } catch (err) {
-    content.innerHTML = `<div class="msg error">${err.message}</div>`;
-  }
-}
-async function deletePlan() {
-  if (!confirm("هل أنت متأكد من حذف الخطة الغذائية؟ سيتوجب على الطبيب وضع خطة جديدة.")) return;
-  try {
-    await apiFetch(`/api/patients/${patientId}/plan`, { method: "DELETE" });
-    load();
-  } catch (err) {
-    document.getElementById("content").innerHTML = `<div class="msg error">${err.message}</div>`;
-  }
+const PLAN_MEAL_TYPES = [["فطور", "فطور"], ["سناك1", "سناك 1"], ["غداء", "غداء"], ["سناك2", "سناك 2"], ["عشاء", "عشاء"]];
+function planMealLabel(mealType) {
+  return (PLAN_MEAL_TYPES.find(([v]) => v === mealType) || [mealType, mealType])[1];
 }
 function escapeHtml(s) {
   const div = document.createElement("div");
-  div.textContent = s;
+  div.textContent = s || "";
   return div.innerHTML;
+}
+
+async function load() {
+  const content = document.getElementById("content");
+  try {
+    // The API already restricts a patient to their own Active plan only.
+    const plans = await apiFetch(`/api/patients/${patientId}/nutrition-plans`);
+    const plan = plans.find((p) => p.status === "Active");
+    if (!plan) {
+      content.innerHTML = `<div class="card"><div class="empty-state">لم يقم الطبيب باعتماد خطة غذائية بعد. يرجى مراجعة الطبيب بعد إكمال استمارة التقييم.</div></div>`;
+      return;
+    }
+
+    const meals = (plan.meals || []).slice().sort((a, b) => a.order - b.order);
+    const mealsHtml = meals.map((meal) => {
+      const items = (meal.items || []).filter((it) => it.patient_visible);
+      if (!items.length) return "";
+      const rows = items.map((it) => `
+        <tr>
+          <td>${escapeHtml(it.food_name)}</td>
+          <td>${it.quantity} ${escapeHtml(it.unit || "")}${it.food_state ? " (" + escapeHtml(it.food_state) + ")" : ""}</td>
+          <td>${it.calories} سعرة</td>
+          <td>${escapeHtml(it.alternative_text || "-")}</td>
+          <td>${escapeHtml(it.instructions || "-")}</td>
+        </tr>`).join("");
+      return `
+        <div style="margin-bottom:20px;">
+          <h3 style="margin-bottom:8px;">${planMealLabel(meal.meal_type)}${meal.time ? ` — <span style="color:var(--muted); font-weight:400; font-size:.85rem;">${meal.time}</span>` : ""}</h3>
+          <table>
+            <thead><tr><th>الصنف</th><th>الكمية</th><th>السعرات</th><th>البديل المكافئ</th><th>تعليمات</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }).join("");
+
+    content.innerHTML = `
+      <div class="card">
+        <h3>🔹 الخطة الغذائية الحالية${plan.name ? " — " + escapeHtml(plan.name) : ""}</h3>
+        <div class="stats-row">
+          <div class="stat-card"><div class="value">${plan.calorie_target || 0}</div><div class="label">سعرة حرارية / يوم</div></div>
+          <div class="stat-card"><div class="value">${plan.protein_grams || 0} غم</div><div class="label">بروتين</div></div>
+          <div class="stat-card"><div class="value">${plan.carbs_grams || 0} غم</div><div class="label">كاربوهيدرات</div></div>
+          <div class="stat-card"><div class="value">${plan.fat_grams || 0} غم</div><div class="label">دهون</div></div>
+        </div>
+        ${plan.start_date ? `<p style="color:var(--muted); font-size:.85rem;">تاريخ البدء: ${plan.start_date}${plan.duration_value ? ` — المدة: ${plan.duration_value} ${escapeHtml(plan.duration_unit || "")}` : ""}</p>` : ""}
+      </div>
+
+      <div class="card">
+        <h3>🔹 جدول الوجبات اليومي</h3>
+        ${mealsHtml || `<div class="empty-state">لم يتم إضافة تفاصيل الوجبات بعد.</div>`}
+      </div>
+
+      ${plan.patient_notes ? `
+      <div class="card">
+        <h3>🔹 ملاحظات الطبيب</h3>
+        <p style="white-space:pre-wrap; color:var(--text);">${escapeHtml(plan.patient_notes)}</p>
+      </div>` : ""}
+
+      <div class="btn-row">
+        <button type="button" class="btn secondary" id="printPlanBtn">طباعة الخطة</button>
+      </div>
+      <p style="color:var(--muted); font-size:.8rem;">آخر تحديث: ${fmtDate(plan.updated_at)}</p>`;
+
+    document.getElementById("printPlanBtn").addEventListener("click", () => window.print());
+  } catch (err) {
+    content.innerHTML = `<div class="msg error">${err.message}</div>`;
+  }
 }
 load();
 </script>

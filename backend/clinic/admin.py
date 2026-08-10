@@ -5,6 +5,7 @@ from import_export.admin import ImportExportModelAdmin
 from .models import (
     User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
+    Food, Meal, MealItem,
 )
 from .utils import compute_bmi, compute_whr, compute_whr_class, compute_activity_level, normalize_height_m
 
@@ -142,10 +143,37 @@ class AssessmentAdmin(ImportExportModelAdmin, admin.ModelAdmin):
     search_fields = ["patient__file_number", "patient__user__full_name"]
 
 
+@admin.register(Food)
+class FoodAdmin(admin.ModelAdmin):
+    list_display = ["name", "unit", "calories_per_unit", "protein_per_unit", "carbs_per_unit", "fat_per_unit", "is_active"]
+    list_filter = ["unit", "is_active"]
+    search_fields = ["name"]
+
+
+class MealItemInline(admin.TabularInline):
+    model = MealItem
+    extra = 0
+
+
+class MealInline(admin.TabularInline):
+    model = Meal
+    extra = 0
+    show_change_link = True
+
+
+@admin.register(Meal)
+class MealAdmin(admin.ModelAdmin):
+    inlines = [MealItemInline]
+    list_display = ["plan", "meal_type", "time", "order"]
+    list_filter = ["meal_type"]
+
+
 @admin.register(NutritionPlan)
 class NutritionPlanAdmin(admin.ModelAdmin):
-    list_display = ["patient", "daily_calories", "protein_pct", "carbs_pct", "fat_pct", "updated_at"]
-    search_fields = ["patient__file_number", "patient__user__full_name"]
+    inlines = [MealInline]
+    list_display = ["patient", "version", "status", "calorie_target", "protein_pct", "carbs_pct", "fat_pct", "created_by", "updated_at"]
+    list_filter = ["status"]
+    search_fields = ["patient__file_number", "patient__user__full_name", "name"]
 
 
 @admin.register(ProgressEntry)

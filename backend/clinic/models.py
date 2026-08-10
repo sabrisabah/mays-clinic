@@ -148,19 +148,144 @@ class Assessment(models.Model):
         return f"استمارة تقييم - {self.patient.file_number} - {self.patient.user.full_name}"
 
 
+class Food(models.Model):
+    """Growing food reference library the clinic builds up over time (there's
+    no bundled nutrition database — doctors add items as needed, same
+    approach as the custom-medication picker). Nutrition values are stored
+    PER ONE `unit` (e.g. per 1 gram, or per 1 piece if unit='قطعة'), so a
+    meal item's totals are simply value_per_unit × quantity."""
+    UNIT_CHOICES = [
+        ("غم", "غم"), ("مل", "مل"), ("قطعة", "قطعة"),
+        ("كوب", "كوب"), ("ملعقة كبيرة", "ملعقة كبيرة"), ("ملعقة صغيرة", "ملعقة صغيرة"),
+    ]
+    name = models.CharField(max_length=200, unique=True)
+    unit = models.CharField(max_length=20, choices=UNIT_CHOICES, default="غم")
+    calories_per_unit = models.FloatField(default=0)
+    protein_per_unit = models.FloatField(default=0)
+    carbs_per_unit = models.FloatField(default=0)
+    fat_per_unit = models.FloatField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="foods_added")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.unit})"
+
+
 class NutritionPlan(models.Model):
-    """Doctor's nutrition plan summary."""
-    patient = models.OneToOneField(Patient, on_delete=models.CASCADE, related_name="plan")
-    daily_calories = models.FloatField(default=0)
+    """Physician-authored nutrition plan. Append-only/versioned like
+    Prescription — approving a plan locks it (status=Active); any later
+    change happens via 'Create Revised Version', which clones a new Draft
+    (parent_plan points back to what it revises, version increments) rather
+    than editing the approved record in place. At most one plan per patient
+    should be Active at a time (enforced in the approve view, not the DB)."""
+    DRAFT, ACTIVE, ARCHIVED = "Draft", "Active", "Archived"
+    STATUS_CHOICES = [(DRAFT, "مسودة"), (ACTIVE, "مفعّلة"), (ARCHIVED, "مؤرشفة")]
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="nutrition_plans")
+    name = models.CharField(max_length=150, blank=True, default="")
+    start_date = models.DateField(null=True, blank=True)
+    duration_value = models.PositiveIntegerField(null=True, blank=True)
+    duration_unit = models.CharField(max_length=20, blank=True, default="")
+    treatment_objective = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=DRAFT)
+    version = models.PositiveIntegerField(default=1)
+    parent_plan = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="revisions")
+
+    # Energy requirement — bmr/tdee are a snapshot computed from the
+    # patient's data at save time (kept editable while Draft; effectively
+    # frozen once Active since only Draft plans can be PUT).
+    activity_level = models.CharField(max_length=20, blank=True, default="")
+    bmr = models.FloatField(default=0)
+    tdee = models.FloatField(default=0)
+    calorie_target = models.FloatField(default=0)
+    target_reason = models.TextField(blank=True, default="")
+
+    # Macro targets (percent is the source of truth; grams are derived at
+    # read time). protein_grams_override switches the UI/validation into the
+    # "protein-first gram-based method" described in the spec.
     protein_pct = models.FloatField(default=0)
     carbs_pct = models.FloatField(default=0)
     fat_pct = models.FloatField(default=0)
-    plan_notes = models.TextField(blank=True, default="")
-    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    protein_grams_override = models.FloatField(null=True, blank=True)
+
+    # Clinical safeguards — ticking any of these (or the patient being under
+    # 18, checked from Patient.age) blocks the automatic adult calorie
+    # target suggestion and requires special_pathway_notes before approval.
+    is_pregnant = models.BooleanField(default=False)
+    is_lactating = models.BooleanField(default=False)
+    eating_disorder_risk = models.BooleanField(default=False)
+    medically_unstable = models.BooleanField(default=False)
+    special_pathway_notes = models.TextField(blank=True, default="")
+
+    plan_notes = models.TextField(blank=True, default="", help_text="ملاحظات للطبيب فقط — لا تظهر للمريض")
+    patient_notes = models.TextField(blank=True, default="", help_text="ملاحظات وتعليمات تظهر للمريض (ماء، نشاط، إلخ)")
+
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="nutrition_plans_authored")
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ["-created_at"]
+
     def __str__(self):
-        return f"خطة غذائية - {self.patient.file_number} - {self.patient.user.full_name}"
+        return f"خطة غذائية v{self.version} ({self.status}) - {self.patient.file_number} - {self.patient.user.full_name}"
+
+
+class Meal(models.Model):
+    MEAL_TYPES = [
+        ("فطور", "فطور"), ("سناك1", "سناك 1"), ("غداء", "غداء"),
+        ("سناك2", "سناك 2"), ("عشاء", "عشاء"),
+    ]
+    plan = models.ForeignKey(NutritionPlan, on_delete=models.CASCADE, related_name="meals")
+    meal_type = models.CharField(max_length=20, choices=MEAL_TYPES)
+    time = models.TimeField(null=True, blank=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return f"{self.meal_type} - خطة #{self.plan_id}"
+
+
+class MealItem(models.Model):
+    FOOD_STATE_CHOICES = [
+        ("نيء", "نيء"), ("مطبوخ", "مطبوخ"),
+        ("مصفّى", "مصفّى"), ("الحصة الصالحة للأكل", "الحصة الصالحة للأكل"),
+    ]
+    meal = models.ForeignKey(Meal, on_delete=models.CASCADE, related_name="items")
+    food = models.ForeignKey(Food, null=True, blank=True, on_delete=models.SET_NULL, related_name="meal_items")
+    custom_food_name = models.CharField(max_length=200, blank=True, default="")
+    quantity = models.FloatField(default=0)
+    unit = models.CharField(max_length=20, blank=True, default="غم")
+    food_state = models.CharField(max_length=30, blank=True, default="")
+
+    # Nutrition totals for THIS item at its quantity — auto-filled from
+    # food.*_per_unit × quantity when a catalog food is picked, but always
+    # editable/overridable (also how a custom/free-text item gets its values).
+    calories = models.FloatField(default=0)
+    protein = models.FloatField(default=0)
+    carbs = models.FloatField(default=0)
+    fat = models.FloatField(default=0)
+
+    alternative_text = models.CharField(max_length=255, blank=True, default="")
+    instructions = models.CharField(max_length=255, blank=True, default="")
+    patient_visible = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def display_name(self):
+        return self.food.name if self.food_id else self.custom_food_name
+
+    def __str__(self):
+        return f"{self.display_name()} - وجبة #{self.meal_id}"
 
 
 class FollowUpRecord(models.Model):

@@ -9,7 +9,6 @@ urlpatterns = [
     path("patients", views.PatientListView.as_view()),
     path("patients/<int:patient_id>", views.PatientDetailView.as_view()),
     path("patients/<int:patient_id>/assessment", views.AssessmentView.as_view()),
-    path("patients/<int:patient_id>/plan", views.NutritionPlanView.as_view()),
     path("patients/<int:patient_id>/followup", views.FollowUpRecordView.as_view()),
     path("patients/<int:patient_id>/progress", views.ProgressListView.as_view()),
     path("patients/<int:patient_id>/progress/<int:entry_id>", views.ProgressDeleteView.as_view()),
@@ -28,4 +27,12 @@ urlpatterns = [
     path("patients/<int:patient_id>/prescriptions", views.PrescriptionListCreateView.as_view()),
     path("patients/<int:patient_id>/prescriptions/<int:prescription_id>/items", views.PrescriptionItemListCreateView.as_view()),
     path("patients/<int:patient_id>/prescriptions/<int:prescription_id>/items/<int:item_id>", views.PrescriptionItemDetailView.as_view()),
+
+    path("foods", views.FoodListCreateView.as_view()),
+    path("patients/<int:patient_id>/nutrition-plans", views.NutritionPlanListCreateView.as_view()),
+    path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>", views.NutritionPlanDetailView.as_view()),
+    path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/action", views.NutritionPlanActionView.as_view()),
+    path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/meals/<int:meal_id>", views.MealDetailView.as_view()),
+    path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/meals/<int:meal_id>/items", views.MealItemListCreateView.as_view()),
+    path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/meals/<int:meal_id>/items/<int:item_id>", views.MealItemDetailView.as_view()),
 ]

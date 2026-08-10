@@ -12,6 +12,7 @@ from rest_framework import status
 from .models import (
     User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
+    Food, Meal, MealItem,
 )
 from .permissions import IsDoctor, IsClinicStaff
 from .utils import (
@@ -21,6 +22,8 @@ from .utils import (
     compute_activity_level,
     next_file_number,
     normalize_height_m,
+    compute_bmr,
+    compute_tdee,
 )
 from . import serializers as sz
 
@@ -256,32 +259,248 @@ class AssessmentView(APIView):
         return Response(sz.AssessmentSerializer(assessment).data)
 
 
-# ---------------- NUTRITION PLAN ----------------
+# ---------------- NUTRITION PLAN (خطة غذائية) ----------------
+# Versioned/append-only like Prescription: approving a plan (status=Active)
+# locks it — further edits go through "revise" (clones a new Draft) rather
+# than mutating the approved record. Doctor-only end to end, except the
+# patient's own read-only access to their current Active plan.
 
-class NutritionPlanView(APIView):
+MEAL_TYPES_ORDER = ["فطور", "سناك1", "غداء", "سناك2", "عشاء"]
+
+
+def _snapshot_bmr_tdee(patient, activity_level):
+    """Computes BMR/TDEE from the patient's latest assessment weight/height
+    and Patient.age/gender. Returns (bmr, tdee) — both 0 if there isn't
+    enough data yet (assessment not filled in)."""
+    assessment = getattr(patient, "assessment", None)
+    weight = assessment.weight if assessment else 0
+    height = assessment.height if assessment else 0
+    bmr = compute_bmr(weight, height, patient.age, patient.gender)
+    tdee = compute_tdee(bmr, activity_level)
+    return bmr, tdee
+
+
+def _create_plan_with_meals(patient, data, created_by, version=1, parent_plan=None):
+    activity_level = data.get("activity_level", "")
+    bmr, tdee = _snapshot_bmr_tdee(patient, activity_level)
+    plan = NutritionPlan.objects.create(
+        patient=patient,
+        created_by=created_by,
+        version=version,
+        parent_plan=parent_plan,
+        bmr=bmr, tdee=tdee,
+        **{k: v for k, v in data.items() if k not in ("id", "status", "version", "parent_plan", "bmr", "tdee")}
+    )
+    for i, meal_type in enumerate(MEAL_TYPES_ORDER):
+        Meal.objects.create(plan=plan, meal_type=meal_type, order=i)
+    return plan
+
+
+def _get_plan_or_404(patient, plan_id):
+    try:
+        return patient.nutrition_plans.get(id=plan_id)
+    except NutritionPlan.DoesNotExist:
+        raise NotFound("الخطة الغذائية غير موجودة")
+
+
+def _require_draft(plan):
+    if plan.status != NutritionPlan.DRAFT:
+        raise PermissionDenied("لا يمكن تعديل خطة معتمدة أو مؤرشفة — استخدم 'إنشاء نسخة معدّلة' لتعديلها")
+
+
+class FoodListCreateView(APIView):
+    def get(self, request):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        foods = Food.objects.filter(is_active=True)
+        return Response(sz.FoodSerializer(foods, many=True).data)
+
+    def post(self, request):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        serializer = sz.FoodSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        food = serializer.save(created_by=request.user)
+        return Response(sz.FoodSerializer(food).data, status=status.HTTP_201_CREATED)
+
+
+class NutritionPlanListCreateView(APIView):
     def get(self, request, patient_id):
         patient = get_patient_or_403(request, patient_id)
-        plan, _ = NutritionPlan.objects.get_or_create(patient=patient)
-        return Response(sz.NutritionPlanSerializer(plan).data)
+        if request.user.role == "patient":
+            plans = patient.nutrition_plans.filter(status=NutritionPlan.ACTIVE)
+        elif request.user.role == "doctor":
+            plans = patient.nutrition_plans.all()
+        else:
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        plans = plans.prefetch_related("meals__items")
+        return Response(sz.NutritionPlanSerializer(plans, many=True, context={"request": request}).data)
 
-    def put(self, request, patient_id):
+    def post(self, request, patient_id):
         if request.user.role != "doctor":
             raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
         patient = get_patient_or_403(request, patient_id)
-        plan, _ = NutritionPlan.objects.get_or_create(patient=patient)
 
-        serializer = sz.NutritionPlanSerializer(plan, data=request.data)
+        serializer = sz.NutritionPlanSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        plan = serializer.save(created_by=request.user)
+        plan = _create_plan_with_meals(patient, serializer.validated_data, request.user)
+        plan = patient.nutrition_plans.prefetch_related("meals__items").get(id=plan.id)
+        return Response(sz.NutritionPlanSerializer(plan, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
+
+class NutritionPlanDetailView(APIView):
+    def get(self, request, patient_id, plan_id):
+        patient = get_patient_or_403(request, patient_id)
+        plan = _get_plan_or_404(patient, plan_id)
+        if request.user.role == "patient" and plan.status != NutritionPlan.ACTIVE:
+            raise PermissionDenied("غير مصرح بعرض هذه الخطة")
+        return Response(sz.NutritionPlanSerializer(plan, context={"request": request}).data)
+
+    def put(self, request, patient_id, plan_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        plan = _get_plan_or_404(patient, plan_id)
+        _require_draft(plan)
+
+        serializer = sz.NutritionPlanSerializer(plan, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        if "activity_level" in data and data["activity_level"] != plan.activity_level:
+            data["bmr"], data["tdee"] = _snapshot_bmr_tdee(patient, data["activity_level"])
+        plan = serializer.save(**{k: data[k] for k in ("bmr", "tdee") if k in data})
         return Response(sz.NutritionPlanSerializer(plan).data)
 
-    def delete(self, request, patient_id):
-        # Lets a patient clear their own nutrition plan from their interface
-        # (get_patient_or_403 already restricts a patient to their own record;
-        # a doctor may act on any patient's plan the same way).
+
+class NutritionPlanActionView(APIView):
+    """Handles the plan-level actions from the spec's 'Plan actions' row:
+    approve (lock + auto-archive any other Active plan for this patient),
+    archive, duplicate (clone as a new Draft, version resets to 1, no
+    parent), and revise (clone as a new Draft version+1 with parent_plan set
+    — the only way to edit an Active/Archived plan's content)."""
+    def post(self, request, patient_id, plan_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
         patient = get_patient_or_403(request, patient_id)
-        NutritionPlan.objects.filter(patient=patient).delete()
+        plan = _get_plan_or_404(patient, plan_id)
+        action = request.data.get("action")
+
+        if action == "approve":
+            _require_draft(plan)
+            serialized = sz.NutritionPlanSerializer(plan).data
+            errors = {}
+            if serialized["requires_target_reason"] and not (plan.target_reason or "").strip():
+                errors["target_reason"] = "الفرق عن TDEE كبير — الرجاء توضيح السبب السريري قبل الاعتماد"
+            if serialized["requires_special_pathway_notes"] and not (plan.special_pathway_notes or "").strip():
+                errors["special_pathway_notes"] = "المريض ضمن فئة تتطلب مساراً سريرياً خاصاً (حمل/رضاعة/خطر اضطراب أكل/عدم استقرار طبي/تحت 18 سنة) — الرجاء توثيق الملاحظات قبل الاعتماد"
+            if errors:
+                raise ValidationError(errors)
+            patient.nutrition_plans.filter(status=NutritionPlan.ACTIVE).update(status=NutritionPlan.ARCHIVED)
+            plan.status = NutritionPlan.ACTIVE
+            plan.approved_at = timezone.now()
+            plan.save(update_fields=["status", "approved_at"])
+
+        elif action == "archive":
+            plan.status = NutritionPlan.ARCHIVED
+            plan.save(update_fields=["status"])
+
+        elif action in ("duplicate", "revise"):
+            is_revise = action == "revise"
+            new_plan = NutritionPlan.objects.create(
+                patient=patient,
+                created_by=request.user,
+                version=(plan.version + 1) if is_revise else 1,
+                parent_plan=plan if is_revise else None,
+                name=plan.name, start_date=plan.start_date,
+                duration_value=plan.duration_value, duration_unit=plan.duration_unit,
+                treatment_objective=plan.treatment_objective,
+                activity_level=plan.activity_level, bmr=plan.bmr, tdee=plan.tdee,
+                calorie_target=plan.calorie_target, target_reason=plan.target_reason,
+                protein_pct=plan.protein_pct, carbs_pct=plan.carbs_pct, fat_pct=plan.fat_pct,
+                protein_grams_override=plan.protein_grams_override,
+                is_pregnant=plan.is_pregnant, is_lactating=plan.is_lactating,
+                eating_disorder_risk=plan.eating_disorder_risk, medically_unstable=plan.medically_unstable,
+                special_pathway_notes=plan.special_pathway_notes,
+                plan_notes=plan.plan_notes, patient_notes=plan.patient_notes,
+            )
+            for meal in plan.meals.all():
+                new_meal = Meal.objects.create(plan=new_plan, meal_type=meal.meal_type, time=meal.time, order=meal.order)
+                for item in meal.items.all():
+                    MealItem.objects.create(
+                        meal=new_meal, food=item.food, custom_food_name=item.custom_food_name,
+                        quantity=item.quantity, unit=item.unit, food_state=item.food_state,
+                        calories=item.calories, protein=item.protein, carbs=item.carbs, fat=item.fat,
+                        alternative_text=item.alternative_text, instructions=item.instructions,
+                        patient_visible=item.patient_visible, order=item.order,
+                    )
+            plan = new_plan
+        else:
+            raise ValidationError({"action": "إجراء غير معروف"})
+
+        plan = patient.nutrition_plans.prefetch_related("meals__items").get(id=plan.id)
+        return Response(sz.NutritionPlanSerializer(plan).data)
+
+
+class MealDetailView(APIView):
+    def put(self, request, patient_id, plan_id, meal_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        plan = _get_plan_or_404(patient, plan_id)
+        _require_draft(plan)
+        try:
+            meal = plan.meals.get(id=meal_id)
+        except Meal.DoesNotExist:
+            raise NotFound("الوجبة غير موجودة")
+        serializer = sz.MealSerializer(meal, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class MealItemListCreateView(APIView):
+    def post(self, request, patient_id, plan_id, meal_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        plan = _get_plan_or_404(patient, plan_id)
+        _require_draft(plan)
+        try:
+            meal = plan.meals.get(id=meal_id)
+        except Meal.DoesNotExist:
+            raise NotFound("الوجبة غير موجودة")
+        serializer = sz.MealItemSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save(meal=meal)
+        return Response(sz.MealItemSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+class MealItemDetailView(APIView):
+    def _get_item(self, patient, plan_id, meal_id, item_id):
+        plan = _get_plan_or_404(patient, plan_id)
+        try:
+            return plan, MealItem.objects.get(id=item_id, meal_id=meal_id, meal__plan=plan)
+        except MealItem.DoesNotExist:
+            raise NotFound("الصنف غير موجود")
+
+    def put(self, request, patient_id, plan_id, meal_id, item_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        plan, item = self._get_item(patient, plan_id, meal_id, item_id)
+        _require_draft(plan)
+        serializer = sz.MealItemSerializer(item, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, patient_id, plan_id, meal_id, item_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        plan, item = self._get_item(patient, plan_id, meal_id, item_id)
+        _require_draft(plan)
+        item.delete()
         return Response({"ok": True})
 
 

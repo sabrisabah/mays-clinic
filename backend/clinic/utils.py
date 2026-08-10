@@ -163,6 +163,73 @@ GOAL_CALORIE_ADJUSTMENT = {
 }
 
 
+# ---------------- NUTRITION PLAN ENGINE (خطة غذائية) ----------------
+# Separate from ACTIVITY_MULTIPLIERS/compute_activity_level above, which are
+# auto-derived from weekly exercise days for the assessment tab's
+# informational badge. Here the physician explicitly PICKS the activity
+# level on the plan itself — 5 tiers, matching the reference spec exactly
+# (adds "نشاط عالي جداً" 1.90, missing from the auto-derived 4-tier table).
+PLAN_ACTIVITY_LEVELS = [
+    ("خامل", 1.20, "نشاط قليل أو معدوم"),
+    ("نشاط خفيف", 1.375, "نشاط خفيف 1-3 أيام/أسبوع"),
+    ("نشاط منتظم", 1.55, "نشاط متوسط 3-5 أيام/أسبوع"),
+    ("نشاط عالي", 1.725, "نشاط شاق 6-7 أيام/أسبوع"),
+    ("نشاط عالي جداً", 1.90, "نشاط شاق جداً أو عمل بدني مجهد"),
+]
+PLAN_ACTIVITY_FACTORS = {name: factor for name, factor, _ in PLAN_ACTIVITY_LEVELS}
+
+# If the physician's calorie_target deviates from TDEE by more than this
+# percentage, target_reason becomes required (server-enforced).
+CALORIE_TARGET_DEVIATION_THRESHOLD_PCT = 10
+
+# A plan can't be Approved while any of these apply unless the physician has
+# also written special_pathway_notes — pregnancy/lactation/eating-disorder
+# risk/medical instability (physician-ticked) or age < 18 (from Patient.age).
+PEDIATRIC_AGE_CUTOFF = 18
+
+
+def compute_bmr(weight, height_m, age, gender):
+    """Mifflin-St Jeor. height_m is in METERS (normalized internally)."""
+    height_m = normalize_height_m(height_m)
+    try:
+        weight = float(weight or 0)
+        age = int(age or 0)
+    except (TypeError, ValueError):
+        return 0
+    if not weight or not height_m or not age:
+        return 0
+    height_cm = height_m * 100
+    if gender == "أنثى":
+        bmr = 10 * weight + 6.25 * height_cm - 5 * age - 161
+    else:
+        bmr = 10 * weight + 6.25 * height_cm - 5 * age + 5
+    return round(bmr)
+
+
+def compute_tdee(bmr, activity_level):
+    factor = PLAN_ACTIVITY_FACTORS.get(activity_level, 1.20)
+    return round((bmr or 0) * factor)
+
+
+def macros_from_percentages(calories, protein_pct, carbs_pct, fat_pct):
+    """Percentage -> gram conversion. Returns (protein_g, carbs_g, fat_g)."""
+    calories = calories or 0
+    protein_g = round(calories * (protein_pct or 0) / 100 / 4, 1)
+    carbs_g = round(calories * (carbs_pct or 0) / 100 / 4, 1)
+    fat_g = round(calories * (fat_pct or 0) / 100 / 9, 1)
+    return protein_g, carbs_g, fat_g
+
+
+def protein_first_breakdown(total_calories, protein_grams):
+    """Protein-first gram-based method: protein grams are fixed by the
+    physician; returns (protein_calories, remaining_calories) so the UI can
+    flag a negative remainder — carb/fat split of the remainder stays a
+    physician judgement call, not auto-computed."""
+    protein_calories = round((protein_grams or 0) * 4)
+    remaining_calories = round((total_calories or 0) - protein_calories)
+    return protein_calories, remaining_calories
+
+
 def compute_suggested_calories(weight, height_m, age, gender, activity_level, goal_type):
     """Returns (base_calories, suggested_calories):
     - base_calories: the patient's real/actual daily burn — TDEE (Mifflin-St Jeor

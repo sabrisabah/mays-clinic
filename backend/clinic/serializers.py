@@ -3,8 +3,12 @@ from rest_framework import serializers
 from .models import (
     User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
+    Food, Meal, MealItem,
 )
-from .utils import compute_suggested_calories
+from .utils import (
+    compute_suggested_calories, macros_from_percentages, protein_first_breakdown,
+    CALORIE_TARGET_DEVIATION_THRESHOLD_PCT, PEDIATRIC_AGE_CUTOFF,
+)
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -158,13 +162,159 @@ class AssessmentSerializer(serializers.ModelSerializer):
         ]
 
 
+# ---------------- NUTRITION PLAN (خطة غذائية) ----------------
+
+class FoodSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Food
+        fields = ["id", "name", "unit", "calories_per_unit", "protein_per_unit", "carbs_per_unit", "fat_per_unit", "is_active"]
+        read_only_fields = ["id"]
+
+
+class MealItemSerializer(serializers.ModelSerializer):
+    food_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MealItem
+        fields = [
+            "id", "meal", "food", "custom_food_name", "food_name",
+            "quantity", "unit", "food_state",
+            "calories", "protein", "carbs", "fat",
+            "alternative_text", "instructions", "patient_visible", "order",
+        ]
+        read_only_fields = ["id", "meal"]
+
+    def get_food_name(self, obj):
+        return obj.food.name if obj.food_id else obj.custom_food_name
+
+    def validate(self, attrs):
+        food = attrs.get("food", getattr(self.instance, "food", None))
+        custom_name = attrs.get("custom_food_name", getattr(self.instance, "custom_food_name", ""))
+        if not food and not (custom_name or "").strip():
+            raise serializers.ValidationError("اختر صنفاً من قائمة الأطعمة أو أدخل اسماً مخصصاً")
+        return attrs
+
+
+class MealSerializer(serializers.ModelSerializer):
+    items = MealItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Meal
+        fields = ["id", "plan", "meal_type", "time", "order", "items"]
+        read_only_fields = ["id", "plan", "items"]
+
+
 class NutritionPlanSerializer(serializers.ModelSerializer):
     patient_id = serializers.IntegerField(source="patient.id", read_only=True)
+    doctor_name = serializers.CharField(source="created_by.full_name", read_only=True, default="")
+    meals = MealSerializer(many=True, read_only=True)
+
+    protein_grams = serializers.SerializerMethodField()
+    carbs_grams = serializers.SerializerMethodField()
+    fat_grams = serializers.SerializerMethodField()
+    protein_calories = serializers.SerializerMethodField()
+    remaining_calories = serializers.SerializerMethodField()
+    tdee_diff = serializers.SerializerMethodField()
+    tdee_diff_pct = serializers.SerializerMethodField()
+    requires_target_reason = serializers.SerializerMethodField()
+    requires_special_pathway_notes = serializers.SerializerMethodField()
+    is_under_18 = serializers.SerializerMethodField()
+    reconciliation = serializers.SerializerMethodField()
 
     class Meta:
         model = NutritionPlan
-        fields = ["id", "patient_id", "daily_calories", "protein_pct", "carbs_pct", "fat_pct", "plan_notes", "updated_at"]
-        read_only_fields = ["id", "patient_id", "updated_at"]
+        fields = [
+            "id", "patient_id", "name", "start_date", "duration_value", "duration_unit",
+            "treatment_objective", "status", "version", "parent_plan",
+            "activity_level", "bmr", "tdee", "calorie_target", "target_reason",
+            "protein_pct", "carbs_pct", "fat_pct", "protein_grams_override",
+            "protein_grams", "carbs_grams", "fat_grams", "protein_calories", "remaining_calories",
+            "tdee_diff", "tdee_diff_pct", "requires_target_reason", "requires_special_pathway_notes", "is_under_18",
+            "is_pregnant", "is_lactating", "eating_disorder_risk", "medically_unstable", "special_pathway_notes",
+            "plan_notes", "patient_notes", "doctor_name", "meals", "reconciliation",
+            "approved_at", "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "patient_id", "version", "parent_plan", "bmr", "tdee", "status",
+            "doctor_name", "meals", "approved_at", "created_at", "updated_at",
+        ]
+
+    def _macro_grams(self, obj):
+        if obj.protein_grams_override:
+            protein_g = obj.protein_grams_override
+            _, carbs_g, fat_g = macros_from_percentages(obj.calorie_target, 0, obj.carbs_pct, obj.fat_pct)
+        else:
+            protein_g, carbs_g, fat_g = macros_from_percentages(obj.calorie_target, obj.protein_pct, obj.carbs_pct, obj.fat_pct)
+        return protein_g, carbs_g, fat_g
+
+    def get_protein_grams(self, obj):
+        return self._macro_grams(obj)[0]
+
+    def get_carbs_grams(self, obj):
+        return self._macro_grams(obj)[1]
+
+    def get_fat_grams(self, obj):
+        return self._macro_grams(obj)[2]
+
+    def get_protein_calories(self, obj):
+        if not obj.protein_grams_override:
+            return None
+        return protein_first_breakdown(obj.calorie_target, obj.protein_grams_override)[0]
+
+    def get_remaining_calories(self, obj):
+        if not obj.protein_grams_override:
+            return None
+        return protein_first_breakdown(obj.calorie_target, obj.protein_grams_override)[1]
+
+    def get_tdee_diff(self, obj):
+        return round((obj.calorie_target or 0) - (obj.tdee or 0))
+
+    def get_tdee_diff_pct(self, obj):
+        if not obj.tdee:
+            return 0
+        return round(((obj.calorie_target or 0) - obj.tdee) / obj.tdee * 100, 1)
+
+    def get_requires_target_reason(self, obj):
+        return abs(self.get_tdee_diff_pct(obj)) > CALORIE_TARGET_DEVIATION_THRESHOLD_PCT
+
+    def get_is_under_18(self, obj):
+        return bool(obj.patient_id and obj.patient.age and obj.patient.age < PEDIATRIC_AGE_CUTOFF)
+
+    def get_requires_special_pathway_notes(self, obj):
+        flagged = obj.is_pregnant or obj.is_lactating or obj.eating_disorder_risk or obj.medically_unstable
+        return bool(flagged or self.get_is_under_18(obj))
+
+    def get_reconciliation(self, obj):
+        totals = {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+        for meal in obj.meals.all():
+            for item in meal.items.all():
+                totals["calories"] += item.calories or 0
+                totals["protein"] += item.protein or 0
+                totals["carbs"] += item.carbs or 0
+                totals["fat"] += item.fat or 0
+        protein_g, carbs_g, fat_g = self._macro_grams(obj)
+        targets = {"calories": obj.calorie_target or 0, "protein": protein_g, "carbs": carbs_g, "fat": fat_g}
+        return {
+            key: {
+                "target": targets[key],
+                "actual": round(totals[key], 1),
+                "diff": round(totals[key] - targets[key], 1),
+            }
+            for key in totals
+        }
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        # plan_notes is explicitly physician-only (see the model's help_text),
+        # and meal items flagged patient_visible=False must stay hidden — both
+        # enforced here (not just in the frontend) since a patient can always
+        # inspect the raw API response.
+        if request and getattr(request.user, "role", None) == "patient":
+            data.pop("plan_notes", None)
+            for meal in data.get("meals", []):
+                meal["items"] = [item for item in meal["items"] if item.get("patient_visible")]
+        return data
 
 
 class FollowUpRecordSerializer(serializers.ModelSerializer):

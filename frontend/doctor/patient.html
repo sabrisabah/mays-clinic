@@ -233,21 +233,179 @@
 
     <!-- PLAN TAB -->
     <div class="tab-panel" id="tab-plan" style="display:none;">
-      <form id="planForm" class="card">
-        <h3>🔹 الخطة الغذائية (يضعها الطبيب)</h3>
-        <div id="calorieSuggestion" class="badge green" style="display:none; margin-bottom:12px;"></div>
-        <div class="grid-3">
-          <div class="field"><label>السعرات اليومية (kcal)</label><input type="number" id="daily_calories"></div>
-          <div class="field"><label>بروتين %</label><input type="number" id="protein_pct"></div>
-          <div class="field"><label>كاربوهيدرات %</label><input type="number" id="carbs_pct"></div>
-          <div class="field"><label>دهون %</label><input type="number" id="fat_pct"></div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <h3 style="margin:0;">🔹 الخطط الغذائية</h3>
+          <button type="button" class="btn small" id="npNewPlanBtn">+ خطة جديدة</button>
         </div>
-        <div class="field" style="margin-top:12px;">
-          <label>ملاحظات الخطة</label>
-          <textarea id="plan_notes" placeholder="تفاصيل إضافية عن الخطة، توصيات، وجبات مقترحة..."></textarea>
+        <div id="npPlanListWrap" style="margin-top:10px;"></div>
+      </div>
+
+      <div id="npBuilderWrap" style="display:none;">
+
+        <div class="card">
+          <h3>🔹 السياق السريري للمريض</h3>
+          <div id="npContextBar" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
         </div>
-        <div class="btn-row"><button type="submit" class="btn">حفظ الخطة الغذائية</button></div>
-      </form>
+
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div>
+              <span id="npStatusBadge" class="badge gray">-</span>
+              <span id="npVersionLabel" style="color:var(--muted); font-size:.85rem; margin-right:8px;"></span>
+            </div>
+            <div class="btn-row" id="npActionsRow" style="margin:0;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 تفاصيل الخطة</h3>
+          <div class="grid">
+            <div class="field"><label>اسم الخطة</label><input type="text" id="np_name"></div>
+            <div class="field"><label>تاريخ البدء</label><input type="date" id="np_start_date"></div>
+            <div class="field">
+              <label>المدة</label>
+              <div style="display:flex; gap:8px;">
+                <input type="number" min="1" id="np_duration_value" style="flex:1;" placeholder="العدد">
+                <select id="np_duration_unit" style="flex:1;">
+                  <option value="يوم">يوم</option><option value="أسبوع">أسبوع</option><option value="شهر">شهر</option>
+                </select>
+              </div>
+            </div>
+            <div class="field"><label>الهدف العلاجي</label><input type="text" id="np_treatment_objective"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 اعتبارات سريرية خاصة</h3>
+          <div id="npPediatricBanner" class="msg error" style="display:none; margin-bottom:10px;"></div>
+          <div class="check-group" id="npSafetyFlags">
+            <label class="check-item"><input type="checkbox" id="np_is_pregnant"> حامل</label>
+            <label class="check-item"><input type="checkbox" id="np_is_lactating"> مرضعة</label>
+            <label class="check-item"><input type="checkbox" id="np_eating_disorder_risk"> خطر اضطراب أكل</label>
+            <label class="check-item"><input type="checkbox" id="np_medically_unstable"> عدم استقرار طبي</label>
+          </div>
+          <div class="field" id="npSpecialNotesField" style="margin-top:10px; display:none;">
+            <label>ملاحظات المسار الخاص (مطلوبة قبل الاعتماد)</label>
+            <textarea id="np_special_pathway_notes" placeholder="توثيق المسار السريري الخاص المتبع..."></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 الاحتياج من الطاقة</h3>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+            <span class="badge gray">BMR: <b id="npBmrOut">-</b> سعرة</span>
+            <span class="badge gray">TDEE: <b id="npTdeeOut">-</b> سعرة</span>
+            <span class="badge orange" id="npDiffBadge">الفرق عن TDEE: -</span>
+          </div>
+          <div class="grid">
+            <div class="field">
+              <label>مستوى النشاط</label>
+              <select id="np_activity_level"></select>
+            </div>
+            <div class="field"><label>السعرات المستهدفة (kcal)</label><input type="number" id="np_calorie_target"></div>
+          </div>
+          <div class="field" id="npTargetReasonField" style="margin-top:10px; display:none;">
+            <label>السبب السريري للانحراف الكبير عن TDEE (مطلوب قبل الاعتماد)</label>
+            <textarea id="np_target_reason"></textarea>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 توزيع الماكروز</h3>
+          <div class="btn-row" style="margin-bottom:12px;">
+            <button type="button" class="btn small secondary" data-template="balanced">متوازن 25/45/30</button>
+            <button type="button" class="btn small secondary" data-template="higher_protein">بروتين أعلى 30/40/30</button>
+            <button type="button" class="btn small secondary" data-template="moderate_carb">كارب متوسط 30/35/35</button>
+          </div>
+          <div class="grid-3">
+            <div class="field"><label>بروتين %</label><input type="number" id="np_protein_pct"></div>
+            <div class="field"><label>كارب %</label><input type="number" id="np_carbs_pct"></div>
+            <div class="field"><label>دهون %</label><input type="number" id="np_fat_pct"></div>
+          </div>
+          <p id="npMacroSumMsg" style="font-size:.85rem; margin-top:8px;"></p>
+          <div class="field" style="margin-top:10px;">
+            <label class="check-item"><input type="checkbox" id="np_protein_first_toggle"> استخدام طريقة "البروتين أولاً" (جرام ثابت بدل النسبة)</label>
+          </div>
+          <div class="field" id="npProteinOverrideField" style="display:none;">
+            <label>جرام البروتين الثابت</label>
+            <input type="number" id="np_protein_grams_override">
+            <p style="color:var(--muted); font-size:.8rem; margin:6px 0 0;">سعرات البروتين: <b id="npProteinCalOut">-</b> — السعرات المتبقية (كارب+دهون): <b id="npRemainingCalOut">-</b></p>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
+            <span class="badge blue">بروتين: <b id="npProteinGramsOut">-</b> غم</span>
+            <span class="badge blue">كارب: <b id="npCarbsGramsOut">-</b> غم</span>
+            <span class="badge blue">دهون: <b id="npFatGramsOut">-</b> غم</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 جدول الوجبات اليومي</h3>
+          <div id="npMealsWrap"></div>
+        </div>
+
+        <div class="card" id="npItemFormCard" style="display:none;">
+          <h4 id="npItemFormTitle" style="margin-top:0;">إضافة صنف</h4>
+          <div class="grid">
+            <div class="field">
+              <label>الصنف الغذائي</label>
+              <input type="text" id="np_item_food_search" list="np_food_list" placeholder="اكتب للبحث..." autocomplete="off">
+              <datalist id="np_food_list"></datalist>
+            </div>
+            <div class="field"><label>الكمية</label><input type="number" step="0.1" id="np_item_quantity"></div>
+            <div class="field">
+              <label>الوحدة</label>
+              <select id="np_item_unit">
+                <option value="غم">غم</option><option value="مل">مل</option><option value="قطعة">قطعة</option>
+                <option value="كوب">كوب</option><option value="ملعقة كبيرة">ملعقة كبيرة</option><option value="ملعقة صغيرة">ملعقة صغيرة</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>حالة الطعام</label>
+              <select id="np_item_food_state">
+                <option value="">-</option>
+                <option value="نيء">نيء</option><option value="مطبوخ">مطبوخ</option>
+                <option value="مصفّى">مصفّى</option><option value="الحصة الصالحة للأكل">الحصة الصالحة للأكل</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-row" style="margin:10px 0;">
+            <button type="button" class="btn secondary small" id="npCustomFoodToggleBtn">+ صنف غير موجود بالقائمة</button>
+          </div>
+          <div class="grid" id="npCustomFoodFields" style="display:none;">
+            <div class="field"><label>اسم الصنف (مخصص)</label><input type="text" id="np_custom_food_name"></div>
+          </div>
+          <div class="grid-3">
+            <div class="field"><label>سعرات</label><input type="number" step="0.1" id="np_item_calories"></div>
+            <div class="field"><label>بروتين (غم)</label><input type="number" step="0.1" id="np_item_protein"></div>
+            <div class="field"><label>كارب (غم)</label><input type="number" step="0.1" id="np_item_carbs"></div>
+          </div>
+          <div class="field" style="max-width:200px;"><label>دهون (غم)</label><input type="number" step="0.1" id="np_item_fat"></div>
+          <div class="grid">
+            <div class="field"><label>البديل المكافئ</label><input type="text" id="np_item_alternative"></div>
+            <div class="field"><label>تعليمات</label><input type="text" id="np_item_instructions"></div>
+          </div>
+          <div class="field"><label class="check-item"><input type="checkbox" id="np_item_patient_visible" checked> ظاهر للمريض</label></div>
+          <div class="btn-row">
+            <button type="button" class="btn" id="npItemSaveBtn">حفظ الصنف</button>
+            <button type="button" class="btn secondary" id="npItemCancelBtn">إلغاء</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 تسوية نهاية اليوم</h3>
+          <div id="npReconciliationWrap"></div>
+        </div>
+
+        <div class="card">
+          <h3>🔹 ملاحظات</h3>
+          <div class="field"><label>ملاحظات للطبيب فقط</label><textarea id="np_plan_notes"></textarea></div>
+          <div class="field" style="margin-top:10px;"><label>ملاحظات تظهر للمريض (ماء، نشاط، إلخ)</label><textarea id="np_patient_notes"></textarea></div>
+        </div>
+
+        <div class="btn-row"><button type="button" class="btn" id="npSaveDraftBtn">حفظ كمسودة</button></div>
+      </div>
     </div>
 
     <!-- FOLLOW-UP FILE TAB -->
@@ -570,6 +728,7 @@ const msgEl = document.getElementById("msg");
 if (!patientId) location.href = role === "secretary" ? "../secretary/dashboard.html" : "dashboard.html";
 let lastAssessment = null;
 let lastFollowup = null;
+let currentPatient = null;
 
 // Keep these lists in sync with backend/clinic/utils.py (LAB_TEST_NAMES / TREATMENT_INJECTION_OPTIONS / DIET_TYPES).
 const LAB_TEST_NAMES = [
@@ -738,6 +897,7 @@ async function loadProfile() {
   document.getElementById("email").value = p.email || "";
   setRadioValue("gender", p.gender);
   updatePcosVisibility();
+  currentPatient = p;
 }
 
 async function loadAssessment() {
@@ -782,36 +942,603 @@ async function loadAssessment() {
   lastAssessment = a;
 }
 
-async function loadPlan() {
-  const plan = await apiFetch(`/api/patients/${patientId}/plan`);
-  document.getElementById("daily_calories").value = plan.daily_calories || "";
-  document.getElementById("protein_pct").value = plan.protein_pct || "";
-  document.getElementById("carbs_pct").value = plan.carbs_pct || "";
-  document.getElementById("fat_pct").value = plan.fat_pct || "";
-  document.getElementById("plan_notes").value = plan.plan_notes || "";
-  updateCalorieSuggestion(plan);
+// ---------------- NUTRITION PLAN MODULE (الخطة الغذائية) ----------------
+// Mirrors backend/clinic/utils.py PLAN_ACTIVITY_LEVELS / CALORIE_TARGET_DEVIATION_THRESHOLD_PCT
+// / PEDIATRIC_AGE_CUTOFF / macros_from_percentages / protein_first_breakdown — kept in sync by hand.
+const NP_ACTIVITY_LEVELS = [
+  ["خامل", 1.20], ["نشاط خفيف", 1.375], ["نشاط منتظم", 1.55],
+  ["نشاط عالي", 1.725], ["نشاط عالي جداً", 1.90],
+];
+const NP_CALORIE_DEVIATION_THRESHOLD_PCT = 10;
+const NP_MEAL_TYPES = [["فطور", "فطور"], ["سناك1", "سناك 1"], ["غداء", "غداء"], ["سناك2", "سناك 2"], ["عشاء", "عشاء"]];
+const NP_MACRO_TEMPLATES = {
+  balanced: { protein: 25, carbs: 45, fat: 30 },
+  higher_protein: { protein: 30, carbs: 40, fat: 30 },
+  moderate_carb: { protein: 30, carbs: 35, fat: 35 },
+};
+
+let npFoods = [];
+let npPlans = [];
+let npCurrentPlan = null;
+let npActiveMealId = null;
+let npEditingItemId = null;
+
+function npStatusLabel(status) {
+  return status === "Draft" ? "مسودة" : status === "Active" ? "مفعّلة" : "مؤرشفة";
+}
+function npStatusBadgeClass(status) {
+  return status === "Draft" ? "gray" : status === "Active" ? "green" : "blue";
+}
+function npIsLocked() {
+  return !npCurrentPlan || npCurrentPlan.status !== "Draft";
+}
+function npMealLabel(mealType) {
+  return (NP_MEAL_TYPES.find(([v]) => v === mealType) || [mealType, mealType])[1];
 }
 
-function updateCalorieSuggestion(plan) {
-  const box = document.getElementById("calorieSuggestion");
-  const suggested = lastAssessment ? lastAssessment.suggested_calories : 0;
-  const base = lastAssessment ? lastAssessment.base_calories : 0;
-  if (!suggested) {
-    box.style.display = "none";
+async function loadNpFoods() {
+  npFoods = await apiFetch(`/api/foods`);
+  document.getElementById("np_food_list").innerHTML = npFoods.map((f) => `<option value="${escapeHtml(f.name)}">`).join("");
+}
+
+async function loadNutritionPlans() {
+  npPlans = await apiFetch(`/api/patients/${patientId}/nutrition-plans`);
+  npRenderPlanList();
+  if (npCurrentPlan) {
+    npCurrentPlan = npPlans.find((p) => p.id === npCurrentPlan.id) || null;
+  }
+  if (!npCurrentPlan) {
+    npCurrentPlan = npPlans.find((p) => p.status === "Draft") || npPlans.find((p) => p.status === "Active") || npPlans[0] || null;
+  }
+  if (npCurrentPlan) {
+    npRenderBuilder();
+    document.getElementById("npBuilderWrap").style.display = "";
+  } else {
+    document.getElementById("npBuilderWrap").style.display = "none";
+  }
+}
+
+function npRenderPlanList() {
+  const wrap = document.getElementById("npPlanListWrap");
+  if (!npPlans.length) {
+    wrap.innerHTML = `<div class="empty-state">لا توجد خطط غذائية بعد — اضغط "+ خطة جديدة" للبدء.</div>`;
     return;
   }
-  const goalLabels = {
-    "نزول وزن": "نزول وزن (-500 سعرة)",
-    "زيادة وزن": "زيادة وزن (+500 سعرة)",
-    "تثبيت": "تثبيت الوزن",
-    "تحسين صحي": "تحسين صحي",
-  };
-  const goalLabel = goalLabels[lastAssessment.goal_type] || "الحالة الحالية";
-  box.style.display = "inline-block";
-  box.textContent = `🔹 السعرات المقترحة حسب حالة المريض — السعرات الحقيقية ${base} (${goalLabel}): ${suggested} سعرة/يوم`;
-  if (!plan.daily_calories) {
-    document.getElementById("daily_calories").value = suggested;
+  wrap.innerHTML = `<div style="display:flex; flex-wrap:wrap; gap:8px;">` + npPlans.map((p) => {
+    const active = npCurrentPlan && npCurrentPlan.id === p.id;
+    return `<button type="button" class="btn small ${active ? "" : "secondary"}" onclick="npSelectPlan(${p.id})">
+      ${escapeHtml(p.name || "بدون اسم")} — إصدار ${p.version}
+      <span class="badge ${npStatusBadgeClass(p.status)}" style="margin-right:6px;">${npStatusLabel(p.status)}</span>
+    </button>`;
+  }).join("") + `</div>`;
+}
+
+function npSelectPlan(id) {
+  npCurrentPlan = npPlans.find((p) => p.id === id) || null;
+  npEditingItemId = null;
+  npActiveMealId = null;
+  document.getElementById("npItemFormCard").style.display = "none";
+  npRenderPlanList();
+  if (npCurrentPlan) {
+    npRenderBuilder();
+    document.getElementById("npBuilderWrap").style.display = "";
   }
+}
+
+document.getElementById("npNewPlanBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    const created = await apiFetch(`/api/patients/${patientId}/nutrition-plans`, { method: "POST", body: JSON.stringify({}) });
+    npCurrentPlan = created;
+    await loadNutritionPlans();
+    npSelectPlan(created.id);
+    showMsg(msgEl, "تم إنشاء خطة جديدة (مسودة) ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+function npRenderBuilder() {
+  const plan = npCurrentPlan;
+  const locked = npIsLocked();
+
+  // Patient context / safety bar
+  const ctx = document.getElementById("npContextBar");
+  const badges = [];
+  if (currentPatient) {
+    badges.push(`<span class="badge gray">${currentPatient.age || "-"} سنة</span>`);
+    badges.push(`<span class="badge gray">${escapeHtml(currentPatient.gender || "-")}</span>`);
+  }
+  if (lastAssessment) {
+    badges.push(`<span class="badge gray">الوزن: ${lastAssessment.weight || "-"} كغم</span>`);
+    badges.push(`<span class="badge gray">الطول: ${heightToCm(lastAssessment.height) || "-"} سم</span>`);
+    if (lastAssessment.bmi) badges.push(`<span class="badge ${bmiBadgeClass(lastAssessment.bmi_class)}">BMI: ${lastAssessment.bmi} (${escapeHtml(lastAssessment.bmi_class || "")})</span>`);
+    if (lastAssessment.goal_type) badges.push(`<span class="badge blue">الهدف: ${escapeHtml(lastAssessment.goal_type)}</span>`);
+    if (lastAssessment.food_allergy) badges.push(`<span class="badge orange">حساسية غذائية: ${escapeHtml(lastAssessment.food_allergy)}</span>`);
+    if (lastAssessment.disliked_foods) badges.push(`<span class="badge orange">أطعمة غير مفضلة: ${escapeHtml(lastAssessment.disliked_foods)}</span>`);
+    if (lastAssessment.current_medications) badges.push(`<span class="badge orange">أدوية حالية: ${escapeHtml(lastAssessment.current_medications)}</span>`);
+  }
+  const activeRxItems = (rxPrescriptions || []).flatMap((p) => p.items || []).filter((i) => i.treatment_status === "مستمر");
+  if (activeRxItems.length) {
+    badges.push(`<span class="badge orange">وصفات نشطة: ${activeRxItems.map((i) => escapeHtml(i.medication_name)).join("، ")}</span>`);
+  }
+  ctx.innerHTML = badges.join("") || `<span class="badge gray">لا توجد بيانات كافية بعد</span>`;
+
+  // Status / version / actions
+  document.getElementById("npStatusBadge").className = "badge " + npStatusBadgeClass(plan.status);
+  document.getElementById("npStatusBadge").textContent = npStatusLabel(plan.status);
+  document.getElementById("npVersionLabel").textContent =
+    `إصدار ${plan.version}${plan.parent_plan ? " (نسخة معدّلة)" : ""} — ${fmtDate(plan.created_at)}`;
+
+  const actions = [];
+  if (!locked) {
+    actions.push(`<button type="button" class="btn small" onclick="npDoAction('approve')">اعتماد وإرسال</button>`);
+    actions.push(`<button type="button" class="btn small secondary" onclick="npDoAction('archive')">أرشفة</button>`);
+  } else {
+    if (plan.status === "Active") actions.push(`<button type="button" class="btn small secondary" onclick="npDoAction('archive')">أرشفة</button>`);
+    actions.push(`<button type="button" class="btn small secondary" onclick="npDoAction('revise')">إنشاء نسخة معدّلة</button>`);
+  }
+  actions.push(`<button type="button" class="btn small secondary" onclick="npDoAction('duplicate')">نسخ كخطة جديدة</button>`);
+  actions.push(`<button type="button" class="btn small secondary" onclick="npPrintPlan(true)">معاينة كمريض</button>`);
+  actions.push(`<button type="button" class="btn small secondary" onclick="npPrintPlan(false)">طباعة</button>`);
+  document.getElementById("npActionsRow").innerHTML = actions.join("");
+
+  // Plan details
+  document.getElementById("np_name").value = plan.name || "";
+  document.getElementById("np_start_date").value = plan.start_date || "";
+  document.getElementById("np_duration_value").value = plan.duration_value || "";
+  document.getElementById("np_duration_unit").value = plan.duration_unit || "أسبوع";
+  document.getElementById("np_treatment_objective").value = plan.treatment_objective || "";
+
+  // Safety flags
+  document.getElementById("np_is_pregnant").checked = !!plan.is_pregnant;
+  document.getElementById("np_is_lactating").checked = !!plan.is_lactating;
+  document.getElementById("np_eating_disorder_risk").checked = !!plan.eating_disorder_risk;
+  document.getElementById("np_medically_unstable").checked = !!plan.medically_unstable;
+  document.getElementById("np_special_pathway_notes").value = plan.special_pathway_notes || "";
+  const pediatricBanner = document.getElementById("npPediatricBanner");
+  if (plan.is_under_18) {
+    pediatricBanner.style.display = "";
+    pediatricBanner.textContent = "⚠ المريض تحت 18 سنة — قواعد العجز الحراري للبالغين لا تُطبَّق تلقائياً، ويتطلب الاعتماد توثيق مسار سريري خاص أدناه.";
+  } else {
+    pediatricBanner.style.display = "none";
+  }
+
+  // Energy requirement
+  const actSel = document.getElementById("np_activity_level");
+  actSel.innerHTML = `<option value="">-- اختر مستوى النشاط --</option>` + NP_ACTIVITY_LEVELS.map(([name]) =>
+    `<option value="${name}" ${plan.activity_level === name ? "selected" : ""}>${name}</option>`
+  ).join("");
+  document.getElementById("npBmrOut").textContent = plan.bmr || "-";
+  document.getElementById("npTdeeOut").textContent = plan.tdee || "-";
+  document.getElementById("np_calorie_target").value = plan.calorie_target || "";
+  document.getElementById("np_target_reason").value = plan.target_reason || "";
+
+  // Macro targets
+  document.getElementById("np_protein_pct").value = plan.protein_pct || "";
+  document.getElementById("np_carbs_pct").value = plan.carbs_pct || "";
+  document.getElementById("np_fat_pct").value = plan.fat_pct || "";
+  document.getElementById("np_protein_first_toggle").checked = !!plan.protein_grams_override;
+  document.getElementById("np_protein_grams_override").value = plan.protein_grams_override || "";
+
+  // Notes
+  document.getElementById("np_plan_notes").value = plan.plan_notes || "";
+  document.getElementById("np_patient_notes").value = plan.patient_notes || "";
+
+  npUpdateSafetyRequirements();
+  npUpdateDiffPreview();
+  npUpdateMacroPreview();
+  npRenderMeals();
+  npRenderReconciliation();
+
+  // Lock the whole form once the plan isn't a Draft — content can then only
+  // change via "إنشاء نسخة معدّلة" (revise), matching the versioning spec.
+  const lockableIds = [
+    "np_name", "np_start_date", "np_duration_value", "np_duration_unit", "np_treatment_objective",
+    "np_is_pregnant", "np_is_lactating", "np_eating_disorder_risk", "np_medically_unstable", "np_special_pathway_notes",
+    "np_activity_level", "np_calorie_target", "np_target_reason",
+    "np_protein_pct", "np_carbs_pct", "np_fat_pct", "np_protein_first_toggle", "np_protein_grams_override",
+    "np_plan_notes", "np_patient_notes",
+  ];
+  lockableIds.forEach((id) => { document.getElementById(id).disabled = locked; });
+  document.querySelectorAll("[data-template]").forEach((btn) => { btn.disabled = locked; });
+  document.getElementById("npSaveDraftBtn").style.display = locked ? "none" : "";
+}
+
+function npUpdateSafetyRequirements() {
+  const plan = npCurrentPlan;
+  if (!plan) return;
+  const flagged = document.getElementById("np_is_pregnant").checked
+    || document.getElementById("np_is_lactating").checked
+    || document.getElementById("np_eating_disorder_risk").checked
+    || document.getElementById("np_medically_unstable").checked
+    || plan.is_under_18;
+  document.getElementById("npSpecialNotesField").style.display = flagged ? "" : "none";
+}
+["np_is_pregnant", "np_is_lactating", "np_eating_disorder_risk", "np_medically_unstable"].forEach((id) => {
+  document.getElementById(id).addEventListener("change", npUpdateSafetyRequirements);
+});
+
+function npUpdateDiffPreview() {
+  const plan = npCurrentPlan;
+  if (!plan) return;
+  const target = parseFloat(document.getElementById("np_calorie_target").value) || 0;
+  const tdee = plan.tdee || 0;
+  const diff = Math.round(target - tdee);
+  const pct = tdee ? Math.round((diff / tdee) * 1000) / 10 : 0;
+  const badge = document.getElementById("npDiffBadge");
+  badge.textContent = `الفرق عن TDEE: ${diff >= 0 ? "+" : ""}${diff} سعرة (${pct >= 0 ? "+" : ""}${pct}%)`;
+  const requiresReason = tdee > 0 && Math.abs(pct) > NP_CALORIE_DEVIATION_THRESHOLD_PCT;
+  badge.className = "badge " + (requiresReason ? "orange" : "gray");
+  document.getElementById("npTargetReasonField").style.display = requiresReason ? "" : "none";
+}
+document.getElementById("np_calorie_target").addEventListener("input", npUpdateDiffPreview);
+document.getElementById("np_activity_level").addEventListener("change", npUpdateDiffPreview);
+
+function npMacrosFromPercentages(calories, proteinPct, carbsPct, fatPct) {
+  return [
+    Math.round((calories * (proteinPct || 0) / 100 / 4) * 10) / 10,
+    Math.round((calories * (carbsPct || 0) / 100 / 4) * 10) / 10,
+    Math.round((calories * (fatPct || 0) / 100 / 9) * 10) / 10,
+  ];
+}
+
+function npUpdateMacroPreview() {
+  const calories = parseFloat(document.getElementById("np_calorie_target").value) || 0;
+  const proteinFirst = document.getElementById("np_protein_first_toggle").checked;
+  document.getElementById("npProteinOverrideField").style.display = proteinFirst ? "" : "none";
+  document.getElementById("np_protein_pct").disabled = proteinFirst || npIsLocked();
+
+  const carbsPct = parseFloat(document.getElementById("np_carbs_pct").value) || 0;
+  const fatPct = parseFloat(document.getElementById("np_fat_pct").value) || 0;
+  const proteinPct = parseFloat(document.getElementById("np_protein_pct").value) || 0;
+
+  let proteinG, carbsG, fatG;
+  if (proteinFirst) {
+    proteinG = parseFloat(document.getElementById("np_protein_grams_override").value) || 0;
+    [, carbsG, fatG] = npMacrosFromPercentages(calories, 0, carbsPct, fatPct);
+    const proteinCal = Math.round(proteinG * 4);
+    const remainingCal = Math.round(calories - proteinCal);
+    document.getElementById("npProteinCalOut").textContent = proteinCal;
+    document.getElementById("npRemainingCalOut").textContent = remainingCal;
+    document.getElementById("npMacroSumMsg").textContent = "";
+  } else {
+    [proteinG, carbsG, fatG] = npMacrosFromPercentages(calories, proteinPct, carbsPct, fatPct);
+    const sum = Math.round((proteinPct + carbsPct + fatPct) * 10) / 10;
+    const msg = document.getElementById("npMacroSumMsg");
+    if (sum === 100) {
+      msg.textContent = "✅ مجموع النسب 100%";
+      msg.style.color = "#1c7a3d";
+    } else {
+      msg.textContent = `⚠ مجموع النسب ${sum}% (يجب أن يساوي 100%)`;
+      msg.style.color = "#b9631a";
+    }
+  }
+  document.getElementById("npProteinGramsOut").textContent = proteinG;
+  document.getElementById("npCarbsGramsOut").textContent = carbsG;
+  document.getElementById("npFatGramsOut").textContent = fatG;
+}
+["np_calorie_target", "np_protein_pct", "np_carbs_pct", "np_fat_pct", "np_protein_grams_override"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", npUpdateMacroPreview);
+});
+document.getElementById("np_protein_first_toggle").addEventListener("change", npUpdateMacroPreview);
+
+document.querySelectorAll("[data-template]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const t = NP_MACRO_TEMPLATES[btn.dataset.template];
+    if (!t) return;
+    document.getElementById("np_protein_pct").value = t.protein;
+    document.getElementById("np_carbs_pct").value = t.carbs;
+    document.getElementById("np_fat_pct").value = t.fat;
+    npUpdateMacroPreview();
+  });
+});
+
+function npRenderMeals() {
+  const wrap = document.getElementById("npMealsWrap");
+  const locked = npIsLocked();
+  const meals = (npCurrentPlan.meals || []).slice().sort((a, b) => a.order - b.order);
+  wrap.innerHTML = meals.map((meal) => {
+    const items = meal.items || [];
+    const subtotal = items.reduce((acc, it) => {
+      acc.calories += it.calories || 0; acc.protein += it.protein || 0;
+      acc.carbs += it.carbs || 0; acc.fat += it.fat || 0;
+      return acc;
+    }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+    const rows = items.map((it) => `
+      <tr>
+        <td>${escapeHtml(it.food_name)}${it.patient_visible ? "" : ` <span class="badge gray">مخفي عن المريض</span>`}</td>
+        <td>${it.quantity} ${escapeHtml(it.unit || "")}</td>
+        <td>${escapeHtml(it.food_state || "-")}</td>
+        <td>${it.calories}</td>
+        <td>${it.protein}</td>
+        <td>${it.carbs}</td>
+        <td>${it.fat}</td>
+        <td>${escapeHtml(it.alternative_text || "-")}</td>
+        <td>
+          ${locked ? "" : `
+            <div class="btn-row" style="margin:0;">
+              <button type="button" class="btn small secondary" onclick="npEditItem(${meal.id}, ${it.id})">تعديل</button>
+              <button type="button" class="btn small danger" onclick="npDeleteItem(${meal.id}, ${it.id})">حذف</button>
+            </div>`}
+        </td>
+      </tr>`).join("");
+    return `
+      <div class="card" style="background:#fafafa; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <h4 style="margin:0;">${npMealLabel(meal.meal_type)}</h4>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <label style="font-size:.82rem; color:var(--muted);">الوقت</label>
+            <input type="time" value="${meal.time || ""}" ${locked ? "disabled" : ""} onchange="npSaveMealTime(${meal.id}, this.value)">
+            ${locked ? "" : `<button type="button" class="btn small" onclick="npOpenItemForm(${meal.id})">+ إضافة صنف</button>`}
+          </div>
+        </div>
+        ${items.length ? `
+          <table style="margin-top:10px;">
+            <thead><tr><th>الصنف</th><th>الكمية</th><th>الحالة</th><th>سعرات</th><th>بروتين</th><th>كارب</th><th>دهون</th><th>البديل</th><th></th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <p style="font-size:.82rem; color:var(--muted); margin-top:8px;">
+            إجمالي الوجبة: ${Math.round(subtotal.calories)} سعرة — بروتين ${Math.round(subtotal.protein * 10) / 10} غم — كارب ${Math.round(subtotal.carbs * 10) / 10} غم — دهون ${Math.round(subtotal.fat * 10) / 10} غم
+          </p>` : `<div class="empty-state" style="padding:14px;">لا توجد أصناف بعد</div>`}
+      </div>`;
+  }).join("");
+}
+
+async function npSaveMealTime(mealId, time) {
+  try {
+    await apiFetch(`/api/patients/${patientId}/nutrition-plans/${npCurrentPlan.id}/meals/${mealId}`, {
+      method: "PUT", body: JSON.stringify({ time: time || null }),
+    });
+    await loadNutritionPlans();
+    npSelectPlan(npCurrentPlan.id);
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+function npOpenItemForm(mealId) {
+  npActiveMealId = mealId;
+  npEditingItemId = null;
+  const meal = npCurrentPlan.meals.find((m) => m.id === mealId) || {};
+  document.getElementById("npItemFormTitle").textContent = "إضافة صنف — " + npMealLabel(meal.meal_type);
+  document.getElementById("np_item_food_search").value = "";
+  document.getElementById("np_item_food_search").disabled = false;
+  document.getElementById("np_item_quantity").value = "";
+  document.getElementById("np_item_unit").value = "غم";
+  document.getElementById("np_item_food_state").value = "";
+  document.getElementById("np_custom_food_name").value = "";
+  document.getElementById("npCustomFoodFields").style.display = "none";
+  document.getElementById("np_item_calories").value = "";
+  document.getElementById("np_item_protein").value = "";
+  document.getElementById("np_item_carbs").value = "";
+  document.getElementById("np_item_fat").value = "";
+  document.getElementById("np_item_alternative").value = "";
+  document.getElementById("np_item_instructions").value = "";
+  document.getElementById("np_item_patient_visible").checked = true;
+  document.getElementById("npItemFormCard").style.display = "";
+  document.getElementById("npItemFormCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+document.getElementById("npCustomFoodToggleBtn").addEventListener("click", () => {
+  const box = document.getElementById("npCustomFoodFields");
+  const showing = box.style.display !== "none";
+  box.style.display = showing ? "none" : "";
+  document.getElementById("np_item_food_search").disabled = !showing;
+  if (!showing) document.getElementById("np_item_food_search").value = "";
+});
+
+function npFindFoodByName(name) {
+  return npFoods.find((f) => f.name === name) || null;
+}
+
+function npAutofillFromFood() {
+  const food = npFindFoodByName(document.getElementById("np_item_food_search").value.trim());
+  const qty = parseFloat(document.getElementById("np_item_quantity").value) || 0;
+  if (!food || !qty) return;
+  document.getElementById("np_item_unit").value = food.unit;
+  document.getElementById("np_item_calories").value = Math.round(food.calories_per_unit * qty * 10) / 10;
+  document.getElementById("np_item_protein").value = Math.round(food.protein_per_unit * qty * 10) / 10;
+  document.getElementById("np_item_carbs").value = Math.round(food.carbs_per_unit * qty * 10) / 10;
+  document.getElementById("np_item_fat").value = Math.round(food.fat_per_unit * qty * 10) / 10;
+}
+document.getElementById("np_item_food_search").addEventListener("change", npAutofillFromFood);
+document.getElementById("np_item_quantity").addEventListener("input", npAutofillFromFood);
+
+document.getElementById("npItemCancelBtn").addEventListener("click", () => {
+  document.getElementById("npItemFormCard").style.display = "none";
+  npEditingItemId = null;
+});
+
+document.getElementById("npItemSaveBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    const food = npFindFoodByName(document.getElementById("np_item_food_search").value.trim());
+    const customName = document.getElementById("np_custom_food_name").value.trim();
+    if (!food && !customName) {
+      showMsg(msgEl, "اختر صنفاً من القائمة أو أدخل اسماً مخصصاً", "error");
+      return;
+    }
+    const payload = {
+      food: food ? food.id : null,
+      custom_food_name: food ? "" : customName,
+      quantity: parseFloat(document.getElementById("np_item_quantity").value) || 0,
+      unit: document.getElementById("np_item_unit").value,
+      food_state: document.getElementById("np_item_food_state").value,
+      calories: parseFloat(document.getElementById("np_item_calories").value) || 0,
+      protein: parseFloat(document.getElementById("np_item_protein").value) || 0,
+      carbs: parseFloat(document.getElementById("np_item_carbs").value) || 0,
+      fat: parseFloat(document.getElementById("np_item_fat").value) || 0,
+      alternative_text: document.getElementById("np_item_alternative").value.trim(),
+      instructions: document.getElementById("np_item_instructions").value.trim(),
+      patient_visible: document.getElementById("np_item_patient_visible").checked,
+    };
+    if (npEditingItemId) {
+      await apiFetch(`/api/patients/${patientId}/nutrition-plans/${npCurrentPlan.id}/meals/${npActiveMealId}/items/${npEditingItemId}`, {
+        method: "PUT", body: JSON.stringify(payload),
+      });
+    } else {
+      await apiFetch(`/api/patients/${patientId}/nutrition-plans/${npCurrentPlan.id}/meals/${npActiveMealId}/items`, {
+        method: "POST", body: JSON.stringify(payload),
+      });
+    }
+    document.getElementById("npItemFormCard").style.display = "none";
+    npEditingItemId = null;
+    const keepPlanId = npCurrentPlan.id;
+    await loadNutritionPlans();
+    npSelectPlan(keepPlanId);
+    showMsg(msgEl, "تم حفظ الصنف ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+function npEditItem(mealId, itemId) {
+  const meal = npCurrentPlan.meals.find((m) => m.id === mealId);
+  const item = meal ? (meal.items || []).find((i) => i.id === itemId) : null;
+  if (!item) return;
+  npActiveMealId = mealId;
+  npEditingItemId = itemId;
+  document.getElementById("npItemFormTitle").textContent = "تعديل صنف — " + npMealLabel(meal.meal_type);
+  const isCustom = !item.food;
+  document.getElementById("np_item_food_search").value = isCustom ? "" : item.food_name;
+  document.getElementById("np_item_food_search").disabled = isCustom;
+  document.getElementById("npCustomFoodFields").style.display = isCustom ? "" : "none";
+  document.getElementById("np_custom_food_name").value = isCustom ? item.custom_food_name : "";
+  document.getElementById("np_item_quantity").value = item.quantity || "";
+  document.getElementById("np_item_unit").value = item.unit || "غم";
+  document.getElementById("np_item_food_state").value = item.food_state || "";
+  document.getElementById("np_item_calories").value = item.calories || "";
+  document.getElementById("np_item_protein").value = item.protein || "";
+  document.getElementById("np_item_carbs").value = item.carbs || "";
+  document.getElementById("np_item_fat").value = item.fat || "";
+  document.getElementById("np_item_alternative").value = item.alternative_text || "";
+  document.getElementById("np_item_instructions").value = item.instructions || "";
+  document.getElementById("np_item_patient_visible").checked = !!item.patient_visible;
+  document.getElementById("npItemFormCard").style.display = "";
+  document.getElementById("npItemFormCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function npDeleteItem(mealId, itemId) {
+  if (!confirm("حذف هذا الصنف من الوجبة؟")) return;
+  try {
+    await apiFetch(`/api/patients/${patientId}/nutrition-plans/${npCurrentPlan.id}/meals/${mealId}/items/${itemId}`, { method: "DELETE" });
+    const keepPlanId = npCurrentPlan.id;
+    await loadNutritionPlans();
+    npSelectPlan(keepPlanId);
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+function npRenderReconciliation() {
+  const wrap = document.getElementById("npReconciliationWrap");
+  const rec = npCurrentPlan.reconciliation || {};
+  const rows = [["calories", "السعرات", "سعرة"], ["protein", "بروتين", "غم"], ["carbs", "كارب", "غم"], ["fat", "دهون", "غم"]];
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th></th><th>الهدف</th><th>الفعلي (حسب الوجبات)</th><th>الفرق</th></tr></thead>
+      <tbody>${rows.map(([key, label, unit]) => {
+        const r = rec[key] || { target: 0, actual: 0, diff: 0 };
+        const tolerant = Math.abs(r.diff) <= (key === "calories" ? 50 : 5);
+        return `<tr>
+          <td>${label}</td>
+          <td>${r.target} ${unit}</td>
+          <td>${r.actual} ${unit}</td>
+          <td><span class="badge ${tolerant ? "green" : "orange"}">${r.diff >= 0 ? "+" : ""}${r.diff} ${unit}</span></td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
+}
+
+document.getElementById("npSaveDraftBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    await npSavePlan();
+    showMsg(msgEl, "تم حفظ الخطة كمسودة ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+async function npSavePlan() {
+  const payload = {
+    name: document.getElementById("np_name").value.trim(),
+    start_date: document.getElementById("np_start_date").value || null,
+    duration_value: parseInt(document.getElementById("np_duration_value").value) || null,
+    duration_unit: document.getElementById("np_duration_unit").value,
+    treatment_objective: document.getElementById("np_treatment_objective").value.trim(),
+    activity_level: document.getElementById("np_activity_level").value,
+    calorie_target: parseFloat(document.getElementById("np_calorie_target").value) || 0,
+    target_reason: document.getElementById("np_target_reason").value.trim(),
+    protein_pct: parseFloat(document.getElementById("np_protein_pct").value) || 0,
+    carbs_pct: parseFloat(document.getElementById("np_carbs_pct").value) || 0,
+    fat_pct: parseFloat(document.getElementById("np_fat_pct").value) || 0,
+    protein_grams_override: document.getElementById("np_protein_first_toggle").checked
+      ? (parseFloat(document.getElementById("np_protein_grams_override").value) || 0)
+      : null,
+    is_pregnant: document.getElementById("np_is_pregnant").checked,
+    is_lactating: document.getElementById("np_is_lactating").checked,
+    eating_disorder_risk: document.getElementById("np_eating_disorder_risk").checked,
+    medically_unstable: document.getElementById("np_medically_unstable").checked,
+    special_pathway_notes: document.getElementById("np_special_pathway_notes").value.trim(),
+    plan_notes: document.getElementById("np_plan_notes").value.trim(),
+    patient_notes: document.getElementById("np_patient_notes").value.trim(),
+  };
+  const updated = await apiFetch(`/api/patients/${patientId}/nutrition-plans/${npCurrentPlan.id}`, {
+    method: "PUT", body: JSON.stringify(payload),
+  });
+  npCurrentPlan = updated;
+  await loadNutritionPlans();
+  npSelectPlan(updated.id);
+  return updated;
+}
+
+async function npDoAction(action) {
+  hideMsg(msgEl);
+  try {
+    if (!npIsLocked()) {
+      await npSavePlan();
+    }
+    const result = await apiFetch(`/api/patients/${patientId}/nutrition-plans/${npCurrentPlan.id}/action`, {
+      method: "POST", body: JSON.stringify({ action }),
+    });
+    await loadNutritionPlans();
+    npSelectPlan(result.id);
+    const labels = {
+      approve: "تم اعتماد الخطة وإرسالها للمريض ✅", archive: "تمت أرشفة الخطة",
+      duplicate: "تم نسخ الخطة كمسودة جديدة", revise: "تم إنشاء نسخة معدّلة كمسودة جديدة",
+    };
+    showMsg(msgEl, labels[action] || "تم ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+function npPrintPlan(patientView) {
+  const plan = npCurrentPlan;
+  if (!plan) return;
+  const meals = (plan.meals || []).slice().sort((a, b) => a.order - b.order);
+  const mealsHtml = meals.map((meal) => {
+    const items = (meal.items || []).filter((it) => !patientView || it.patient_visible);
+    if (!items.length) return "";
+    const rows = items.map((it) => `
+      <tr>
+        <td>${escapeHtml(it.food_name)}</td>
+        <td>${it.quantity} ${escapeHtml(it.unit || "")}${it.food_state ? " (" + escapeHtml(it.food_state) + ")" : ""}</td>
+        <td>${it.calories} سعرة</td>
+        <td>${escapeHtml(it.alternative_text || "-")}</td>
+        <td>${escapeHtml(it.instructions || "-")}</td>
+      </tr>`).join("");
+    return `<h3>${npMealLabel(meal.meal_type)}${meal.time ? " — " + meal.time : ""}</h3>
+      <table border="1" cellpadding="6" style="border-collapse:collapse; width:100%; margin-bottom:16px;">
+        <thead><tr><th>الصنف</th><th>الكمية</th><th>السعرات</th><th>البديل</th><th>تعليمات</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }).join("");
+  const win = window.open("", "_blank");
+  win.document.write(`
+    <html dir="rtl"><head><meta charset="utf-8"><title>الخطة الغذائية</title>
+    <style>body{font-family:Tahoma,Arial,sans-serif; padding:24px;} table{font-size:.9rem;}</style></head>
+    <body>
+      <h1>الخطة الغذائية — ${escapeHtml(currentPatient ? currentPatient.full_name || "" : "")}</h1>
+      <p>${escapeHtml(plan.name || "")} — إصدار ${plan.version}${plan.start_date ? " — تاريخ البدء: " + plan.start_date : ""}</p>
+      <p>السعرات المستهدفة: ${plan.calorie_target} سعرة — بروتين ${plan.protein_grams} غم — كارب ${plan.carbs_grams} غم — دهون ${plan.fat_grams} غم</p>
+      ${mealsHtml}
+      ${plan.patient_notes ? `<h3>ملاحظات</h3><p>${escapeHtml(plan.patient_notes)}</p>` : ""}
+      ${(!patientView && plan.plan_notes) ? `<h3>ملاحظات الطبيب</h3><p>${escapeHtml(plan.plan_notes)}</p>` : ""}
+    </body></html>`);
+  win.document.close();
+  win.focus();
+  win.print();
 }
 
 async function loadFollowup() {
@@ -1125,24 +1852,6 @@ document.getElementById("assessForm").addEventListener("submit", async (e) => {
     updateComputed(result.bmi, result.bmi_class, result.whr, result.whr_class, result.activity_level);
     lastAssessment = result;
     showMsg(msgEl, "تم حفظ استمارة التقييم ✅", "success");
-  } catch (err) { showMsg(msgEl, err.message, "error"); }
-});
-
-document.getElementById("planForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  hideMsg(msgEl);
-  try {
-    await apiFetch(`/api/patients/${patientId}/plan`, {
-      method: "PUT",
-      body: JSON.stringify({
-        daily_calories: parseFloat(document.getElementById("daily_calories").value) || 0,
-        protein_pct: parseFloat(document.getElementById("protein_pct").value) || 0,
-        carbs_pct: parseFloat(document.getElementById("carbs_pct").value) || 0,
-        fat_pct: parseFloat(document.getElementById("fat_pct").value) || 0,
-        plan_notes: document.getElementById("plan_notes").value.trim(),
-      }),
-    });
-    showMsg(msgEl, "تم حفظ الخطة الغذائية ✅", "success");
   } catch (err) { showMsg(msgEl, err.message, "error"); }
 });
 
@@ -1660,7 +2369,8 @@ document.getElementById("noteForm").addEventListener("submit", async (e) => {
     rxPopulateCategories();
     await loadRx();
     if (role !== "secretary") {
-      await loadPlan();
+      await loadNpFoods();
+      await loadNutritionPlans();
       await loadLabTests();
       await loadMounjaro();
       await loadProgress();
