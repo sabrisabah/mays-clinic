@@ -13,6 +13,7 @@ from .models import (
     User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
+    Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
 )
 from .permissions import IsDoctor, IsClinicStaff
 from .utils import (
@@ -24,6 +25,8 @@ from .utils import (
     normalize_height_m,
     compute_bmr,
     compute_tdee,
+    next_invoice_number,
+    log_action,
 )
 from . import serializers as sz
 
@@ -989,3 +992,440 @@ class PrescriptionItemDetailView(APIView):
         item = self._get_item(patient, prescription_id, item_id)
         item.delete()
         return Response({"ok": True})
+
+
+# ---------------- REVENUE / BILLING (نظام الإيرادات) ----------------
+# Doctor: full access (services/prices, discount approval, cancel/refund,
+# reports). Secretary: create invoices, record payments, apply a discount
+# (must name a doctor who approved it), print receipts — but can never edit
+# a locked (fully paid) invoice, cancel, refund, or see the reports
+# dashboard. Patients have no access to this module at all.
+
+CONSULTATION_SERVICE_NAME = "كشفية الطبيب"
+
+
+class DoctorListView(APIView):
+    """Minimal read-only roster of active doctor accounts — powers the
+    'من وافق على الخصم' picker when a secretary applies a discount."""
+    permission_classes = [IsAuthenticated, IsClinicStaff]
+
+    def get(self, request):
+        doctors = User.objects.filter(role="doctor", is_active=True).order_by("full_name")
+        return Response([{"id": d.id, "full_name": d.full_name} for d in doctors])
+
+
+class ServiceListCreateView(APIView):
+    permission_classes = [IsAuthenticated, IsClinicStaff]
+
+    def get(self, request):
+        services = Service.objects.prefetch_related("variants")
+        if not (request.user.role == "doctor" and request.query_params.get("all")):
+            services = services.filter(is_active=True)
+        return Response(sz.ServiceSerializer(services, many=True).data)
+
+    def post(self, request):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        serializer = sz.ServiceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        service = serializer.save(created_by=request.user)
+        log_action(request.user, "service_created", detail=f"إضافة خدمة: {service.name}")
+        return Response(sz.ServiceSerializer(service).data, status=status.HTTP_201_CREATED)
+
+
+class ServiceDetailView(APIView):
+    def put(self, request, service_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        try:
+            service = Service.objects.get(id=service_id)
+        except Service.DoesNotExist:
+            raise NotFound("الخدمة غير موجودة")
+        old_price = service.price
+        serializer = sz.ServiceSerializer(service, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        new_price = serializer.validated_data.get("price", old_price)
+        extra = {}
+        if new_price != old_price:
+            extra["price_updated_at"] = timezone.now()
+        service = serializer.save(**extra)
+        if new_price != old_price:
+            log_action(request.user, "service_price_changed", detail=f"{service.name}: {old_price} -> {new_price} د.ع")
+        return Response(sz.ServiceSerializer(service).data)
+
+
+class ServiceVariantListCreateView(APIView):
+    def post(self, request, service_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        try:
+            service = Service.objects.get(id=service_id)
+        except Service.DoesNotExist:
+            raise NotFound("الخدمة غير موجودة")
+        serializer = sz.ServiceVariantSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        variant = serializer.save(service=service)
+        log_action(request.user, "service_variant_added", detail=f"{service.name} - {variant.name}")
+        return Response(sz.ServiceVariantSerializer(variant).data, status=status.HTTP_201_CREATED)
+
+
+class ServiceVariantDetailView(APIView):
+    def put(self, request, service_id, variant_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        try:
+            variant = ServiceVariant.objects.get(id=variant_id, service_id=service_id)
+        except ServiceVariant.DoesNotExist:
+            raise NotFound("الخيار غير موجود")
+        old_price = variant.price
+        serializer = sz.ServiceVariantSerializer(variant, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        variant = serializer.save()
+        if variant.price != old_price:
+            log_action(request.user, "service_variant_price_changed", detail=f"{variant.service.name} - {variant.name}: {old_price} -> {variant.price} د.ع")
+        return Response(sz.ServiceVariantSerializer(variant).data)
+
+
+def _invoice_or_404(invoice_id):
+    try:
+        return Invoice.objects.prefetch_related("items").get(id=invoice_id)
+    except Invoice.DoesNotExist:
+        raise NotFound("الفاتورة غير موجودة")
+
+
+def _check_invoice_editable(request, invoice):
+    """Shared gate for anything that mutates an invoice or its items.
+    Cancelled/refunded invoices are terminal — nobody edits them. A locked
+    (fully paid) invoice can only be touched by a doctor, and only with a
+    documented reason, which is logged and stored on the invoice."""
+    if invoice.payment_status in (Invoice.CANCELLED, Invoice.REFUNDED):
+        raise PermissionDenied("لا يمكن تعديل فاتورة ملغاة أو مستردة")
+    if invoice.is_locked:
+        if request.user.role != "doctor":
+            raise PermissionDenied("الفاتورة مقفلة بعد الدفع — التصحيح متاح للطبيب فقط")
+        reason = (request.data.get("correction_reason") or "").strip()
+        if not reason:
+            raise ValidationError({"correction_reason": "التعديل على فاتورة مقفلة يتطلب توثيق سبب التصحيح"})
+        invoice.last_correction_reason = reason
+        invoice.last_correction_by = request.user
+        invoice.save(update_fields=["last_correction_reason", "last_correction_by"])
+        log_action(request.user, "invoice_corrected", invoice=invoice, detail=reason)
+
+
+class InvoiceListCreateView(APIView):
+    permission_classes = [IsAuthenticated, IsClinicStaff]
+
+    def get(self, request):
+        qs = Invoice.objects.prefetch_related("items").select_related("patient__user", "created_by")
+
+        patient_id = request.query_params.get("patient")
+        if patient_id:
+            qs = qs.filter(patient_id=patient_id)
+        date_from = request.query_params.get("date_from")
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        date_to = request.query_params.get("date_to")
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+        payment_method = request.query_params.get("payment_method")
+        if payment_method:
+            qs = qs.filter(payment_method=payment_method)
+        payment_status = request.query_params.get("payment_status")
+        if payment_status:
+            qs = qs.filter(payment_status=payment_status)
+        created_by = request.query_params.get("created_by")
+        if created_by:
+            qs = qs.filter(created_by_id=created_by)
+        service_id = request.query_params.get("service")
+        if service_id:
+            qs = qs.filter(items__service_id=service_id).distinct()
+        search = request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(invoice_number__icontains=search)
+                | Q(patient__user__full_name__icontains=search)
+                | Q(patient__file_number__icontains=search)
+            )
+
+        return Response(sz.InvoiceSerializer(qs, many=True).data)
+
+    def post(self, request):
+        patient_id = request.data.get("patient")
+        if not patient_id:
+            raise ValidationError({"patient": "اختر المريض"})
+        patient = get_patient_or_403(request, patient_id)
+        invoice = Invoice.objects.create(
+            invoice_number=next_invoice_number(),
+            patient=patient,
+            notes=(request.data.get("notes") or "").strip(),
+            created_by=request.user,
+        )
+        log_action(request.user, "invoice_created", invoice=invoice, detail=f"فاتورة #{invoice.invoice_number}")
+        return Response(sz.InvoiceSerializer(invoice).data, status=status.HTTP_201_CREATED)
+
+
+class InvoiceDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsClinicStaff]
+
+    def get(self, request, invoice_id):
+        invoice = _invoice_or_404(invoice_id)
+        return Response(sz.InvoiceSerializer(invoice).data)
+
+    def put(self, request, invoice_id):
+        invoice = _invoice_or_404(invoice_id)
+        _check_invoice_editable(request, invoice)
+
+        data = dict(request.data)
+        data.pop("correction_reason", None)
+        # A discount applied by a secretary must name a doctor as approver;
+        # a doctor applying their own discount is auto-approved.
+        if "discount_pct" in data and float(data.get("discount_pct") or 0) > 0:
+            if request.user.role == "doctor" and not data.get("discount_approved_by"):
+                data["discount_approved_by"] = request.user.id
+            subtotal = sum(item.line_total() for item in invoice.items.all())
+            if subtotal <= 0:
+                raise ValidationError({"discount_pct": "لا يمكن تطبيق خصم على فاتورة بمجموع صفر (مثل المتابعة المجانية وحدها)"})
+
+        serializer = sz.InvoiceSerializer(invoice, data=data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        extra = {}
+        if "discount_pct" in serializer.validated_data and float(serializer.validated_data["discount_pct"] or 0) > 0:
+            extra["discount_entered_by"] = request.user
+        invoice = serializer.save(**extra)
+        return Response(sz.InvoiceSerializer(invoice).data)
+
+
+class InvoiceItemListCreateView(APIView):
+    permission_classes = [IsAuthenticated, IsClinicStaff]
+
+    def post(self, request, invoice_id):
+        invoice = _invoice_or_404(invoice_id)
+        _check_invoice_editable(request, invoice)
+        serializer = sz.InvoiceItemSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        order = invoice.items.count()
+        item = serializer.save(invoice=invoice, order=order)
+        return Response(sz.InvoiceItemSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+class InvoiceItemDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsClinicStaff]
+
+    def _get_item(self, invoice, item_id):
+        try:
+            return InvoiceItem.objects.get(id=item_id, invoice=invoice)
+        except InvoiceItem.DoesNotExist:
+            raise NotFound("البند غير موجود")
+
+    def put(self, request, invoice_id, item_id):
+        invoice = _invoice_or_404(invoice_id)
+        _check_invoice_editable(request, invoice)
+        item = self._get_item(invoice, item_id)
+        serializer = sz.InvoiceItemSerializer(item, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, invoice_id, item_id):
+        invoice = _invoice_or_404(invoice_id)
+        _check_invoice_editable(request, invoice)
+        item = self._get_item(invoice, item_id)
+        if item.is_free_followup:
+            raise PermissionDenied("لا يمكن حذف بند المتابعة المجانية بشكل منفرد")
+        item.delete()
+        return Response({"ok": True})
+
+
+class InvoiceActionView(APIView):
+    permission_classes = [IsAuthenticated, IsClinicStaff]
+
+    def post(self, request, invoice_id):
+        invoice = _invoice_or_404(invoice_id)
+        action = request.data.get("action")
+
+        if action == "record_payment":
+            _check_invoice_editable(request, invoice)
+            payment_method = request.data.get("payment_method")
+            if payment_method not in dict(Invoice.PAYMENT_METHOD_CHOICES):
+                raise ValidationError({"payment_method": "اختر طريقة الدفع"})
+            try:
+                amount_paid = float(request.data.get("amount_paid", 0) or 0)
+            except (TypeError, ValueError):
+                raise ValidationError({"amount_paid": "قيمة غير صالحة"})
+            subtotal = sum(item.line_total() for item in invoice.items.all())
+            discount_amount = round(subtotal * (invoice.discount_pct or 0) / 100)
+            total_due = subtotal - discount_amount
+
+            invoice.payment_method = payment_method
+            invoice.amount_paid = amount_paid
+            if amount_paid >= total_due:
+                invoice.payment_status = Invoice.PAID
+                invoice.is_locked = True
+            elif amount_paid > 0:
+                invoice.payment_status = Invoice.PARTIAL
+            else:
+                invoice.payment_status = Invoice.UNPAID
+            invoice.save(update_fields=["payment_method", "amount_paid", "payment_status", "is_locked"])
+            log_action(request.user, "payment_recorded", invoice=invoice, detail=f"{amount_paid} د.ع عبر {payment_method}")
+
+        elif action == "cancel":
+            if request.user.role != "doctor":
+                raise PermissionDenied("إلغاء الفاتورة متاح للطبيب فقط")
+            if invoice.payment_status in (Invoice.CANCELLED, Invoice.REFUNDED):
+                raise ValidationError({"action": "الفاتورة ملغاة أو مستردة مسبقاً"})
+            reason = (request.data.get("reason") or "").strip()
+            if not reason:
+                raise ValidationError({"reason": "إلغاء الفاتورة يتطلب توثيق السبب"})
+            invoice.payment_status = Invoice.CANCELLED
+            invoice.cancel_refund_reason = reason
+            invoice.save(update_fields=["payment_status", "cancel_refund_reason"])
+            log_action(request.user, "invoice_cancelled", invoice=invoice, detail=reason)
+
+        elif action == "refund":
+            if request.user.role != "doctor":
+                raise PermissionDenied("استرداد الفاتورة متاح للطبيب فقط")
+            if invoice.payment_status not in (Invoice.PAID, Invoice.PARTIAL):
+                raise ValidationError({"action": "لا يمكن استرداد فاتورة غير مدفوعة"})
+            reason = (request.data.get("reason") or "").strip()
+            if not reason:
+                raise ValidationError({"reason": "استرداد الفاتورة يتطلب توثيق السبب"})
+            invoice.payment_status = Invoice.REFUNDED
+            invoice.cancel_refund_reason = reason
+            invoice.save(update_fields=["payment_status", "cancel_refund_reason"])
+            log_action(request.user, "invoice_refunded", invoice=invoice, detail=reason)
+
+        elif action == "add_free_followup":
+            _check_invoice_editable(request, invoice)
+            has_paid_consultation = InvoiceItem.objects.filter(
+                invoice__patient=invoice.patient,
+                invoice__payment_status=Invoice.PAID,
+                item_name=CONSULTATION_SERVICE_NAME,
+            ).exclude(invoice=invoice).exists()
+            if not has_paid_consultation:
+                raise ValidationError({"action": "لا توجد كشفية سابقة مدفوعة لهذا المريض — لا يمكن اعتماد متابعة مجانية"})
+            consultation_service = Service.objects.filter(name=CONSULTATION_SERVICE_NAME).first()
+            order = invoice.items.count()
+            InvoiceItem.objects.create(
+                invoice=invoice, service=consultation_service, item_name="متابعة مجانية",
+                unit_price=0, quantity=1, is_free_followup=True, order=order,
+            )
+            log_action(request.user, "free_followup_added", invoice=invoice)
+
+        else:
+            raise ValidationError({"action": "إجراء غير معروف"})
+
+        invoice = _invoice_or_404(invoice_id)
+        return Response(sz.InvoiceSerializer(invoice).data)
+
+
+class AuditLogListView(APIView):
+    def get(self, request):
+        if request.user.role != "doctor":
+            raise PermissionDenied("سجل التدقيق متاح للطبيب فقط")
+        qs = AuditLogEntry.objects.select_related("actor", "invoice")
+        invoice_id = request.query_params.get("invoice")
+        if invoice_id:
+            qs = qs.filter(invoice_id=invoice_id)
+        return Response(sz.AuditLogEntrySerializer(qs[:200], many=True).data)
+
+
+class RevenueReportView(APIView):
+    """Doctor-only summary + filterable breakdowns for the revenue
+    dashboard. Fixed-period totals (today/week/month/year) are always
+    returned as reference points; the detailed breakdowns respect whatever
+    filters were passed."""
+
+    def get(self, request):
+        if request.user.role != "doctor":
+            raise PermissionDenied("التقارير متاحة للطبيب فقط")
+
+        def revenue_since(dt):
+            return sum(
+                inv.amount_paid for inv in
+                Invoice.objects.filter(created_at__gte=dt).exclude(payment_status__in=[Invoice.CANCELLED, Invoice.REFUNDED])
+            )
+
+        now = timezone.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        totals = {
+            "today": revenue_since(today_start),
+            "this_week": revenue_since(now - timedelta(days=7)),
+            "this_month": revenue_since(now - timedelta(days=30)),
+            "this_year": revenue_since(now - timedelta(days=365)),
+        }
+
+        qs = Invoice.objects.prefetch_related("items", "items__service", "items__service_variant").select_related("patient__user")
+        date_from = request.query_params.get("date_from")
+        if date_from:
+            qs = qs.filter(created_at__date__gte=date_from)
+        date_to = request.query_params.get("date_to")
+        if date_to:
+            qs = qs.filter(created_at__date__lte=date_to)
+        payment_method = request.query_params.get("payment_method")
+        if payment_method:
+            qs = qs.filter(payment_method=payment_method)
+        payment_status = request.query_params.get("payment_status")
+        if payment_status:
+            qs = qs.filter(payment_status=payment_status)
+        created_by = request.query_params.get("created_by")
+        if created_by:
+            qs = qs.filter(created_by_id=created_by)
+        service_id = request.query_params.get("service")
+        if service_id:
+            qs = qs.filter(items__service_id=service_id).distinct()
+
+        by_service = {}
+        by_payment_method = {}
+        status_counts = {choice[0]: 0 for choice in Invoice.PAYMENT_STATUS_CHOICES}
+        discount_total_count = 0
+        discount_total_value = 0
+        discount_by_reason = {}
+        discount_by_user = {}
+        mounjaro = {}
+
+        billable = [inv for inv in qs if inv.payment_status not in (Invoice.CANCELLED, Invoice.REFUNDED)]
+
+        for inv in qs:
+            status_counts[inv.payment_status] = status_counts.get(inv.payment_status, 0) + 1
+
+        for inv in billable:
+            if inv.payment_method:
+                by_payment_method[inv.payment_method] = by_payment_method.get(inv.payment_method, 0) + inv.amount_paid
+            subtotal = sum(item.line_total() for item in inv.items.all())
+            discount_amount = round(subtotal * (inv.discount_pct or 0) / 100)
+            if inv.discount_pct:
+                discount_total_count += 1
+                discount_total_value += discount_amount
+                reason = inv.discount_reason_key or "-"
+                discount_by_reason[reason] = discount_by_reason.get(reason, 0) + discount_amount
+                enterer = inv.discount_entered_by.full_name if inv.discount_entered_by_id else "-"
+                discount_by_user[enterer] = discount_by_user.get(enterer, 0) + discount_amount
+
+            for item in inv.items.all():
+                name = item.item_name
+                if name not in by_service:
+                    by_service[name] = {"count": 0, "revenue": 0}
+                by_service[name]["count"] += item.quantity
+                by_service[name]["revenue"] += item.line_total()
+
+                if item.service_id and item.service and item.service.name == "جرعات مونجارو":
+                    dose = item.service_variant.name if item.service_variant_id else "غير محدد"
+                    if dose not in mounjaro:
+                        mounjaro[dose] = {"count": 0, "revenue": 0}
+                    mounjaro[dose]["count"] += item.quantity
+                    mounjaro[dose]["revenue"] += item.line_total()
+
+        return Response({
+            "totals": totals,
+            "by_service": [{"name": k, **v} for k, v in sorted(by_service.items(), key=lambda x: -x[1]["revenue"])],
+            "by_payment_method": [{"method": k, "revenue": v} for k, v in by_payment_method.items()],
+            "status_counts": status_counts,
+            "discounts": {
+                "count": discount_total_count,
+                "total_value": discount_total_value,
+                "by_reason": [{"reason": k, "value": v} for k, v in discount_by_reason.items()],
+                "by_user": [{"user": k, "value": v} for k, v in discount_by_user.items()],
+            },
+            "mounjaro": [{"dose": k, **v} for k, v in mounjaro.items()],
+            "invoice_count": qs.count(),
+        })

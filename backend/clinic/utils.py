@@ -95,6 +95,19 @@ def next_file_number():
     return f"MAYS-{count:04d}"
 
 
+def next_invoice_number():
+    from .models import Invoice
+    last = Invoice.objects.order_by("-invoice_number").values_list("invoice_number", flat=True).first()
+    return (last or 0) + 1
+
+
+def log_action(actor, action, invoice=None, detail=""):
+    """Writes one append-only AuditLogEntry row. Never call .save() on an
+    existing entry elsewhere — entries are create-only by design."""
+    from .models import AuditLogEntry
+    AuditLogEntry.objects.create(actor=actor, action=action, invoice=invoice, detail=detail)
+
+
 # Fixed lab test panel shown as numeric boxes in the follow-up file.
 # Keep this list in sync with the frontend (doctor/patient.html + patient/followup.html).
 LAB_TEST_NAMES = [

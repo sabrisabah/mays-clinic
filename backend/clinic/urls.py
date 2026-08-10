@@ -35,4 +35,17 @@ urlpatterns = [
     path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/meals/<int:meal_id>", views.MealDetailView.as_view()),
     path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/meals/<int:meal_id>/items", views.MealItemListCreateView.as_view()),
     path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/meals/<int:meal_id>/items/<int:item_id>", views.MealItemDetailView.as_view()),
+
+    path("staff/doctors", views.DoctorListView.as_view()),
+    path("services", views.ServiceListCreateView.as_view()),
+    path("services/<int:service_id>", views.ServiceDetailView.as_view()),
+    path("services/<int:service_id>/variants", views.ServiceVariantListCreateView.as_view()),
+    path("services/<int:service_id>/variants/<int:variant_id>", views.ServiceVariantDetailView.as_view()),
+    path("invoices", views.InvoiceListCreateView.as_view()),
+    path("invoices/<int:invoice_id>", views.InvoiceDetailView.as_view()),
+    path("invoices/<int:invoice_id>/action", views.InvoiceActionView.as_view()),
+    path("invoices/<int:invoice_id>/items", views.InvoiceItemListCreateView.as_view()),
+    path("invoices/<int:invoice_id>/items/<int:item_id>", views.InvoiceItemDetailView.as_view()),
+    path("audit-log", views.AuditLogListView.as_view()),
+    path("reports/revenue", views.RevenueReportView.as_view()),
 ]

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>دليل الخدمات — عيادة دكتورة ميس الربيعي</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> عيادة دكتورة ميس الربيعي — دليل الخدمات</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a href="dashboard.html" class="btn small secondary">لوحة الطبيب</a>
+        <a href="invoices.html" class="btn small secondary">الفواتير</a>
+        <a href="reports.html" class="btn small secondary">التقارير</a>
+      </div>
+      <h2 style="margin:0;">🔹 دليل الخدمات والأسعار</h2>
+      <button type="button" class="btn" id="newServiceBtn">+ خدمة جديدة</button>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card" id="serviceFormCard" style="display:none;">
+      <h3 id="serviceFormTitle" style="margin-top:0;">خدمة جديدة</h3>
+      <div class="grid">
+        <div class="field"><label>اسم الخدمة</label><input type="text" id="svc_name"></div>
+        <div class="field"><label>التصنيف</label><input type="text" id="svc_category" list="svc_category_list" placeholder="مثال: جلسات"><datalist id="svc_category_list"></datalist></div>
+        <div class="field"><label>السعر (د.ع)</label><input type="number" id="svc_price" min="0"></div>
+        <div class="field"><label>ملاحظة / وحدة التسعير</label><input type="text" id="svc_pricing_note" placeholder="مثال: لكل جلسة"></div>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label class="check-item"><input type="checkbox" id="svc_has_variants"> السعر يعتمد على خيارات فرعية (مثل جرعات مونجارو)</label>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label class="check-item"><input type="checkbox" id="svc_is_active" checked> نشطة (تظهر عند إنشاء الفواتير)</label>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn" id="serviceSaveBtn">حفظ</button>
+        <button type="button" class="btn secondary" id="serviceCancelBtn">إلغاء</button>
+      </div>
+    </div>
+
+    <div id="servicesWrap"></div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("doctor")) { throw new Error("redirect"); }
+refreshUserChip("userChip", "د. " + Auth.getName());
+const msgEl = document.getElementById("msg");
+
+let services = [];
+let editingServiceId = null;
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s || "";
+  return div.innerHTML;
+}
+
+async function loadServices() {
+  services = await apiFetch(`/api/services?all=1`);
+  renderCategoryList();
+  renderServices();
+}
+
+function renderCategoryList() {
+  const cats = [...new Set(services.map((s) => s.category).filter(Boolean))];
+  document.getElementById("svc_category_list").innerHTML = cats.map((c) => `<option value="${escapeHtml(c)}">`).join("");
+}
+
+function renderServices() {
+  const wrap = document.getElementById("servicesWrap");
+  if (!services.length) {
+    wrap.innerHTML = `<div class="card"><div class="empty-state">لا توجد خدمات بعد.</div></div>`;
+    return;
+  }
+  const byCategory = {};
+  services.forEach((s) => {
+    const cat = s.category || "بدون تصنيف";
+    (byCategory[cat] = byCategory[cat] || []).push(s);
+  });
+
+  wrap.innerHTML = Object.keys(byCategory).sort().map((cat) => {
+    const rows = byCategory[cat].map((s) => {
+      const variantsHtml = s.has_variants ? `
+        <tr><td colspan="4" style="padding:0;">
+          <div style="padding:10px 14px; background:#fafafa;">
+            <table style="margin:0;">
+              <thead><tr><th>الخيار</th><th>السعر (د.ع)</th><th>الحالة</th><th></th></tr></thead>
+              <tbody>
+                ${(s.variants || []).map((v) => `
+                  <tr>
+                    <td>${escapeHtml(v.name)}</td>
+                    <td><input type="number" min="0" value="${v.price}" style="width:120px;" id="variant_price_${v.id}"></td>
+                    <td><span class="badge ${v.is_active ? "green" : "gray"}">${v.is_active ? "نشط" : "معطل"}</span></td>
+                    <td>
+                      <div class="btn-row" style="margin:0;">
+                        <button type="button" class="btn small secondary" onclick="saveVariantPrice(${s.id}, ${v.id})">حفظ السعر</button>
+                        <button type="button" class="btn small secondary" onclick="toggleVariant(${s.id}, ${v.id}, ${!v.is_active})">${v.is_active ? "تعطيل" : "تفعيل"}</button>
+                      </div>
+                    </td>
+                  </tr>`).join("")}
+              </tbody>
+            </table>
+            <div class="btn-row" style="margin-top:10px;">
+              <input type="text" placeholder="اسم الخيار الجديد (مثال: 20 mg)" id="new_variant_name_${s.id}" style="max-width:220px; padding:8px 10px; border:2px solid #1a1a1a; border-radius:8px; font-family:inherit;">
+              <input type="number" placeholder="السعر" min="0" id="new_variant_price_${s.id}" style="max-width:140px; padding:8px 10px; border:2px solid #1a1a1a; border-radius:8px; font-family:inherit;">
+              <button type="button" class="btn small" onclick="addVariant(${s.id})">+ إضافة خيار</button>
+            </div>
+          </div>
+        </td></tr>` : "";
+      return `
+        <tr>
+          <td>${escapeHtml(s.name)}</td>
+          <td>${s.has_variants ? "حسب الخيار" : s.price.toLocaleString("en-US") + " د.ع"}</td>
+          <td>${escapeHtml(s.pricing_note || "-")}</td>
+          <td>
+            <span class="badge ${s.is_active ? "green" : "gray"}">${s.is_active ? "نشطة" : "معطلة"}</span>
+            <div class="btn-row" style="margin-top:6px;">
+              <button type="button" class="btn small secondary" onclick="editService(${s.id})">تعديل</button>
+              <button type="button" class="btn small secondary" onclick="toggleService(${s.id}, ${!s.is_active})">${s.is_active ? "تعطيل" : "تفعيل"}</button>
+            </div>
+          </td>
+        </tr>
+        ${variantsHtml}`;
+    }).join("");
+    return `
+      <div class="card">
+        <h3>${escapeHtml(cat)}</h3>
+        <table>
+          <thead><tr><th>الخدمة</th><th>السعر</th><th>ملاحظة</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }).join("");
+}
+
+document.getElementById("newServiceBtn").addEventListener("click", () => {
+  editingServiceId = null;
+  document.getElementById("serviceFormTitle").textContent = "خدمة جديدة";
+  document.getElementById("svc_name").value = "";
+  document.getElementById("svc_category").value = "";
+  document.getElementById("svc_price").value = "";
+  document.getElementById("svc_pricing_note").value = "";
+  document.getElementById("svc_has_variants").checked = false;
+  document.getElementById("svc_is_active").checked = true;
+  document.getElementById("serviceFormCard").style.display = "";
+  document.getElementById("serviceFormCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
+function editService(id) {
+  const s = services.find((x) => x.id === id);
+  if (!s) return;
+  editingServiceId = id;
+  document.getElementById("serviceFormTitle").textContent = "تعديل — " + s.name;
+  document.getElementById("svc_name").value = s.name;
+  document.getElementById("svc_category").value = s.category || "";
+  document.getElementById("svc_price").value = s.price || "";
+  document.getElementById("svc_pricing_note").value = s.pricing_note || "";
+  document.getElementById("svc_has_variants").checked = s.has_variants;
+  document.getElementById("svc_is_active").checked = s.is_active;
+  document.getElementById("serviceFormCard").style.display = "";
+  document.getElementById("serviceFormCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+document.getElementById("serviceCancelBtn").addEventListener("click", () => {
+  document.getElementById("serviceFormCard").style.display = "none";
+});
+
+document.getElementById("serviceSaveBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    const payload = {
+      name: document.getElementById("svc_name").value.trim(),
+      category: document.getElementById("svc_category").value.trim(),
+      price: parseInt(document.getElementById("svc_price").value) || 0,
+      pricing_note: document.getElementById("svc_pricing_note").value.trim(),
+      has_variants: document.getElementById("svc_has_variants").checked,
+      is_active: document.getElementById("svc_is_active").checked,
+    };
+    if (!payload.name) { showMsg(msgEl, "أدخل اسم الخدمة", "error"); return; }
+    if (editingServiceId) {
+      await apiFetch(`/api/services/${editingServiceId}`, { method: "PUT", body: JSON.stringify(payload) });
+    } else {
+      await apiFetch(`/api/services`, { method: "POST", body: JSON.stringify(payload) });
+    }
+    document.getElementById("serviceFormCard").style.display = "none";
+    await loadServices();
+    showMsg(msgEl, "تم الحفظ ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+async function toggleService(id, active) {
+  try {
+    await apiFetch(`/api/services/${id}`, { method: "PUT", body: JSON.stringify({ is_active: active }) });
+    await loadServices();
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+async function saveVariantPrice(serviceId, variantId) {
+  try {
+    const price = parseInt(document.getElementById(`variant_price_${variantId}`).value) || 0;
+    await apiFetch(`/api/services/${serviceId}/variants/${variantId}`, { method: "PUT", body: JSON.stringify({ price }) });
+    await loadServices();
+    showMsg(msgEl, "تم تحديث السعر ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+async function toggleVariant(serviceId, variantId, active) {
+  try {
+    await apiFetch(`/api/services/${serviceId}/variants/${variantId}`, { method: "PUT", body: JSON.stringify({ is_active: active }) });
+    await loadServices();
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+async function addVariant(serviceId) {
+  try {
+    const name = document.getElementById(`new_variant_name_${serviceId}`).value.trim();
+    const price = parseInt(document.getElementById(`new_variant_price_${serviceId}`).value) || 0;
+    if (!name) { showMsg(msgEl, "أدخل اسم الخيار الجديد", "error"); return; }
+    await apiFetch(`/api/services/${serviceId}/variants`, { method: "POST", body: JSON.stringify({ name, price }) });
+    await loadServices();
+    showMsg(msgEl, "تمت إضافة الخيار ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+loadServices().catch((err) => showMsg(msgEl, err.message, "error"));
+</script>
+</body>
+</html>

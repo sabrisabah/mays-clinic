@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>التقارير المالية — عيادة دكتورة ميس الربيعي</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> عيادة دكتورة ميس الربيعي — التقارير المالية</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <a href="dashboard.html" class="btn small secondary">لوحة الطبيب</a>
+        <a href="invoices.html" class="btn small secondary">الفواتير</a>
+        <a href="services.html" class="btn small secondary">دليل الخدمات</a>
+        <a href="#" class="btn small secondary" id="auditLogLink">سجل التدقيق</a>
+      </div>
+      <h2 style="margin:0;">🔹 التقارير المالية</h2>
+      <div class="btn-row" style="margin:0;">
+        <button type="button" class="btn small secondary" id="exportCsvBtn">تصدير CSV</button>
+        <button type="button" class="btn small secondary" id="printBtn">طباعة / PDF</button>
+      </div>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card">
+      <div class="stats-row">
+        <div class="stat-card"><div class="value" id="totToday">-</div><div class="label">إيرادات اليوم</div></div>
+        <div class="stat-card"><div class="value" id="totWeek">-</div><div class="label">آخر 7 أيام</div></div>
+        <div class="stat-card"><div class="value" id="totMonth">-</div><div class="label">آخر 30 يوم</div></div>
+        <div class="stat-card"><div class="value" id="totYear">-</div><div class="label">آخر سنة</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">تصفية التقرير التفصيلي</h3>
+      <div class="grid">
+        <div class="field"><label>من تاريخ</label><input type="date" id="f_date_from"></div>
+        <div class="field"><label>إلى تاريخ</label><input type="date" id="f_date_to"></div>
+        <div class="field">
+          <label>حالة الفاتورة</label>
+          <select id="f_payment_status">
+            <option value="">-- الكل --</option>
+            <option value="غير مدفوعة">غير مدفوعة</option>
+            <option value="مدفوعة جزئيا">مدفوعة جزئيا</option>
+            <option value="مدفوعة">مدفوعة</option>
+            <option value="ملغاة">ملغاة</option>
+            <option value="مستردة">مستردة</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>طريقة الدفع</label>
+          <select id="f_payment_method">
+            <option value="">-- الكل --</option>
+            <option value="نقدا">نقدا (Cash)</option>
+            <option value="Master Qi Card">Master Qi Card</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>الخدمة</label>
+          <select id="f_service"><option value="">-- الكل --</option></select>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button type="button" class="btn secondary small" id="applyFilterBtn">تصفية</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🔹 عدد الفواتير حسب الحالة</h3>
+      <div id="statusCountsWrap"></div>
+    </div>
+
+    <div class="card">
+      <h3>🔹 الإيرادات حسب الخدمة</h3>
+      <div id="byServiceWrap"></div>
+    </div>
+
+    <div class="card">
+      <h3>🔹 الإيرادات حسب طريقة الدفع</h3>
+      <div id="byPaymentMethodWrap"></div>
+    </div>
+
+    <div class="card">
+      <h3>🔹 تفصيل جرعات مونجارو</h3>
+      <div id="mounjaroWrap"></div>
+    </div>
+
+    <div class="card">
+      <h3>🔹 ملخص الخصومات</h3>
+      <div class="stats-row">
+        <div class="stat-card"><div class="value" id="discCount">-</div><div class="label">عدد الفواتير المخصومة</div></div>
+        <div class="stat-card"><div class="value" id="discValue">-</div><div class="label">إجمالي قيمة الخصم</div></div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px;">
+        <div>
+          <h4>حسب السبب</h4>
+          <div id="discByReasonWrap"></div>
+        </div>
+        <div>
+          <h4>حسب من أدخل الخصم</h4>
+          <div id="discByUserWrap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("doctor")) { throw new Error("redirect"); }
+refreshUserChip("userChip", "د. " + Auth.getName());
+const msgEl = document.getElementById("msg");
+document.getElementById("auditLogLink").addEventListener("click", (e) => {
+  e.preventDefault();
+  alert("سجل التدقيق متاح عبر واجهة الإدارة (/admin) حالياً.");
+});
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s || "";
+  return div.innerHTML;
+}
+function money(n) { return (n || 0).toLocaleString("en-US") + " د.ع"; }
+
+let lastReport = null;
+
+async function loadServicesFilter() {
+  try {
+    const services = await apiFetch(`/api/services`);
+    document.getElementById("f_service").innerHTML =
+      `<option value="">-- الكل --</option>` + services.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join("");
+  } catch (err) { /* non-fatal */ }
+}
+
+async function loadReport() {
+  hideMsg(msgEl);
+  try {
+    const params = new URLSearchParams();
+    const dateFrom = document.getElementById("f_date_from").value;
+    const dateTo = document.getElementById("f_date_to").value;
+    const paymentStatus = document.getElementById("f_payment_status").value;
+    const paymentMethod = document.getElementById("f_payment_method").value;
+    const service = document.getElementById("f_service").value;
+    if (dateFrom) params.set("date_from", dateFrom);
+    if (dateTo) params.set("date_to", dateTo);
+    if (paymentStatus) params.set("payment_status", paymentStatus);
+    if (paymentMethod) params.set("payment_method", paymentMethod);
+    if (service) params.set("service", service);
+
+    const report = await apiFetch(`/api/reports/revenue?${params.toString()}`);
+    lastReport = report;
+    renderReport(report);
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+function renderReport(r) {
+  document.getElementById("totToday").textContent = money(r.totals.today);
+  document.getElementById("totWeek").textContent = money(r.totals.this_week);
+  document.getElementById("totMonth").textContent = money(r.totals.this_month);
+  document.getElementById("totYear").textContent = money(r.totals.this_year);
+
+  const statusWrap = document.getElementById("statusCountsWrap");
+  const statuses = Object.entries(r.status_counts);
+  statusWrap.innerHTML = statuses.length ? `
+    <table><thead><tr>${statuses.map(([k]) => `<th>${escapeHtml(k)}</th>`).join("")}</tr></thead>
+    <tbody><tr>${statuses.map(([, v]) => `<td>${v}</td>`).join("")}</tr></tbody></table>` :
+    `<div class="empty-state">لا توجد بيانات.</div>`;
+
+  const byServiceWrap = document.getElementById("byServiceWrap");
+  byServiceWrap.innerHTML = r.by_service.length ? `
+    <table><thead><tr><th>الخدمة</th><th>الكمية</th><th>الإيراد</th></tr></thead>
+    <tbody>${r.by_service.map((s) => `<tr><td>${escapeHtml(s.name)}</td><td>${s.count}</td><td>${money(s.revenue)}</td></tr>`).join("")}</tbody></table>` :
+    `<div class="empty-state">لا توجد بيانات ضمن هذا النطاق.</div>`;
+
+  const byMethodWrap = document.getElementById("byPaymentMethodWrap");
+  byMethodWrap.innerHTML = r.by_payment_method.length ? `
+    <table><thead><tr><th>طريقة الدفع</th><th>الإيراد</th></tr></thead>
+    <tbody>${r.by_payment_method.map((m) => `<tr><td>${escapeHtml(m.method)}</td><td>${money(m.revenue)}</td></tr>`).join("")}</tbody></table>` :
+    `<div class="empty-state">لا توجد بيانات ضمن هذا النطاق.</div>`;
+
+  const mounjaroWrap = document.getElementById("mounjaroWrap");
+  mounjaroWrap.innerHTML = r.mounjaro.length ? `
+    <table><thead><tr><th>الجرعة</th><th>الكمية</th><th>الإيراد</th></tr></thead>
+    <tbody>${r.mounjaro.map((m) => `<tr><td>${escapeHtml(m.dose)}</td><td>${m.count}</td><td>${money(m.revenue)}</td></tr>`).join("")}</tbody></table>` :
+    `<div class="empty-state">لا توجد جرعات مونجارو ضمن هذا النطاق.</div>`;
+
+  document.getElementById("discCount").textContent = r.discounts.count;
+  document.getElementById("discValue").textContent = money(r.discounts.total_value);
+  const byReasonWrap = document.getElementById("discByReasonWrap");
+  byReasonWrap.innerHTML = r.discounts.by_reason.length ? `
+    <table><thead><tr><th>السبب</th><th>القيمة</th></tr></thead>
+    <tbody>${r.discounts.by_reason.map((d) => `<tr><td>${escapeHtml(d.reason)}</td><td>${money(d.value)}</td></tr>`).join("")}</tbody></table>` :
+    `<div class="empty-state">لا توجد خصومات.</div>`;
+  const byUserWrap = document.getElementById("discByUserWrap");
+  byUserWrap.innerHTML = r.discounts.by_user.length ? `
+    <table><thead><tr><th>الموظف</th><th>القيمة</th></tr></thead>
+    <tbody>${r.discounts.by_user.map((d) => `<tr><td>${escapeHtml(d.user)}</td><td>${money(d.value)}</td></tr>`).join("")}</tbody></table>` :
+    `<div class="empty-state">لا توجد خصومات.</div>`;
+}
+
+document.getElementById("applyFilterBtn").addEventListener("click", loadReport);
+
+document.getElementById("printBtn").addEventListener("click", () => window.print());
+
+document.getElementById("exportCsvBtn").addEventListener("click", () => {
+  if (!lastReport) return;
+  const r = lastReport;
+  const lines = [];
+  lines.push("التقرير المالي — عيادة دكتورة ميس الربيعي");
+  lines.push("");
+  lines.push("الفترة,القيمة");
+  lines.push(`اليوم,${r.totals.today}`);
+  lines.push(`آخر 7 أيام,${r.totals.this_week}`);
+  lines.push(`آخر 30 يوم,${r.totals.this_month}`);
+  lines.push(`آخر سنة,${r.totals.this_year}`);
+  lines.push("");
+  lines.push("الخدمة,الكمية,الإيراد");
+  r.by_service.forEach((s) => lines.push(`${s.name},${s.count},${s.revenue}`));
+  lines.push("");
+  lines.push("طريقة الدفع,الإيراد");
+  r.by_payment_method.forEach((m) => lines.push(`${m.method},${m.revenue}`));
+  lines.push("");
+  lines.push("جرعة مونجارو,الكمية,الإيراد");
+  r.mounjaro.forEach((m) => lines.push(`${m.dose},${m.count},${m.revenue}`));
+  lines.push("");
+  lines.push(`إجمالي الخصومات,${r.discounts.count},${r.discounts.total_value}`);
+
+  const csv = "﻿" + lines.join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `تقرير_مالي_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+(async function init() {
+  await loadServicesFilter();
+  await loadReport();
+})();
+</script>
+</body>
+</html>

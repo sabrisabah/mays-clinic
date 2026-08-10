@@ -541,3 +541,134 @@ class DoctorNote(models.Model):
 
     def __str__(self):
         return f"ملاحظة - {self.patient.file_number} - {self.patient.user.full_name} ({self.created_at:%Y-%m-%d})"
+
+
+# ---------------- REVENUE / BILLING (نظام الإيرادات) ----------------
+# Per the clinic's revenue spec: a growing "service directory" (دليل
+# الخدمات) with editable prices, invoices built from line items that each
+# freeze a copy of the price at the time they were added (so a later price
+# change never rewrites a past invoice), a single-discount-per-invoice rule
+# that requires a doctor's sign-off when a secretary applies it, and an
+# append-only audit log for anything money-related.
+
+class Service(models.Model):
+    """One catalog entry (e.g. 'كشفية الطبيب', 'جلسة تذويب الدهون'). Services
+    with has_variants=True (e.g. Mounjaro doses) are priced entirely through
+    their ServiceVariant rows instead of `price`."""
+    name = models.CharField(max_length=200, unique=True)
+    category = models.CharField(max_length=100, blank=True, default="")
+    price = models.PositiveIntegerField(default=0, help_text="بالدينار العراقي (IQD)")
+    pricing_note = models.CharField(max_length=200, blank=True, default="", help_text="مثال: لكل جلسة، لكل إبرة")
+    has_variants = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    price_updated_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="services_added")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["category", "name"]
+
+    def __str__(self):
+        return self.name
+
+
+class ServiceVariant(models.Model):
+    """A priced sub-option of a has_variants=True service — e.g. each
+    Mounjaro dose strength is its own variant with its own price, editable
+    independently without touching the other doses."""
+    service = models.ForeignKey(Service, on_delete=models.CASCADE, related_name="variants")
+    name = models.CharField(max_length=100)
+    price = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+        unique_together = [("service", "name")]
+
+    def __str__(self):
+        return f"{self.service.name} - {self.name}"
+
+
+class Invoice(models.Model):
+    UNPAID, PARTIAL, PAID, CANCELLED, REFUNDED = "غير مدفوعة", "مدفوعة جزئيا", "مدفوعة", "ملغاة", "مستردة"
+    PAYMENT_STATUS_CHOICES = [
+        (UNPAID, "غير مدفوعة"), (PARTIAL, "مدفوعة جزئيا"), (PAID, "مدفوعة"),
+        (CANCELLED, "ملغاة"), (REFUNDED, "مستردة"),
+    ]
+    PAYMENT_METHOD_CHOICES = [("نقدا", "نقدا (Cash)"), ("Master Qi Card", "Master Qi Card")]
+    DISCOUNT_REASON_CHOICES = [
+        ("الأصدقاء", "الأصدقاء"), ("الأقارب", "الأقارب"), ("الطلبة", "الطلبة"),
+        ("ذوو الإعاقة", "ذوو الإعاقة"), ("سبب مخصص", "سبب مخصص"),
+    ]
+
+    invoice_number = models.PositiveIntegerField(unique=True, editable=False)
+    patient = models.ForeignKey(Patient, on_delete=models.PROTECT, related_name="invoices")
+
+    discount_pct = models.FloatField(default=0)
+    discount_reason_key = models.CharField(max_length=20, choices=DISCOUNT_REASON_CHOICES, blank=True, default="")
+    discount_reason_custom = models.CharField(max_length=200, blank=True, default="")
+    discount_entered_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="discounts_entered")
+    discount_approved_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="discounts_approved")
+
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, default="")
+    amount_paid = models.FloatField(default=0)
+    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default=UNPAID)
+    cancel_refund_reason = models.TextField(blank=True, default="")
+
+    is_locked = models.BooleanField(default=False, help_text="يُقفل تلقائياً عند تسجيل الدفع الكامل")
+    last_correction_reason = models.TextField(blank=True, default="")
+    last_correction_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoice_corrections")
+
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoices_created")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"فاتورة #{self.invoice_number} - {self.patient.user.full_name}"
+
+
+class InvoiceItem(models.Model):
+    """A single billed line. `item_name`/`unit_price` are a frozen snapshot
+    taken when the item was added — Service/ServiceVariant are kept only as
+    a soft reference for reporting, so renaming or repricing a service later
+    never changes a past invoice."""
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name="items")
+    service = models.ForeignKey(Service, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoice_items")
+    service_variant = models.ForeignKey(ServiceVariant, null=True, blank=True, on_delete=models.SET_NULL, related_name="invoice_items")
+    item_name = models.CharField(max_length=200)
+    unit_price = models.PositiveIntegerField(default=0)
+    quantity = models.PositiveIntegerField(default=1)
+    is_free_followup = models.BooleanField(default=False)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def line_total(self):
+        return self.unit_price * self.quantity
+
+    def __str__(self):
+        return f"{self.item_name} x{self.quantity} - فاتورة #{self.invoice_id}"
+
+
+class AuditLogEntry(models.Model):
+    """Append-only trail for anything money-related (invoice create/edit/
+    cancel/refund, discounts, service price changes, locked-invoice
+    corrections). Never exposed for update/delete via the API or admin."""
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    action = models.CharField(max_length=50)
+    invoice = models.ForeignKey(Invoice, null=True, blank=True, on_delete=models.SET_NULL, related_name="audit_entries")
+    detail = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name_plural = "Audit log entries"
+
+    def __str__(self):
+        return f"{self.action} - {self.created_at:%Y-%m-%d %H:%M}"

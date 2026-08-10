@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الفواتير — عيادة دكتورة ميس الربيعي</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> عيادة دكتورة ميس الربيعي — الفواتير</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;" id="navLinks"></div>
+      <h2 style="margin:0;">🔹 الفواتير</h2>
+      <button type="button" class="btn" id="newInvoiceBtn">+ فاتورة جديدة</button>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card" id="newInvoiceCard" style="display:none;">
+      <h3 style="margin-top:0;">اختر المريض للفاتورة الجديدة</h3>
+      <div class="search-row">
+        <input type="text" id="patientSearchBox" placeholder="ابحث بالاسم، رقم الملف، أو الهاتف...">
+        <button type="button" class="btn secondary" onclick="searchPatients()">بحث</button>
+      </div>
+      <div id="patientSearchResults"></div>
+    </div>
+
+    <div class="card">
+      <div class="grid">
+        <div class="field"><label>من تاريخ</label><input type="date" id="f_date_from"></div>
+        <div class="field"><label>إلى تاريخ</label><input type="date" id="f_date_to"></div>
+        <div class="field">
+          <label>حالة الفاتورة</label>
+          <select id="f_payment_status">
+            <option value="">-- الكل --</option>
+            <option value="غير مدفوعة">غير مدفوعة</option>
+            <option value="مدفوعة جزئيا">مدفوعة جزئيا</option>
+            <option value="مدفوعة">مدفوعة</option>
+            <option value="ملغاة">ملغاة</option>
+            <option value="مستردة">مستردة</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>طريقة الدفع</label>
+          <select id="f_payment_method">
+            <option value="">-- الكل --</option>
+            <option value="نقدا">نقدا (Cash)</option>
+            <option value="Master Qi Card">Master Qi Card</option>
+          </select>
+        </div>
+      </div>
+      <div class="search-row" style="margin-top:12px;">
+        <input type="text" id="f_search" placeholder="بحث برقم الفاتورة أو اسم المريض أو رقم الملف...">
+        <button type="button" class="btn secondary" onclick="loadInvoices()">تصفية</button>
+      </div>
+      <div id="invoicesWrap"></div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
+refreshUserChip("userChip", Auth.getName());
+const role = Auth.getRole();
+const msgEl = document.getElementById("msg");
+
+document.getElementById("navLinks").innerHTML = role === "doctor"
+  ? `<a href="dashboard.html" class="btn small secondary">لوحة الطبيب</a>
+     <a href="services.html" class="btn small secondary">دليل الخدمات</a>
+     <a href="reports.html" class="btn small secondary">التقارير</a>`
+  : `<a href="../secretary/dashboard.html" class="btn small secondary">لوحة السكرتيرة</a>`;
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s || "";
+  return div.innerHTML;
+}
+function statusBadgeClass(st) {
+  if (st === "مدفوعة") return "green";
+  if (st === "غير مدفوعة") return "gray";
+  if (st === "مدفوعة جزئيا") return "orange";
+  if (st === "ملغاة") return "red";
+  if (st === "مستردة") return "blue";
+  return "gray";
+}
+
+document.getElementById("newInvoiceBtn").addEventListener("click", () => {
+  document.getElementById("newInvoiceCard").style.display = "";
+  document.getElementById("patientSearchBox").value = "";
+  document.getElementById("patientSearchResults").innerHTML = "";
+  document.getElementById("patientSearchBox").focus();
+});
+
+async function searchPatients() {
+  const q = document.getElementById("patientSearchBox").value.trim();
+  const wrap = document.getElementById("patientSearchResults");
+  if (!q) { wrap.innerHTML = ""; return; }
+  try {
+    const patients = await apiFetch(`/api/patients?search=${encodeURIComponent(q)}`);
+    if (!patients.length) {
+      wrap.innerHTML = `<div class="empty-state">لا يوجد مرضى مطابقين — يجب أن يكون المريض مسجلاً في النظام مسبقاً.</div>`;
+      return;
+    }
+    wrap.innerHTML = `<table><thead><tr><th>رقم الملف</th><th>الاسم</th><th>الهاتف</th><th></th></tr></thead><tbody>
+      ${patients.map((p) => `
+        <tr>
+          <td>${escapeHtml(p.file_number)}</td>
+          <td>${escapeHtml(p.full_name)}</td>
+          <td>${escapeHtml(p.phone || "-")}</td>
+          <td><button type="button" class="btn small" onclick="createInvoiceFor(${p.patient_id})">إنشاء فاتورة</button></td>
+        </tr>`).join("")}
+      </tbody></table>`;
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+document.getElementById("patientSearchBox").addEventListener("keydown", (e) => { if (e.key === "Enter") searchPatients(); });
+
+async function createInvoiceFor(patientId) {
+  try {
+    const invoice = await apiFetch(`/api/invoices`, { method: "POST", body: JSON.stringify({ patient: patientId }) });
+    location.href = `invoice.html?id=${invoice.id}`;
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+async function loadInvoices() {
+  const wrap = document.getElementById("invoicesWrap");
+  try {
+    const params = new URLSearchParams();
+    const dateFrom = document.getElementById("f_date_from").value;
+    const dateTo = document.getElementById("f_date_to").value;
+    const paymentStatus = document.getElementById("f_payment_status").value;
+    const paymentMethod = document.getElementById("f_payment_method").value;
+    const search = document.getElementById("f_search").value.trim();
+    if (dateFrom) params.set("date_from", dateFrom);
+    if (dateTo) params.set("date_to", dateTo);
+    if (paymentStatus) params.set("payment_status", paymentStatus);
+    if (paymentMethod) params.set("payment_method", paymentMethod);
+    if (search) params.set("search", search);
+
+    const invoices = await apiFetch(`/api/invoices?${params.toString()}`);
+    if (!invoices.length) {
+      wrap.innerHTML = `<div class="empty-state">لا توجد فواتير مطابقة.</div>`;
+      return;
+    }
+    wrap.innerHTML = `
+      <table>
+        <thead><tr><th>رقم الفاتورة</th><th>المريض</th><th>التاريخ</th><th>المجموع المستحق</th><th>الحالة</th><th>طريقة الدفع</th><th></th></tr></thead>
+        <tbody>
+          ${invoices.map((inv) => `
+            <tr style="cursor:pointer;" onclick="location.href='invoice.html?id=${inv.id}'">
+              <td>#${inv.invoice_number}</td>
+              <td>${escapeHtml(inv.patient_name)} (${escapeHtml(inv.patient_file_number)})</td>
+              <td>${fmtDate(inv.created_at)}</td>
+              <td>${inv.total_due.toLocaleString("en-US")} د.ع</td>
+              <td><span class="badge ${statusBadgeClass(inv.payment_status)}">${inv.payment_status}</span></td>
+              <td>${escapeHtml(inv.payment_method || "-")}</td>
+              <td><a class="btn small secondary" href="invoice.html?id=${inv.id}">فتح</a></td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+  } catch (err) {
+    wrap.innerHTML = `<div class="msg error">${err.message}</div>`;
+  }
+}
+
+loadInvoices();
+</script>
+</body>
+</html>

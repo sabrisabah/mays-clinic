@@ -6,6 +6,7 @@ from .models import (
     User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
+    Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
 )
 from .utils import compute_bmi, compute_whr, compute_whr_class, compute_activity_level, normalize_height_m
 
@@ -240,3 +241,51 @@ class PrescriptionAdmin(admin.ModelAdmin):
     list_display = ["patient", "prescription_date", "created_by"]
     search_fields = ["patient__file_number", "patient__user__full_name"]
     date_hierarchy = "prescription_date"
+
+
+# ---------------- REVENUE / BILLING ----------------
+
+class ServiceVariantInline(admin.TabularInline):
+    model = ServiceVariant
+    extra = 0
+
+
+@admin.register(Service)
+class ServiceAdmin(admin.ModelAdmin):
+    inlines = [ServiceVariantInline]
+    list_display = ["name", "category", "price", "has_variants", "is_active", "price_updated_at"]
+    list_filter = ["category", "has_variants", "is_active"]
+    search_fields = ["name"]
+
+
+class InvoiceItemInline(admin.TabularInline):
+    model = InvoiceItem
+    extra = 0
+
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    inlines = [InvoiceItemInline]
+    list_display = ["invoice_number", "patient", "payment_status", "payment_method", "discount_pct", "is_locked", "created_by", "created_at"]
+    list_filter = ["payment_status", "payment_method", "is_locked"]
+    search_fields = ["invoice_number", "patient__file_number", "patient__user__full_name"]
+    date_hierarchy = "created_at"
+    readonly_fields = ["invoice_number", "created_at", "updated_at"]
+
+
+@admin.register(AuditLogEntry)
+class AuditLogEntryAdmin(admin.ModelAdmin):
+    """Read-only in /admin — audit entries are create-only by design."""
+    list_display = ["created_at", "action", "actor", "invoice"]
+    list_filter = ["action"]
+    search_fields = ["detail"]
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

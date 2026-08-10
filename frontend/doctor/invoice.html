@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>فاتورة — عيادة دكتورة ميس الربيعي</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> عيادة دكتورة ميس الربيعي</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <a href="invoices.html" class="btn small secondary">&rarr; كل الفواتير</a>
+        <div>
+          <h2 style="margin:0; display:inline;">فاتورة #<span id="invNumber">-</span></h2>
+          <span class="badge gray" id="invStatusBadge" style="margin-right:10px;">-</span>
+        </div>
+        <button type="button" class="btn secondary" onclick="printReceipt()">طباعة الإيصال</button>
+      </div>
+      <p style="color:var(--muted); font-size:.85rem; margin:8px 0 0;">
+        المريض: <b id="invPatientName">-</b> (<span id="invPatientFile">-</span>) — تاريخ الإنشاء: <span id="invCreatedAt">-</span>
+      </p>
+      <div id="invCorrectionNote" style="display:none; margin-top:8px;" class="msg error"></div>
+    </div>
+
+    <div id="msg"></div>
+
+    <div class="card">
+      <h3>🔹 الأصناف</h3>
+      <div id="itemsWrap"></div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button type="button" class="btn small" id="addItemBtn">+ إضافة خدمة</button>
+        <button type="button" class="btn small secondary" id="addFreeFollowupBtn">+ متابعة مجانية</button>
+      </div>
+    </div>
+
+    <div class="card" id="itemFormCard" style="display:none;">
+      <h4 style="margin-top:0;">إضافة صنف</h4>
+      <div class="grid">
+        <div class="field">
+          <label>الخدمة</label>
+          <select id="item_service_select"><option value="">-- اختر خدمة --</option></select>
+        </div>
+        <div class="field" id="item_variant_field" style="display:none;">
+          <label>الخيار / الجرعة</label>
+          <select id="item_variant_select"></select>
+        </div>
+        <div class="field"><label>الكمية</label><input type="number" id="item_quantity" min="1" value="1"></div>
+        <div class="field"><label>سعر الوحدة (د.ع)</label><input type="number" id="item_unit_price" min="0"></div>
+      </div>
+      <div class="btn-row" style="margin:10px 0;">
+        <button type="button" class="btn secondary small" id="itemCustomToggleBtn">+ بند مخصص غير مرتبط بخدمة</button>
+      </div>
+      <div class="field" id="item_custom_field" style="display:none;">
+        <label>اسم البند المخصص</label>
+        <input type="text" id="item_custom_name">
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn" id="itemSaveBtn">حفظ الصنف</button>
+        <button type="button" class="btn secondary" id="itemCancelBtn">إلغاء</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🔹 الخصم</h3>
+      <div class="grid">
+        <div class="field"><label>نسبة الخصم %</label><input type="number" id="disc_pct" min="0" max="100"></div>
+        <div class="field">
+          <label>سبب الخصم</label>
+          <select id="disc_reason">
+            <option value="">-- بدون --</option>
+            <option value="الأصدقاء">الأصدقاء</option>
+            <option value="الأقارب">الأقارب</option>
+            <option value="الطلبة">الطلبة</option>
+            <option value="ذوو الإعاقة">ذوو الإعاقة</option>
+            <option value="سبب مخصص">سبب مخصص</option>
+          </select>
+        </div>
+        <div class="field" id="disc_custom_field" style="display:none;"><label>السبب المخصص</label><input type="text" id="disc_custom"></div>
+        <div class="field">
+          <label>وافقت عليه (الطبيبة)</label>
+          <select id="disc_approved_by"><option value="">-- اختر --</option></select>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button type="button" class="btn small" id="discSaveBtn">حفظ الخصم</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🔹 الملخص المالي</h3>
+      <div class="stats-row">
+        <div class="stat-card"><div class="value" id="sumSubtotal">-</div><div class="label">المجموع قبل الخصم</div></div>
+        <div class="stat-card"><div class="value" id="sumDiscount">-</div><div class="label">قيمة الخصم</div></div>
+        <div class="stat-card"><div class="value" id="sumTotalDue">-</div><div class="label">المبلغ المستحق</div></div>
+        <div class="stat-card"><div class="value" id="sumRemaining">-</div><div class="label">المتبقي</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🔹 الدفع</h3>
+      <div class="grid">
+        <div class="field">
+          <label>طريقة الدفع</label>
+          <select id="pay_method">
+            <option value="">-- اختر --</option>
+            <option value="نقدا">نقدا (Cash)</option>
+            <option value="Master Qi Card">Master Qi Card</option>
+          </select>
+        </div>
+        <div class="field"><label>المبلغ المستلم (د.ع)</label><input type="number" id="pay_amount" min="0"></div>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <button type="button" class="btn" id="recordPaymentBtn">تسجيل الدفع</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🔹 ملاحظات</h3>
+      <div class="field"><textarea id="inv_notes" placeholder="ملاحظات إضافية..."></textarea></div>
+      <div class="btn-row" style="margin-top:10px;"><button type="button" class="btn secondary small" id="notesSaveBtn">حفظ الملاحظات</button></div>
+    </div>
+
+    <div class="card" id="doctorActionsCard" style="display:none;">
+      <h3>🔹 إجراءات الطبيب</h3>
+      <div class="btn-row">
+        <button type="button" class="btn danger" id="cancelInvoiceBtn">إلغاء الفاتورة</button>
+        <button type="button" class="btn danger" id="refundInvoiceBtn">استرداد المبلغ</button>
+      </div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
+refreshUserChip("userChip", Auth.getName());
+const role = Auth.getRole();
+const msgEl = document.getElementById("msg");
+const params = new URLSearchParams(location.search);
+const invoiceId = params.get("id");
+if (!invoiceId) location.href = "invoices.html";
+
+let currentInvoice = null;
+let services = [];
+let isCustomItem = false;
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s || "";
+  return div.innerHTML;
+}
+function statusBadgeClass(st) {
+  if (st === "مدفوعة") return "green";
+  if (st === "غير مدفوعة") return "gray";
+  if (st === "مدفوعة جزئيا") return "orange";
+  if (st === "ملغاة") return "red";
+  if (st === "مستردة") return "blue";
+  return "gray";
+}
+function money(n) { return (n || 0).toLocaleString("en-US") + " د.ع"; }
+
+// A locked (fully paid) invoice can only be touched by a doctor, and only
+// with a documented correction reason — this mirrors the server-side gate,
+// prompting for the reason up front instead of failing then retrying.
+function withCorrectionReason(payload) {
+  if (currentInvoice && currentInvoice.is_locked) {
+    const reason = prompt("الفاتورة مقفلة بعد الدفع الكامل — أدخل سبب التصحيح للمتابعة:", "");
+    if (!reason || !reason.trim()) return null;
+    return Object.assign({}, payload, { correction_reason: reason.trim() });
+  }
+  return payload;
+}
+
+async function loadDoctors() {
+  const doctors = await apiFetch(`/api/staff/doctors`);
+  const sel = document.getElementById("disc_approved_by");
+  sel.innerHTML = `<option value="">-- اختر --</option>` + doctors.map((d) => `<option value="${d.id}">${escapeHtml(d.full_name)}</option>`).join("");
+}
+
+async function loadServices() {
+  services = await apiFetch(`/api/services`);
+  const sel = document.getElementById("item_service_select");
+  sel.innerHTML = `<option value="">-- اختر خدمة --</option>` + services.map((s) =>
+    `<option value="${s.id}">${escapeHtml(s.name)}${s.has_variants ? "" : " — " + s.price.toLocaleString("en-US") + " د.ع"}</option>`
+  ).join("");
+}
+
+async function loadInvoice() {
+  currentInvoice = await apiFetch(`/api/invoices/${invoiceId}`);
+  renderInvoice();
+}
+
+function renderInvoice() {
+  const inv = currentInvoice;
+  document.getElementById("invNumber").textContent = inv.invoice_number;
+  const badge = document.getElementById("invStatusBadge");
+  badge.textContent = inv.payment_status;
+  badge.className = "badge " + statusBadgeClass(inv.payment_status);
+  document.getElementById("invPatientName").textContent = inv.patient_name;
+  document.getElementById("invPatientFile").textContent = inv.patient_file_number;
+  document.getElementById("invCreatedAt").textContent = fmtDate(inv.created_at);
+
+  const correctionNote = document.getElementById("invCorrectionNote");
+  if (inv.last_correction_reason) {
+    correctionNote.style.display = "";
+    correctionNote.textContent = `⚠️ آخر تصحيح على فاتورة مقفلة: ${inv.last_correction_reason}`;
+  } else {
+    correctionNote.style.display = "none";
+  }
+
+  renderItems();
+
+  document.getElementById("disc_pct").value = inv.discount_pct || "";
+  document.getElementById("disc_reason").value = inv.discount_reason_key || "";
+  document.getElementById("disc_custom_field").style.display = inv.discount_reason_key === "سبب مخصص" ? "" : "none";
+  document.getElementById("disc_custom").value = inv.discount_reason_custom || "";
+  document.getElementById("disc_approved_by").value = inv.discount_approved_by || "";
+
+  document.getElementById("sumSubtotal").textContent = money(inv.subtotal);
+  document.getElementById("sumDiscount").textContent = money(inv.discount_amount);
+  document.getElementById("sumTotalDue").textContent = money(inv.total_due);
+  document.getElementById("sumRemaining").textContent = money(inv.remaining_due);
+
+  document.getElementById("pay_method").value = inv.payment_method || "";
+  document.getElementById("pay_amount").value = inv.remaining_due > 0 ? inv.remaining_due : "";
+
+  document.getElementById("inv_notes").value = inv.notes || "";
+
+  document.getElementById("doctorActionsCard").style.display =
+    (role === "doctor" && !["ملغاة", "مستردة"].includes(inv.payment_status)) ? "" : "none";
+  document.getElementById("cancelInvoiceBtn").style.display = inv.payment_status === "مدفوعة" ? "none" : "";
+  document.getElementById("refundInvoiceBtn").style.display = ["مدفوعة", "مدفوعة جزئيا"].includes(inv.payment_status) ? "" : "none";
+
+  const terminal = ["ملغاة", "مستردة"].includes(inv.payment_status);
+  document.getElementById("addItemBtn").style.display = terminal ? "none" : "";
+  document.getElementById("addFreeFollowupBtn").style.display = terminal ? "none" : "";
+  document.getElementById("recordPaymentBtn").disabled = terminal;
+  document.getElementById("discSaveBtn").disabled = terminal;
+}
+
+function renderItems() {
+  const items = currentInvoice.items || [];
+  const wrap = document.getElementById("itemsWrap");
+  if (!items.length) {
+    wrap.innerHTML = `<div class="empty-state">لا توجد أصناف بعد.</div>`;
+    return;
+  }
+  const terminal = ["ملغاة", "مستردة"].includes(currentInvoice.payment_status);
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>الصنف</th><th>الكمية</th><th>سعر الوحدة</th><th>المجموع</th><th></th></tr></thead>
+      <tbody>
+        ${items.map((it) => `
+          <tr>
+            <td>${escapeHtml(it.item_name)}${it.is_free_followup ? ` <span class="badge green">مجانية</span>` : ""}</td>
+            <td>${it.quantity}</td>
+            <td>${money(it.unit_price)}</td>
+            <td>${money(it.line_total)}</td>
+            <td>${(!terminal && !it.is_free_followup) ? `<button type="button" class="btn small danger" onclick="deleteItem(${it.id})">حذف</button>` : ""}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>`;
+}
+
+document.getElementById("addItemBtn").addEventListener("click", () => {
+  isCustomItem = false;
+  document.getElementById("item_service_select").value = "";
+  document.getElementById("item_variant_field").style.display = "none";
+  document.getElementById("item_quantity").value = 1;
+  document.getElementById("item_unit_price").value = "";
+  document.getElementById("item_custom_field").style.display = "none";
+  document.getElementById("item_custom_name").value = "";
+  document.getElementById("item_service_select").disabled = false;
+  document.getElementById("itemFormCard").style.display = "";
+  document.getElementById("itemFormCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
+document.getElementById("itemCustomToggleBtn").addEventListener("click", () => {
+  isCustomItem = !isCustomItem;
+  document.getElementById("item_custom_field").style.display = isCustomItem ? "" : "none";
+  document.getElementById("item_service_select").disabled = isCustomItem;
+  document.getElementById("item_variant_field").style.display = "none";
+  if (isCustomItem) document.getElementById("item_service_select").value = "";
+});
+
+document.getElementById("item_service_select").addEventListener("change", () => {
+  const service = services.find((s) => String(s.id) === document.getElementById("item_service_select").value);
+  const variantField = document.getElementById("item_variant_field");
+  const variantSelect = document.getElementById("item_variant_select");
+  if (!service) { variantField.style.display = "none"; return; }
+  if (service.has_variants) {
+    variantSelect.innerHTML = (service.variants || []).filter((v) => v.is_active).map((v) =>
+      `<option value="${v.id}" data-price="${v.price}">${escapeHtml(v.name)} — ${v.price.toLocaleString("en-US")} د.ع</option>`
+    ).join("");
+    variantField.style.display = "";
+    const firstVariant = (service.variants || []).find((v) => v.is_active);
+    document.getElementById("item_unit_price").value = firstVariant ? firstVariant.price : "";
+  } else {
+    variantField.style.display = "none";
+    document.getElementById("item_unit_price").value = service.price;
+  }
+});
+document.getElementById("item_variant_select").addEventListener("change", (e) => {
+  const opt = e.target.selectedOptions[0];
+  document.getElementById("item_unit_price").value = opt ? opt.dataset.price : "";
+});
+
+document.getElementById("itemCancelBtn").addEventListener("click", () => {
+  document.getElementById("itemFormCard").style.display = "none";
+});
+
+document.getElementById("itemSaveBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    const service = services.find((s) => String(s.id) === document.getElementById("item_service_select").value);
+    const variantSelect = document.getElementById("item_variant_select");
+    const variant = (service && service.has_variants && document.getElementById("item_variant_field").style.display !== "none")
+      ? (service.variants || []).find((v) => String(v.id) === variantSelect.value) : null;
+    const customName = document.getElementById("item_custom_name").value.trim();
+
+    let itemName;
+    if (isCustomItem) {
+      if (!customName) { showMsg(msgEl, "أدخل اسم البند المخصص", "error"); return; }
+      itemName = customName;
+    } else {
+      if (!service) { showMsg(msgEl, "اختر خدمة من القائمة", "error"); return; }
+      itemName = variant ? `${service.name} - ${variant.name}` : service.name;
+    }
+
+    const basePayload = {
+      service: isCustomItem ? null : (service ? service.id : null),
+      service_variant: variant ? variant.id : null,
+      item_name: itemName,
+      quantity: parseInt(document.getElementById("item_quantity").value) || 1,
+      unit_price: parseInt(document.getElementById("item_unit_price").value) || 0,
+    };
+    const payload = withCorrectionReason(basePayload);
+    if (!payload) return;
+
+    await apiFetch(`/api/invoices/${invoiceId}/items`, { method: "POST", body: JSON.stringify(payload) });
+    document.getElementById("itemFormCard").style.display = "none";
+    await loadInvoice();
+    showMsg(msgEl, "تمت إضافة الصنف ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+async function deleteItem(itemId) {
+  if (!confirm("حذف هذا الصنف من الفاتورة؟")) return;
+  try {
+    const payload = withCorrectionReason({});
+    if (!payload) return;
+    await apiFetch(`/api/invoices/${invoiceId}/items/${itemId}`, { method: "DELETE", body: JSON.stringify(payload) });
+    await loadInvoice();
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+}
+
+document.getElementById("addFreeFollowupBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    const payload = withCorrectionReason({ action: "add_free_followup" });
+    if (!payload) return;
+    await apiFetch(`/api/invoices/${invoiceId}/action`, { method: "POST", body: JSON.stringify(payload) });
+    await loadInvoice();
+    showMsg(msgEl, "تمت إضافة متابعة مجانية ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("disc_reason").addEventListener("change", (e) => {
+  document.getElementById("disc_custom_field").style.display = e.target.value === "سبب مخصص" ? "" : "none";
+});
+
+document.getElementById("discSaveBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    const basePayload = {
+      discount_pct: parseFloat(document.getElementById("disc_pct").value) || 0,
+      discount_reason_key: document.getElementById("disc_reason").value,
+      discount_reason_custom: document.getElementById("disc_custom").value.trim(),
+      discount_approved_by: document.getElementById("disc_approved_by").value || null,
+    };
+    const payload = withCorrectionReason(basePayload);
+    if (!payload) return;
+    await apiFetch(`/api/invoices/${invoiceId}`, { method: "PUT", body: JSON.stringify(payload) });
+    await loadInvoice();
+    showMsg(msgEl, "تم حفظ الخصم ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("recordPaymentBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    const method = document.getElementById("pay_method").value;
+    if (!method) { showMsg(msgEl, "اختر طريقة الدفع", "error"); return; }
+    const basePayload = {
+      action: "record_payment",
+      payment_method: method,
+      amount_paid: parseFloat(document.getElementById("pay_amount").value) || 0,
+    };
+    const payload = withCorrectionReason(basePayload);
+    if (!payload) return;
+    await apiFetch(`/api/invoices/${invoiceId}/action`, { method: "POST", body: JSON.stringify(payload) });
+    await loadInvoice();
+    showMsg(msgEl, "تم تسجيل الدفع ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("notesSaveBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    const basePayload = { notes: document.getElementById("inv_notes").value.trim() };
+    const payload = withCorrectionReason(basePayload);
+    if (!payload) return;
+    await apiFetch(`/api/invoices/${invoiceId}`, { method: "PUT", body: JSON.stringify(payload) });
+    await loadInvoice();
+    showMsg(msgEl, "تم حفظ الملاحظات ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("cancelInvoiceBtn").addEventListener("click", async () => {
+  const reason = prompt("سبب إلغاء الفاتورة:", "");
+  if (!reason || !reason.trim()) return;
+  try {
+    await apiFetch(`/api/invoices/${invoiceId}/action`, { method: "POST", body: JSON.stringify({ action: "cancel", reason: reason.trim() }) });
+    await loadInvoice();
+    showMsg(msgEl, "تم إلغاء الفاتورة", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("refundInvoiceBtn").addEventListener("click", async () => {
+  const reason = prompt("سبب استرداد المبلغ:", "");
+  if (!reason || !reason.trim()) return;
+  try {
+    await apiFetch(`/api/invoices/${invoiceId}/action`, { method: "POST", body: JSON.stringify({ action: "refund", reason: reason.trim() }) });
+    await loadInvoice();
+    showMsg(msgEl, "تم استرداد المبلغ", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+function printReceipt() {
+  const inv = currentInvoice;
+  const rows = (inv.items || []).map((it) => `
+    <tr>
+      <td>${escapeHtml(it.item_name)}</td>
+      <td>${it.quantity}</td>
+      <td>${money(it.unit_price)}</td>
+      <td>${money(it.line_total)}</td>
+    </tr>`).join("");
+  const win = window.open("", "_blank");
+  win.document.write(`
+    <html dir="rtl"><head><meta charset="utf-8"><title>إيصال فاتورة #${inv.invoice_number}</title>
+    <style>body{font-family:Tahoma,Arial,sans-serif; padding:24px;} table{width:100%; border-collapse:collapse; font-size:.9rem;} td,th{border:1px solid #ccc; padding:6px 10px; text-align:right;}</style>
+    </head><body>
+      <h1>عيادة دكتورة ميس الربيعي</h1>
+      <h2>إيصال فاتورة #${inv.invoice_number}</h2>
+      <p>المريض: ${escapeHtml(inv.patient_name)} (${escapeHtml(inv.patient_file_number)})</p>
+      <p>التاريخ: ${fmtDate(inv.created_at)}</p>
+      <table>
+        <thead><tr><th>الخدمة</th><th>الكمية</th><th>السعر</th><th>المجموع</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p>المجموع قبل الخصم: ${money(inv.subtotal)}</p>
+      ${inv.discount_pct ? `<p>الخصم (${inv.discount_pct}%): -${money(inv.discount_amount)}</p>` : ""}
+      <p><b>المبلغ المستحق: ${money(inv.total_due)}</b></p>
+      <p>طريقة الدفع: ${escapeHtml(inv.payment_method || "-")} — حالة الدفع: ${escapeHtml(inv.payment_status)}</p>
+      <p>الموظف: ${escapeHtml(inv.created_by_name || "-")}</p>
+    </body></html>`);
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
+(async function init() {
+  try {
+    await loadServices();
+    await loadDoctors();
+    await loadInvoice();
+  } catch (err) {
+    showMsg(msgEl, err.message, "error");
+  }
+})();
+</script>
+</body>
+</html>

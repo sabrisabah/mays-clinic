@@ -4,6 +4,7 @@ from .models import (
     User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
+    Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
 )
 from .utils import (
     compute_suggested_calories, macros_from_percentages, protein_first_breakdown,
@@ -474,3 +475,125 @@ class PrescriptionSerializer(serializers.ModelSerializer):
         model = Prescription
         fields = ["id", "patient_id", "prescription_date", "general_notes", "doctor_name", "items", "updated_at"]
         read_only_fields = ["id", "patient_id", "prescription_date", "doctor_name", "items", "updated_at"]
+
+
+# ---------------- REVENUE / BILLING (نظام الإيرادات) ----------------
+
+class ServiceVariantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceVariant
+        fields = ["id", "service", "name", "price", "is_active", "order"]
+        read_only_fields = ["id", "service"]
+
+
+class ServiceSerializer(serializers.ModelSerializer):
+    variants = ServiceVariantSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Service
+        fields = [
+            "id", "name", "category", "price", "pricing_note",
+            "has_variants", "is_active", "price_updated_at", "variants",
+        ]
+        read_only_fields = ["id", "price_updated_at", "variants"]
+
+
+class InvoiceItemSerializer(serializers.ModelSerializer):
+    line_total = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InvoiceItem
+        fields = [
+            "id", "invoice", "service", "service_variant", "item_name",
+            "unit_price", "quantity", "line_total", "is_free_followup", "order",
+        ]
+        read_only_fields = ["id", "invoice", "is_free_followup"]
+
+    def get_line_total(self, obj):
+        return obj.line_total()
+
+    def validate(self, attrs):
+        service = attrs.get("service", getattr(self.instance, "service", None))
+        item_name = attrs.get("item_name", getattr(self.instance, "item_name", ""))
+        if not service and not (item_name or "").strip():
+            raise serializers.ValidationError("اختر خدمة من الدليل أو أدخل اسماً للبند")
+        return attrs
+
+
+class InvoiceSerializer(serializers.ModelSerializer):
+    patient_name = serializers.CharField(source="patient.user.full_name", read_only=True)
+    patient_file_number = serializers.CharField(source="patient.file_number", read_only=True)
+    items = InvoiceItemSerializer(many=True, read_only=True)
+    created_by_name = serializers.CharField(source="created_by.full_name", read_only=True, default="")
+    discount_entered_by_name = serializers.CharField(source="discount_entered_by.full_name", read_only=True, default="")
+    discount_approved_by_name = serializers.CharField(source="discount_approved_by.full_name", read_only=True, default="")
+
+    subtotal = serializers.SerializerMethodField()
+    discount_amount = serializers.SerializerMethodField()
+    total_due = serializers.SerializerMethodField()
+    remaining_due = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Invoice
+        fields = [
+            "id", "invoice_number", "patient", "patient_name", "patient_file_number",
+            "items", "subtotal",
+            "discount_pct", "discount_reason_key", "discount_reason_custom",
+            "discount_entered_by", "discount_entered_by_name",
+            "discount_approved_by", "discount_approved_by_name", "discount_amount",
+            "payment_method", "amount_paid", "payment_status", "cancel_refund_reason",
+            "total_due", "remaining_due",
+            "is_locked", "last_correction_reason", "notes",
+            "created_by", "created_by_name", "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "invoice_number", "patient_name", "patient_file_number", "items",
+            "subtotal", "discount_entered_by", "discount_entered_by_name",
+            "discount_approved_by_name", "discount_amount",
+            "payment_status", "cancel_refund_reason", "total_due", "remaining_due",
+            "is_locked", "last_correction_reason", "created_by", "created_by_name",
+            "created_at", "updated_at",
+        ]
+
+    def get_subtotal(self, obj):
+        return sum(item.line_total() for item in obj.items.all())
+
+    def get_discount_amount(self, obj):
+        subtotal = self.get_subtotal(obj)
+        return round(subtotal * (obj.discount_pct or 0) / 100)
+
+    def get_total_due(self, obj):
+        return self.get_subtotal(obj) - self.get_discount_amount(obj)
+
+    def get_remaining_due(self, obj):
+        return round(self.get_total_due(obj) - (obj.amount_paid or 0))
+
+    def validate_discount_pct(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("نسبة الخصم يجب أن تكون بين 0 و100")
+        return value
+
+    def validate(self, attrs):
+        discount_pct = attrs.get("discount_pct", getattr(self.instance, "discount_pct", 0))
+        if discount_pct:
+            reason_key = attrs.get("discount_reason_key", getattr(self.instance, "discount_reason_key", ""))
+            if not reason_key:
+                raise serializers.ValidationError({"discount_reason_key": "اختر سبب الخصم"})
+            custom = attrs.get("discount_reason_custom", getattr(self.instance, "discount_reason_custom", ""))
+            if reason_key == "سبب مخصص" and not (custom or "").strip():
+                raise serializers.ValidationError({"discount_reason_custom": "أدخل السبب المخصص للخصم"})
+            approved_by = attrs.get("discount_approved_by", getattr(self.instance, "discount_approved_by", None))
+            if not approved_by:
+                raise serializers.ValidationError({"discount_approved_by": "الخصم يتطلب اسم الطبيبة التي وافقت عليه"})
+            if approved_by.role != "doctor":
+                raise serializers.ValidationError({"discount_approved_by": "الموافقة يجب أن تكون من حساب طبيب"})
+        return attrs
+
+
+class AuditLogEntrySerializer(serializers.ModelSerializer):
+    actor_name = serializers.CharField(source="actor.full_name", read_only=True, default="")
+
+    class Meta:
+        model = AuditLogEntry
+        fields = ["id", "actor", "actor_name", "action", "invoice", "detail", "created_at"]
+        read_only_fields = fields
