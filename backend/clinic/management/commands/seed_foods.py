@@ -1,7 +1,7 @@
 """Seeds the doctor-facing food picker (see Food model / '+ إضافة صنف' in the
 nutrition-plan meal builder) with a starter catalog of common Iraqi foods
-across the 9 categories used by the search/filter UI:
-فطور عراقي، خبز، بيض، ألبان، بقوليات، خضروات، فواكه، إضافات، مشروبات.
+across the 10 categories used by the search/filter UI:
+فطور عراقي، غداء عراقي، خبز، بيض، ألبان، بقوليات، خضروات، فواكه، إضافات، مشروبات.
 
 Nutrition values are per ONE `unit` (matching Food's storage convention —
 see the model docstring), taken from commonly-cited standard nutrition
@@ -80,11 +80,23 @@ FOODS = [
     ("شعيرية بالحليب", "فطور عراقي", "كوب", 210, 6.0, 35.0, 5.0),
     ("تمن باقلا (فطور)", "فطور عراقي", "كوب", 300, 8.0, 55.0, 5.0),
     ("فتة (حمص وخبز ولبن)", "فطور عراقي", "قطعة", 350, 15.0, 45.0, 12.0),
+
+    # ---------------- غداء عراقي (أطباق مركّبة) ----------------
+    ("تمن مع مرقة باميا", "غداء عراقي", "قطعة", 420, 12.0, 60.0, 14.0),
+    ("قيمة (مرقة لحم وطماطة)", "غداء عراقي", "قطعة", 320, 18.0, 15.0, 20.0),
+    ("دولمة", "غداء عراقي", "قطعة", 280, 8.0, 30.0, 14.0),
+    ("كباب عراقي مشوي", "غداء عراقي", "قطعة", 250, 20.0, 2.0, 18.0),
+    ("تكة لحم مشوي", "غداء عراقي", "قطعة", 320, 28.0, 0.0, 22.0),
+    ("كبة مقلية", "غداء عراقي", "قطعة", 210, 8.0, 18.0, 12.0),
+    ("برياني عراقي", "غداء عراقي", "كوب", 380, 15.0, 55.0, 11.0),
+    ("سمك مسگوف", "غداء عراقي", "قطعة", 340, 35.0, 0.0, 21.0),
+    ("مقلوبة", "غداء عراقي", "كوب", 350, 14.0, 48.0, 12.0),
+    ("مرقة باجلا بلحم", "غداء عراقي", "كوب", 260, 16.0, 22.0, 12.0),
 ]
 
 
 class Command(BaseCommand):
-    help = "Seeds the food picker with a starter catalog of common Iraqi foods across all 9 categories."
+    help = "Seeds the food picker with a starter catalog of common Iraqi foods across all 10 categories."
 
     def handle(self, *args, **options):
         created, skipped = 0, 0

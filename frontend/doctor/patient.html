@@ -984,7 +984,10 @@ async function loadNpFoods() {
 }
 
 // ---- searchable food picker (category tabs + live filter) ----
-const NP_FOOD_CATEGORIES = ["فطور عراقي", "خبز", "بيض", "ألبان", "بقوليات", "خضروات", "فواكه", "إضافات", "مشروبات"];
+const NP_FOOD_CATEGORIES = ["فطور عراقي", "غداء عراقي", "خبز", "بيض", "ألبان", "بقوليات", "خضروات", "فواكه", "إضافات", "مشروبات"];
+// Opening "+ إضافة صنف" from a given meal slot starts the category filter on
+// the dishes typical for that meal, without hiding the other tabs.
+const NP_DEFAULT_CATEGORY_BY_MEAL = { "فطور": "فطور عراقي", "غداء": "غداء عراقي" };
 let npActiveFoodCategory = "الكل";
 
 function npFindFoodByName(name) {
@@ -1393,7 +1396,7 @@ function npOpenItemForm(mealId) {
   document.getElementById("np_item_alternative").value = "";
   document.getElementById("np_item_instructions").value = "";
   document.getElementById("np_item_patient_visible").checked = true;
-  npActiveFoodCategory = "الكل";
+  npActiveFoodCategory = NP_DEFAULT_CATEGORY_BY_MEAL[meal.meal_type] || "الكل";
   npCloseFoodDropdown();
   document.getElementById("npItemFormCard").style.display = "";
   document.getElementById("npItemFormCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -1490,7 +1493,7 @@ function npEditItem(mealId, itemId) {
   document.getElementById("np_item_alternative").value = item.alternative_text || "";
   document.getElementById("np_item_instructions").value = item.instructions || "";
   document.getElementById("np_item_patient_visible").checked = !!item.patient_visible;
-  npActiveFoodCategory = "الكل";
+  npActiveFoodCategory = NP_DEFAULT_CATEGORY_BY_MEAL[meal.meal_type] || "الكل";
   npCloseFoodDropdown();
   document.getElementById("npItemFormCard").style.display = "";
   document.getElementById("npItemFormCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
