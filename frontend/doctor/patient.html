@@ -348,10 +348,13 @@
         <div class="card" id="npItemFormCard" style="display:none;">
           <h4 id="npItemFormTitle" style="margin-top:0;">إضافة صنف</h4>
           <div class="grid">
-            <div class="field">
+            <div class="field" style="position:relative;">
               <label>الصنف الغذائي</label>
-              <input type="text" id="np_item_food_search" list="np_food_list" placeholder="اكتب للبحث..." autocomplete="off">
-              <datalist id="np_food_list"></datalist>
+              <input type="text" id="np_item_food_search" placeholder="اكتب للبحث... (مثال: بيض)" autocomplete="off">
+              <div id="npFoodDropdown" style="display:none; position:absolute; top:100%; right:0; left:0; z-index:30; background:#fff; border:2px solid #1a1a1a; border-radius:8px; margin-top:4px; max-height:320px; overflow-y:auto; box-shadow:0 4px 14px rgba(0,0,0,.15);">
+                <div id="npFoodCategoryTabs" style="display:flex; flex-wrap:wrap; gap:6px; padding:8px; border-bottom:1px solid var(--border); position:sticky; top:0; background:#fff;"></div>
+                <div id="npFoodResultsList"></div>
+              </div>
             </div>
             <div class="field"><label>الكمية</label><input type="number" step="0.1" id="np_item_quantity"></div>
             <div class="field">
@@ -978,8 +981,81 @@ function npMealLabel(mealType) {
 
 async function loadNpFoods() {
   npFoods = await apiFetch(`/api/foods`);
-  document.getElementById("np_food_list").innerHTML = npFoods.map((f) => `<option value="${escapeHtml(f.name)}">`).join("");
 }
+
+// ---- searchable food picker (category tabs + live filter) ----
+const NP_FOOD_CATEGORIES = ["فطور عراقي", "خبز", "بيض", "ألبان", "بقوليات", "خضروات", "فواكه", "إضافات", "مشروبات"];
+let npActiveFoodCategory = "الكل";
+
+function npFindFoodByName(name) {
+  return npFoods.find((f) => f.name === name) || null;
+}
+function npFindFoodById(id) {
+  return npFoods.find((f) => f.id === id) || null;
+}
+
+function npRenderFoodCategoryTabs() {
+  const wrap = document.getElementById("npFoodCategoryTabs");
+  const cats = ["الكل", ...NP_FOOD_CATEGORIES];
+  wrap.innerHTML = cats.map((c) =>
+    `<button type="button" class="btn small ${c === npActiveFoodCategory ? "" : "secondary"}" onclick="npSetFoodCategory('${c}')">${c}</button>`
+  ).join("");
+}
+
+function npSetFoodCategory(cat) {
+  npActiveFoodCategory = cat;
+  npRenderFoodCategoryTabs();
+  npRenderFoodResults();
+}
+
+function npRenderFoodResults() {
+  const wrap = document.getElementById("npFoodResultsList");
+  const q = document.getElementById("np_item_food_search").value.trim();
+  const filtered = npFoods.filter((f) =>
+    (npActiveFoodCategory === "الكل" || f.category === npActiveFoodCategory)
+    && (!q || f.name.includes(q))
+  );
+  if (!filtered.length) {
+    wrap.innerHTML = `<div class="empty-state" style="padding:14px;">لا توجد نتائج</div>`;
+    return;
+  }
+  wrap.innerHTML = filtered.map((f) => `
+    <div style="padding:8px 12px; border-bottom:1px solid var(--border); cursor:pointer;" onmouseover="this.style.background='#f7f7f7'" onmouseout="this.style.background='#fff'" onclick="npSelectFoodResult(${f.id})">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <span>${escapeHtml(f.name)}</span>
+        <span style="color:var(--muted); font-size:.78rem; white-space:nowrap;">${f.calories_per_unit} سعرة/${escapeHtml(f.unit)}${f.category ? " · " + escapeHtml(f.category) : ""}</span>
+      </div>
+    </div>`).join("");
+}
+
+function npOpenFoodDropdown() {
+  if (document.getElementById("np_item_food_search").disabled) return;
+  npRenderFoodCategoryTabs();
+  npRenderFoodResults();
+  document.getElementById("npFoodDropdown").style.display = "";
+}
+function npCloseFoodDropdown() {
+  document.getElementById("npFoodDropdown").style.display = "none";
+}
+function npSelectFoodResult(id) {
+  const food = npFindFoodById(id);
+  if (!food) return;
+  document.getElementById("np_item_food_search").value = food.name;
+  npCloseFoodDropdown();
+  npAutofillFromFood();
+}
+document.getElementById("np_item_food_search").addEventListener("focus", npOpenFoodDropdown);
+document.getElementById("np_item_food_search").addEventListener("input", () => {
+  npRenderFoodResults();
+  document.getElementById("npFoodDropdown").style.display = "";
+});
+document.addEventListener("click", (e) => {
+  const dropdown = document.getElementById("npFoodDropdown");
+  const input = document.getElementById("np_item_food_search");
+  if (dropdown.style.display !== "none" && !dropdown.contains(e.target) && e.target !== input) {
+    npCloseFoodDropdown();
+  }
+});
 
 async function loadNutritionPlans() {
   npPlans = await apiFetch(`/api/patients/${patientId}/nutrition-plans`);
@@ -1317,6 +1393,8 @@ function npOpenItemForm(mealId) {
   document.getElementById("np_item_alternative").value = "";
   document.getElementById("np_item_instructions").value = "";
   document.getElementById("np_item_patient_visible").checked = true;
+  npActiveFoodCategory = "الكل";
+  npCloseFoodDropdown();
   document.getElementById("npItemFormCard").style.display = "";
   document.getElementById("npItemFormCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
@@ -1327,11 +1405,8 @@ document.getElementById("npCustomFoodToggleBtn").addEventListener("click", () =>
   box.style.display = showing ? "none" : "";
   document.getElementById("np_item_food_search").disabled = !showing;
   if (!showing) document.getElementById("np_item_food_search").value = "";
+  npCloseFoodDropdown();
 });
-
-function npFindFoodByName(name) {
-  return npFoods.find((f) => f.name === name) || null;
-}
 
 function npAutofillFromFood() {
   const food = npFindFoodByName(document.getElementById("np_item_food_search").value.trim());
@@ -1349,6 +1424,7 @@ document.getElementById("np_item_quantity").addEventListener("input", npAutofill
 document.getElementById("npItemCancelBtn").addEventListener("click", () => {
   document.getElementById("npItemFormCard").style.display = "none";
   npEditingItemId = null;
+  npCloseFoodDropdown();
 });
 
 document.getElementById("npItemSaveBtn").addEventListener("click", async () => {
@@ -1414,6 +1490,8 @@ function npEditItem(mealId, itemId) {
   document.getElementById("np_item_alternative").value = item.alternative_text || "";
   document.getElementById("np_item_instructions").value = item.instructions || "";
   document.getElementById("np_item_patient_visible").checked = !!item.patient_visible;
+  npActiveFoodCategory = "الكل";
+  npCloseFoodDropdown();
   document.getElementById("npItemFormCard").style.display = "";
   document.getElementById("npItemFormCard").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }

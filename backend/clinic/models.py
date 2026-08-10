@@ -158,7 +158,13 @@ class Food(models.Model):
         ("غم", "غم"), ("مل", "مل"), ("قطعة", "قطعة"),
         ("كوب", "كوب"), ("ملعقة كبيرة", "ملعقة كبيرة"), ("ملعقة صغيرة", "ملعقة صغيرة"),
     ]
+    CATEGORY_CHOICES = [
+        ("فطور عراقي", "فطور عراقي"), ("خبز", "خبز"), ("بيض", "بيض"), ("ألبان", "ألبان"),
+        ("بقوليات", "بقوليات"), ("خضروات", "خضروات"), ("فواكه", "فواكه"),
+        ("إضافات", "إضافات"), ("مشروبات", "مشروبات"),
+    ]
     name = models.CharField(max_length=200, unique=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, blank=True, default="")
     unit = models.CharField(max_length=20, choices=UNIT_CHOICES, default="غم")
     calories_per_unit = models.FloatField(default=0)
     protein_per_unit = models.FloatField(default=0)

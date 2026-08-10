@@ -167,7 +167,7 @@ class AssessmentSerializer(serializers.ModelSerializer):
 class FoodSerializer(serializers.ModelSerializer):
     class Meta:
         model = Food
-        fields = ["id", "name", "unit", "calories_per_unit", "protein_per_unit", "carbs_per_unit", "fat_per_unit", "is_active"]
+        fields = ["id", "name", "category", "unit", "calories_per_unit", "protein_per_unit", "carbs_per_unit", "fat_per_unit", "is_active"]
         read_only_fields = ["id"]
 
 

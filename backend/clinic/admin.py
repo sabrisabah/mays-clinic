@@ -145,8 +145,8 @@ class AssessmentAdmin(ImportExportModelAdmin, admin.ModelAdmin):
 
 @admin.register(Food)
 class FoodAdmin(admin.ModelAdmin):
-    list_display = ["name", "unit", "calories_per_unit", "protein_per_unit", "carbs_per_unit", "fat_per_unit", "is_active"]
-    list_filter = ["unit", "is_active"]
+    list_display = ["name", "category", "unit", "calories_per_unit", "protein_per_unit", "carbs_per_unit", "fat_per_unit", "is_active"]
+    list_filter = ["category", "unit", "is_active"]
     search_fields = ["name"]
 
 
