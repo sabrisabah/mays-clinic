@@ -281,8 +281,8 @@
           <h3>🔹 اعتبارات سريرية خاصة</h3>
           <div id="npPediatricBanner" class="msg error" style="display:none; margin-bottom:10px;"></div>
           <div class="check-group" id="npSafetyFlags">
-            <label class="check-item"><input type="checkbox" id="np_is_pregnant"> حامل</label>
-            <label class="check-item"><input type="checkbox" id="np_is_lactating"> مرضعة</label>
+            <label class="check-item" id="np_is_pregnant_wrap"><input type="checkbox" id="np_is_pregnant"> حامل</label>
+            <label class="check-item" id="np_is_lactating_wrap"><input type="checkbox" id="np_is_lactating"> مرضعة</label>
             <label class="check-item"><input type="checkbox" id="np_eating_disorder_risk"> خطر اضطراب أكل</label>
             <label class="check-item"><input type="checkbox" id="np_medically_unstable"> عدم استقرار طبي</label>
           </div>
@@ -1088,9 +1088,14 @@ function npRenderBuilder() {
   document.getElementById("np_duration_unit").value = plan.duration_unit || "أسبوع";
   document.getElementById("np_treatment_objective").value = plan.treatment_objective || "";
 
-  // Safety flags
-  document.getElementById("np_is_pregnant").checked = !!plan.is_pregnant;
-  document.getElementById("np_is_lactating").checked = !!plan.is_lactating;
+  // Safety flags — pregnancy/lactation only apply to female patients, so
+  // hide those two options entirely for a male patient rather than leaving
+  // clinically-irrelevant checkboxes on screen.
+  const isFemale = currentPatient && currentPatient.gender === "أنثى";
+  document.getElementById("np_is_pregnant_wrap").style.display = isFemale ? "" : "none";
+  document.getElementById("np_is_lactating_wrap").style.display = isFemale ? "" : "none";
+  document.getElementById("np_is_pregnant").checked = isFemale && !!plan.is_pregnant;
+  document.getElementById("np_is_lactating").checked = isFemale && !!plan.is_lactating;
   document.getElementById("np_eating_disorder_risk").checked = !!plan.eating_disorder_risk;
   document.getElementById("np_medically_unstable").checked = !!plan.medically_unstable;
   document.getElementById("np_special_pathway_notes").value = plan.special_pathway_notes || "";
