@@ -304,8 +304,12 @@
               <label>مستوى النشاط</label>
               <select id="np_activity_level"></select>
             </div>
-            <div class="field"><label>السعرات المستهدفة (kcal)</label><input type="number" id="np_calorie_target"></div>
+            <div class="field">
+              <label>السعرات اليومية المستهدفة (kcal/day)</label>
+              <input type="number" id="np_calorie_target">
+            </div>
           </div>
+          <div class="msg error" id="npCalorieImplausibleWarning" style="display:none; margin-top:10px;">⚠️ قيمة السعرات المستهدفة منخفضة بشكل غير معتاد. يرجى التحقق من القيمة المدخلة.</div>
           <div class="field" id="npTargetReasonField" style="margin-top:10px; display:none;">
             <label>السبب السريري للانحراف الكبير عن TDEE (مطلوب قبل الاعتماد)</label>
             <textarea id="np_target_reason"></textarea>
@@ -953,6 +957,12 @@ const NP_ACTIVITY_LEVELS = [
   ["نشاط عالي", 1.725], ["نشاط عالي جداً", 1.90],
 ];
 const NP_CALORIE_DEVIATION_THRESHOLD_PCT = 10;
+// Below this, a value is treated as a likely data-entry error (e.g. "14"
+// instead of "1400") rather than a deliberate low-calorie prescription —
+// flagged immediately as the doctor types, separately from the TDEE
+// deviation check below (which is for values that are plausible on their
+// own but represent a real clinical deficit needing a documented reason).
+const NP_CALORIE_TARGET_MIN_PLAUSIBLE = 800;
 const NP_MEAL_TYPES = [["فطور", "فطور"], ["سناك1", "سناك 1"], ["غداء", "غداء"], ["سناك2", "سناك 2"], ["عشاء", "عشاء"]];
 const NP_MACRO_TEMPLATES = {
   balanced: { protein: 25, carbs: 45, fat: 30 },
@@ -1245,6 +1255,15 @@ function npUpdateDiffPreview() {
   const plan = npCurrentPlan;
   if (!plan) return;
   const target = parseFloat(document.getElementById("np_calorie_target").value) || 0;
+
+  // 1) Plausibility check — catches likely typos (e.g. "14" instead of
+  // "1400") the moment they're typed, independent of TDEE.
+  const implausible = target > 0 && target < NP_CALORIE_TARGET_MIN_PLAUSIBLE;
+  document.getElementById("npCalorieImplausibleWarning").style.display = implausible ? "" : "none";
+
+  // 2) Clinical deviation check — the value is plausible on its own, but
+  // represents a real deficit/surplus vs TDEE that needs a documented
+  // clinical reason before the plan can be approved.
   const tdee = plan.tdee || 0;
   const diff = Math.round(target - tdee);
   const pct = tdee ? Math.round((diff / tdee) * 1000) / 10 : 0;
@@ -1252,7 +1271,11 @@ function npUpdateDiffPreview() {
   badge.textContent = `الفرق عن TDEE: ${diff >= 0 ? "+" : ""}${diff} سعرة (${pct >= 0 ? "+" : ""}${pct}%)`;
   const requiresReason = tdee > 0 && Math.abs(pct) > NP_CALORIE_DEVIATION_THRESHOLD_PCT;
   badge.className = "badge " + (requiresReason ? "orange" : "gray");
-  document.getElementById("npTargetReasonField").style.display = requiresReason ? "" : "none";
+  const reasonField = document.getElementById("npTargetReasonField");
+  reasonField.style.display = requiresReason ? "" : "none";
+  reasonField.querySelector("label").textContent = requiresReason
+    ? "⚠️ الفرق عن TDEE يتجاوز الحد السريري المحدد. يرجى توثيق السبب السريري قبل اعتماد الخطة."
+    : "السبب السريري للانحراف الكبير عن TDEE (مطلوب قبل الاعتماد)";
 }
 document.getElementById("np_calorie_target").addEventListener("input", npUpdateDiffPreview);
 document.getElementById("np_activity_level").addEventListener("change", npUpdateDiffPreview);
