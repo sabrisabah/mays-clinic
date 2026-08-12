@@ -204,7 +204,10 @@
 
         <div class="card">
           <h3>🔹 الهدف العلاجي</h3>
-          <div class="grid">
+          <div id="goalLockedNote" class="msg error" style="display:none; margin-bottom:12px;">
+            🔒 هذا القسم مقفل بعد فتح الطبيب لملف المريض — أي تعديل على الهدف أو الوزن الحالي/المستهدف يحتاج الطبيب.
+          </div>
+          <div class="grid" id="goalSectionFields">
             <div class="field"><label>الهدف</label>
               <div class="radio-row"><label class="radio-item"><input type="radio" name="goal_type" value="نزول وزن"> نزول وزن</label>
               <label class="radio-item"><input type="radio" name="goal_type" value="زيادة وزن"> زيادة وزن</label>
@@ -741,6 +744,11 @@ let currentPatient = null;
 // (anthropometrics weight) — while false, current_weight auto-follows weight
 // live as the doctor types, instead of staying blank until the form reloads.
 let currentWeightManuallyEdited = false;
+// True when the treatment-goal section is locked for the current viewer
+// (secretary, after a doctor has opened the file) — set in loadAssessment.
+// Blocks the live weight auto-sync too, so a secretary editing the
+// anthropometric weight can't inadvertently change the locked goal field.
+let goalSectionLockedForRole = false;
 
 // Keep these lists in sync with backend/clinic/utils.py (LAB_TEST_NAMES / TREATMENT_INJECTION_OPTIONS / DIET_TYPES).
 const LAB_TEST_NAMES = [
@@ -895,8 +903,9 @@ function refreshLiveMetrics() {
   updateComputed(bmi, bmiClass, whr, "");
 
   // Keep "الوزن الحالي" (treatment goal) in sync with "الوزن" (anthropometrics)
-  // as the doctor types, unless they've deliberately overridden it themselves.
-  if (!currentWeightManuallyEdited) {
+  // as the doctor types, unless they've deliberately overridden it themselves
+  // or the goal section is locked for this viewer (secretary, post-lock).
+  if (!currentWeightManuallyEdited && !goalSectionLockedForRole) {
     document.getElementById("current_weight").value = document.getElementById("weight").value;
   }
 }
@@ -962,6 +971,14 @@ async function loadAssessment() {
   document.getElementById("target_weight").value = a.target_weight || "";
   setGoalDuration(a.goal_duration);
   lastAssessment = a;
+
+  // Treatment-goal section locks against secretary edits once a doctor has
+  // opened this patient's file (server enforces this too — see
+  // AssessmentView.put — this just keeps the UI honest about it upfront).
+  goalSectionLockedForRole = role === "secretary" && a.goal_locked;
+  document.getElementById("goalLockedNote").style.display = goalSectionLockedForRole ? "" : "none";
+  document.querySelectorAll("#goalSectionFields input").forEach((el) => { el.disabled = goalSectionLockedForRole; });
+  document.getElementById("goal_duration_unit").disabled = goalSectionLockedForRole;
 }
 
 // ---------------- NUTRITION PLAN MODULE (الخطة الغذائية) ----------------

@@ -55,6 +55,12 @@ class Patient(models.Model):
     gender = models.CharField(max_length=10, blank=True, default="")
     occupation = models.CharField(max_length=150, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
+    # Set the first time a doctor (not secretary) opens this patient's file.
+    # From that moment on, the treatment-goal section of the assessment
+    # (goal_type/current_weight/target_weight/goal_duration) locks against
+    # secretary edits — the case has moved from front-desk intake to the
+    # doctor's clinical care, so only the doctor may change the goal.
+    doctor_first_opened_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.file_number} - {self.user.full_name}"

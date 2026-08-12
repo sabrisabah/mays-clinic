@@ -143,6 +143,15 @@ class AssessmentSerializer(serializers.ModelSerializer):
     def get_suggested_calories(self, obj):
         return self._calorie_calc(obj)[1]
 
+    # True once a doctor has opened this patient's file at least once — from
+    # that point on the treatment-goal fields below reject secretary edits
+    # (enforced server-side in AssessmentView.put; this just lets the
+    # frontend show the section as read-only instead of failing on save).
+    goal_locked = serializers.SerializerMethodField()
+
+    def get_goal_locked(self, obj):
+        return obj.patient.doctor_first_opened_at is not None
+
     class Meta:
         model = Assessment
         fields = [
@@ -154,12 +163,13 @@ class AssessmentSerializer(serializers.ModelSerializer):
             "appetite", "night_hunger", "sugar_craving", "insulin_resistance", "hormonal_symptoms",
             "meals_per_day", "snack", "eating_type", "favorite_foods", "disliked_foods",
             "water_liters", "coffee_per_day", "sugar_intake",
-            "goal_type", "current_weight", "target_weight", "goal_duration",
+            "goal_type", "current_weight", "target_weight", "goal_duration", "goal_locked",
             "base_calories", "suggested_calories", "is_submitted", "checked_in", "updated_at",
         ]
         read_only_fields = [
             "id", "patient_id", "visit_date", "bmi", "bmi_class", "whr", "whr_class",
             "activity_level", "base_calories", "suggested_calories", "is_submitted", "checked_in", "updated_at",
+            "goal_locked",
         ]
 
 

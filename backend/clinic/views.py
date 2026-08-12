@@ -171,6 +171,12 @@ class PatientListView(APIView):
 class PatientDetailView(APIView):
     def get(self, request, patient_id):
         patient = get_patient_or_403(request, patient_id)
+        # First time a doctor opens this file, the case moves from front-desk
+        # intake to clinical care — lock the treatment-goal section against
+        # further secretary edits from this point on (see AssessmentView.put).
+        if request.user.role == "doctor" and patient.doctor_first_opened_at is None:
+            patient.doctor_first_opened_at = timezone.now()
+            patient.save(update_fields=["doctor_first_opened_at"])
         return Response(sz.PatientProfileSerializer(patient).data)
 
     def put(self, request, patient_id):
@@ -218,6 +224,12 @@ class PatientDetailView(APIView):
 
 # ---------------- ASSESSMENT ----------------
 
+# Once a doctor has opened the patient's file (Patient.doctor_first_opened_at
+# set), these treatment-goal fields become doctor-only — the secretary can
+# still edit every other section of the assessment freely.
+GOAL_SECTION_FIELDS = ["goal_type", "current_weight", "target_weight", "goal_duration"]
+
+
 class AssessmentView(APIView):
     def get(self, request, patient_id):
         patient = get_patient_or_403(request, patient_id)
@@ -238,6 +250,19 @@ class AssessmentView(APIView):
         serializer = sz.AssessmentSerializer(assessment, data=request.data, partial=False)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+
+        # Treatment-goal section locks against secretary edits once a doctor
+        # has opened this patient's file — the rest of the form stays open.
+        if request.user.role == "secretary" and patient.doctor_first_opened_at is not None:
+            changed_goal_fields = [
+                f for f in GOAL_SECTION_FIELDS
+                if f in data and data[f] != getattr(assessment, f)
+            ]
+            if changed_goal_fields:
+                raise PermissionDenied(
+                    "قسم الهدف العلاجي أصبح مقفلاً بعد فتح الطبيب لملف المريض — لا يمكن للسكرتيرة تعديله. "
+                    "يرجى التواصل مع الطبيب لأي تعديل على الهدف أو الوزن الحالي/المستهدف."
+                )
 
         # Accept height typed in cm (e.g. 170) or meters (1.70); always store meters.
         if "height" in data:
