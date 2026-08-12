@@ -88,6 +88,9 @@ body {
 .field input:focus, .field select:focus, .field textarea:focus {
   outline: none; border-color: var(--primary);
 }
+.field input:disabled, .field select:disabled, .field textarea:disabled {
+  background: #eee; color: var(--muted); border-color: var(--border); cursor: not-allowed;
+}
 
 /* Checkbox groups */
 .check-group { display: flex; flex-wrap: wrap; gap: 10px 18px; }
