@@ -264,6 +264,16 @@ class AssessmentView(APIView):
                     "يرجى التواصل مع الطبيب لأي تعديل على الهدف أو الوزن الحالي/المستهدف."
                 )
 
+        # "الوزن الحالي" becomes a permanent baseline the moment it's first
+        # saved with a non-zero value — it's the starting weight for the
+        # treatment goal, so from then on NOBODY (not even the doctor) can
+        # change it through this endpoint; it just displays going forward.
+        if assessment.current_weight and "current_weight" in data and data["current_weight"] != assessment.current_weight:
+            raise PermissionDenied(
+                "الوزن الحالي أصبح ثابتاً منذ أول حفظ له ولا يمكن تعديله لاحقاً من أي مستخدم — "
+                "هو وزن البداية عند تحديد الهدف العلاجي."
+            )
+
         # Accept height typed in cm (e.g. 170) or meters (1.70); always store meters.
         if "height" in data:
             data["height"] = normalize_height_m(data.get("height", 0))

@@ -214,7 +214,11 @@
               <label class="radio-item"><input type="radio" name="goal_type" value="تثبيت"> تثبيت</label>
               <label class="radio-item"><input type="radio" name="goal_type" value="تحسين صحي"> تحسين صحي</label></div>
             </div>
-            <div class="field"><label>الوزن الحالي</label><input type="number" step="0.1" id="current_weight"></div>
+            <div class="field">
+              <label>الوزن الحالي</label>
+              <input type="number" step="0.1" id="current_weight">
+              <span id="currentWeightLockedNote" style="display:none; font-size:.78rem; color:var(--muted);">🔒 ثابت منذ أول حفظ — وزن البداية عند تحديد الهدف، لا يتغير لاحقاً.</span>
+            </div>
             <div class="field"><label>الوزن المستهدف</label><input type="number" step="0.1" id="target_weight"></div>
             <div class="field">
               <label>المدة المتوقعة</label>
@@ -749,6 +753,11 @@ let currentWeightManuallyEdited = false;
 // Blocks the live weight auto-sync too, so a secretary editing the
 // anthropometric weight can't inadvertently change the locked goal field.
 let goalSectionLockedForRole = false;
+// True once "الوزن الحالي" has ever been saved with a non-zero value — from
+// that point on it's a permanent baseline and nobody, including the doctor,
+// can change it (server-enforced too, see AssessmentView.put). Set in
+// loadAssessment.
+let currentWeightPermanentlyLocked = false;
 
 // Keep these lists in sync with backend/clinic/utils.py (LAB_TEST_NAMES / TREATMENT_INJECTION_OPTIONS / DIET_TYPES).
 const LAB_TEST_NAMES = [
@@ -903,9 +912,10 @@ function refreshLiveMetrics() {
   updateComputed(bmi, bmiClass, whr, "");
 
   // Keep "الوزن الحالي" (treatment goal) in sync with "الوزن" (anthropometrics)
-  // as the doctor types, unless they've deliberately overridden it themselves
-  // or the goal section is locked for this viewer (secretary, post-lock).
-  if (!currentWeightManuallyEdited && !goalSectionLockedForRole) {
+  // as the doctor types, unless they've deliberately overridden it themselves,
+  // the goal section is locked for this viewer (secretary, post-lock), or
+  // current_weight has already been permanently fixed by a prior save.
+  if (!currentWeightManuallyEdited && !goalSectionLockedForRole && !currentWeightPermanentlyLocked) {
     document.getElementById("current_weight").value = document.getElementById("weight").value;
   }
 }
@@ -979,6 +989,13 @@ async function loadAssessment() {
   document.getElementById("goalLockedNote").style.display = goalSectionLockedForRole ? "" : "none";
   document.querySelectorAll("#goalSectionFields input").forEach((el) => { el.disabled = goalSectionLockedForRole; });
   document.getElementById("goal_duration_unit").disabled = goalSectionLockedForRole;
+
+  // current_weight becomes a permanent baseline after its first non-zero
+  // save — locked for EVERY role (including the doctor) from then on,
+  // independent of the secretary-only goal-section lock above.
+  currentWeightPermanentlyLocked = !!a.current_weight;
+  document.getElementById("current_weight").disabled = goalSectionLockedForRole || currentWeightPermanentlyLocked;
+  document.getElementById("currentWeightLockedNote").style.display = currentWeightPermanentlyLocked ? "" : "none";
 }
 
 // ---------------- NUTRITION PLAN MODULE (الخطة الغذائية) ----------------
