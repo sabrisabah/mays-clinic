@@ -736,6 +736,11 @@ if (!patientId) location.href = role === "secretary" ? "../secretary/dashboard.h
 let lastAssessment = null;
 let lastFollowup = null;
 let currentPatient = null;
+// Tracks whether the doctor has deliberately typed a different value into
+// "الوزن الحالي" (treatment-goal current weight) than the measured "الوزن"
+// (anthropometrics weight) — while false, current_weight auto-follows weight
+// live as the doctor types, instead of staying blank until the form reloads.
+let currentWeightManuallyEdited = false;
 
 // Keep these lists in sync with backend/clinic/utils.py (LAB_TEST_NAMES / TREATMENT_INJECTION_OPTIONS / DIET_TYPES).
 const LAB_TEST_NAMES = [
@@ -888,6 +893,12 @@ function refreshLiveMetrics() {
   );
   // WHR risk class is gender-specific and confirmed by the server on save.
   updateComputed(bmi, bmiClass, whr, "");
+
+  // Keep "الوزن الحالي" (treatment goal) in sync with "الوزن" (anthropometrics)
+  // as the doctor types, unless they've deliberately overridden it themselves.
+  if (!currentWeightManuallyEdited) {
+    document.getElementById("current_weight").value = document.getElementById("weight").value;
+  }
 }
 
 async function loadProfile() {
@@ -944,6 +955,10 @@ async function loadAssessment() {
   setRadioValue("sugar_intake", a.sugar_intake);
   setRadioValue("goal_type", a.goal_type);
   document.getElementById("current_weight").value = a.current_weight || a.weight || "";
+  // If a saved current_weight diverges from the measured weight, the doctor
+  // must have deliberately set it that way before — keep protecting it from
+  // the live auto-sync. Otherwise resume auto-following the weight field.
+  currentWeightManuallyEdited = !!(a.current_weight && a.weight && a.current_weight !== a.weight);
   document.getElementById("target_weight").value = a.target_weight || "";
   setGoalDuration(a.goal_duration);
   lastAssessment = a;
@@ -2467,6 +2482,9 @@ document.getElementById("noteForm").addEventListener("submit", async (e) => {
 
 ["weight", "height", "waist", "hip"].forEach((id) => {
   document.getElementById(id).addEventListener("input", refreshLiveMetrics);
+});
+document.getElementById("current_weight").addEventListener("input", () => {
+  currentWeightManuallyEdited = true;
 });
 
 (async function init() {
