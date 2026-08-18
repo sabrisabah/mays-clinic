@@ -655,7 +655,7 @@
         <div id="mounjaroSummary" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;"></div>
       </div>
       <form id="mounjaroForm" class="card">
-        <h3>🔹 إضافة جرعة جديدة</h3>
+        <h3 id="mounjaroFormTitle">🔹 إضافة جرعة جديدة</h3>
         <div class="grid-3">
           <div class="field"><label>الوزن (كغم)</label><input type="number" step="0.1" id="mj_weight" required></div>
           <div class="field">
@@ -671,7 +671,10 @@
           </div>
           <div class="field"><label>ملاحظات</label><input type="text" id="mj_notes"></div>
         </div>
-        <div class="btn-row"><button type="submit" class="btn">إضافة الجرعة</button></div>
+        <div class="btn-row">
+          <button type="submit" class="btn" id="mounjaroFormSubmitBtn">إضافة الجرعة</button>
+          <button type="button" class="btn secondary" id="mounjaroFormCancelBtn" style="display:none;" onclick="cancelMounjaroEdit()">إلغاء</button>
+        </div>
       </form>
       <div class="card">
         <h3>🔹 سجل الجرعات</h3>
@@ -1774,8 +1777,12 @@ async function deleteLabTest(entryId) {
   loadLabTests();
 }
 
+let mounjaroEntries = [];
+let editingMounjaroEntryId = null;
+
 async function loadMounjaro() {
   const entries = await apiFetch(`/api/patients/${patientId}/mounjaro`);
+  mounjaroEntries = entries;
   const summary = document.getElementById("mounjaroSummary");
   const targetWeight = lastAssessment ? lastAssessment.target_weight : 0;
   const latest = entries.length ? entries[entries.length - 1] : null;
@@ -1808,7 +1815,10 @@ async function loadMounjaro() {
       <td>الوزن${orderNum}: ${e.weight} كغم</td>
       <td>الجرعة${orderNum}: ${e.dose_mg} ملغم</td>
       <td>${escapeHtml(e.notes) || "-"}</td>
-      <td><button class="btn small danger" onclick="deleteMounjaroDose(${e.id})">حذف</button></td>
+      <td>
+        ${role === "doctor" ? `<button class="btn small success" onclick="editMounjaroDose(${e.id})">تعديل</button>` : ""}
+        <button class="btn small danger" onclick="deleteMounjaroDose(${e.id})">حذف</button>
+      </td>
     </tr>`;
   }).join("");
   wrap.innerHTML = `
@@ -1818,6 +1828,32 @@ async function loadMounjaro() {
     </table>`;
 
   if (role === "doctor") loadMounjaroCorrections();
+}
+
+function editMounjaroDose(entryId) {
+  const entry = mounjaroEntries.find((e) => e.id === entryId);
+  if (!entry) return;
+  editingMounjaroEntryId = entryId;
+  document.getElementById("mounjaroFormTitle").textContent = "🔹 تعديل الجرعة";
+  document.getElementById("mj_weight").value = entry.weight;
+  document.getElementById("mj_dose").value = entry.dose_mg;
+  document.getElementById("mj_notes").value = entry.notes || "";
+  document.getElementById("mounjaroFormSubmitBtn").textContent = "حفظ التعديل";
+  document.getElementById("mounjaroFormCancelBtn").style.display = "";
+  const form = document.getElementById("mounjaroForm");
+  form.style.display = "";
+  form.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function cancelMounjaroEdit() {
+  editingMounjaroEntryId = null;
+  document.getElementById("mounjaroForm").reset();
+  document.getElementById("mounjaroFormTitle").textContent = "🔹 إضافة جرعة جديدة";
+  document.getElementById("mounjaroFormSubmitBtn").textContent = "إضافة الجرعة";
+  document.getElementById("mounjaroFormCancelBtn").style.display = "none";
+  // The add form is hidden entirely for the doctor (see role check near the
+  // top of this script) — only re-hide it for her when leaving edit mode.
+  if (role === "doctor") document.getElementById("mounjaroForm").style.display = "none";
 }
 
 async function deleteMounjaroDose(entryId) {
@@ -1832,6 +1868,7 @@ async function deleteMounjaroDose(entryId) {
   } else {
     if (!confirm("حذف هذه الجرعة؟")) return;
   }
+  if (editingMounjaroEntryId === entryId) cancelMounjaroEdit();
   await apiFetch(`/api/patients/${patientId}/mounjaro/${entryId}`, { method: "DELETE", body });
   loadMounjaro();
 }
@@ -2519,17 +2556,28 @@ document.getElementById("mounjaroForm").addEventListener("submit", async (e) => 
   e.preventDefault();
   hideMsg(msgEl);
   try {
-    await apiFetch(`/api/patients/${patientId}/mounjaro`, {
-      method: "POST",
-      body: JSON.stringify({
-        weight: parseFloat(document.getElementById("mj_weight").value),
-        dose_mg: parseFloat(document.getElementById("mj_dose").value),
-        notes: document.getElementById("mj_notes").value.trim(),
-      }),
-    });
-    document.getElementById("mounjaroForm").reset();
-    loadMounjaro();
-    showMsg(msgEl, "تمت إضافة الجرعة ✅", "success");
+    const payload = {
+      weight: parseFloat(document.getElementById("mj_weight").value),
+      dose_mg: parseFloat(document.getElementById("mj_dose").value),
+      notes: document.getElementById("mj_notes").value.trim(),
+    };
+    if (editingMounjaroEntryId) {
+      await apiFetch(`/api/patients/${patientId}/mounjaro/${editingMounjaroEntryId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      await loadMounjaro();
+      cancelMounjaroEdit();
+      showMsg(msgEl, "تم تحديث الجرعة ✅", "success");
+    } else {
+      await apiFetch(`/api/patients/${patientId}/mounjaro`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      document.getElementById("mounjaroForm").reset();
+      loadMounjaro();
+      showMsg(msgEl, "تمت إضافة الجرعة ✅", "success");
+    }
   } catch (err) { showMsg(msgEl, err.message, "error"); }
 });
 

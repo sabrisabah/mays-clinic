@@ -112,6 +112,8 @@ body {
 .btn.secondary:hover { background: var(--primary-light); }
 .btn.danger { background: var(--danger); }
 .btn.danger:hover { background: #96271d; }
+.btn.success { background: #1c7a3d; }
+.btn.success:hover { background: #145c2d; }
 .btn.small { padding: 6px 12px; font-size: .82rem; }
 .btn:disabled { opacity: .6; cursor: not-allowed; }
 .btn-row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }

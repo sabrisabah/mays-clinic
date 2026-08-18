@@ -700,7 +700,30 @@ class MounjaroDoseListView(APIView):
         return Response(sz.MounjaroDoseSerializer(entry).data, status=status.HTTP_201_CREATED)
 
 
-class MounjaroDoseDeleteView(APIView):
+class MounjaroDoseDetailView(APIView):
+    # In-place editing (weight/dose/notes on an existing entry) is doctor-only
+    # — the secretary's write access stays limited to adding new entries and
+    # deleting (with a documented reason); she doesn't rewrite history.
+    # A doctor edit needs no reason and isn't logged, same as a doctor delete.
+    def put(self, request, patient_id, entry_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("تعديل سجل موجود متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        try:
+            entry = MounjaroDose.objects.get(id=entry_id, patient=patient)
+        except MounjaroDose.DoesNotExist:
+            raise NotFound("السجل غير موجود")
+
+        serializer = sz.MounjaroDoseCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        entry.weight = data["weight"]
+        entry.dose_mg = data["dose_mg"]
+        entry.notes = data.get("notes", "")
+        entry.save(update_fields=["weight", "dose_mg", "notes"])
+        return Response(sz.MounjaroDoseSerializer(entry).data)
+
     def delete(self, request, patient_id, entry_id):
         if request.user.role not in ("doctor", "secretary"):
             raise PermissionDenied("هذا الإجراء متاح للطبيب أو السكرتيرة فقط")
