@@ -10,7 +10,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 
 from .models import (
-    User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry,
+    User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose,
+    MounjaroCorrectionLog, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
@@ -667,8 +668,12 @@ class ProgressDeleteView(APIView):
 
 
 # ---------------- MOUNJARO DOSE TRACKING ----------------
-# Weekly weight + dose log for patients on Mounjaro, entered by the doctor
-# at each clinic visit; the patient can view their own log read-only.
+# Weekly weight + dose log for patients on Mounjaro. Both doctor and
+# secretary can log entries and adjust the dose (full parity — the
+# secretary is often the one doing the weekly weigh-in/injection); the
+# patient can only view their own log read-only. A secretary deleting an
+# entry must document why — logged to MounjaroCorrectionLog, doctor-only
+# visible — a doctor's own deletions need no reason and aren't logged.
 
 class MounjaroDoseListView(APIView):
     def get(self, request, patient_id):
@@ -677,8 +682,8 @@ class MounjaroDoseListView(APIView):
         return Response(sz.MounjaroDoseSerializer(entries, many=True).data)
 
     def post(self, request, patient_id):
-        if request.user.role != "doctor":
-            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح للطبيب أو السكرتيرة فقط")
         patient = get_patient_or_403(request, patient_id)
 
         serializer = sz.MounjaroDoseCreateSerializer(data=request.data)
@@ -697,11 +702,38 @@ class MounjaroDoseListView(APIView):
 
 class MounjaroDoseDeleteView(APIView):
     def delete(self, request, patient_id, entry_id):
-        if request.user.role != "doctor":
-            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح للطبيب أو السكرتيرة فقط")
         patient = get_patient_or_403(request, patient_id)
-        MounjaroDose.objects.filter(id=entry_id, patient=patient).delete()
+        try:
+            entry = MounjaroDose.objects.get(id=entry_id, patient=patient)
+        except MounjaroDose.DoesNotExist:
+            return Response({"ok": True})
+
+        if request.user.role == "secretary":
+            reason = request.data.get("reason", "").strip()
+            if not reason:
+                raise ValidationError({"reason": "سبب حذف/تصحيح السجل مطلوب"})
+            MounjaroCorrectionLog.objects.create(
+                patient=patient,
+                actor=request.user,
+                original_date=entry.date,
+                original_weight=entry.weight,
+                original_dose_mg=entry.dose_mg,
+                reason=reason,
+            )
+
+        entry.delete()
         return Response({"ok": True})
+
+
+class MounjaroCorrectionLogListView(APIView):
+    def get(self, request, patient_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("سجل التصحيحات متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        logs = patient.mounjaro_corrections.select_related("actor")
+        return Response(sz.MounjaroCorrectionLogSerializer(logs, many=True).data)
 
 
 # ---------------- LAB TEST TRACKING (monthly, doctor-only) ----------------

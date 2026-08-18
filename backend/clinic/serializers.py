@@ -1,7 +1,8 @@
 import datetime
 from rest_framework import serializers
 from .models import (
-    User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose, LabTestEntry,
+    User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose,
+    MounjaroCorrectionLog, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
@@ -384,8 +385,28 @@ class MounjaroDoseSerializer(serializers.ModelSerializer):
 
 class MounjaroDoseCreateSerializer(serializers.Serializer):
     weight = serializers.FloatField()
-    dose_mg = serializers.ChoiceField(choices=[c[0] for c in MounjaroDose.DOSE_CHOICES])
+    # Plain FloatField + manual membership check rather than ChoiceField:
+    # ChoiceField matches on str(value), and DOSE_CHOICES stores whole-number
+    # doses as floats (5.0, 10.0, 15.0) whose string form is "5.0" — but the
+    # frontend sends parseFloat("5") -> JSON number 5 -> "5", which never
+    # matched "5.0". That silently 400'd every whole-number dose selection.
+    dose_mg = serializers.FloatField()
     notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_dose_mg(self, value):
+        allowed = [c[0] for c in MounjaroDose.DOSE_CHOICES]
+        if value not in allowed:
+            raise serializers.ValidationError("جرعة غير صالحة")
+        return value
+
+
+class MounjaroCorrectionLogSerializer(serializers.ModelSerializer):
+    actor_name = serializers.CharField(source="actor.full_name", read_only=True, default="")
+
+    class Meta:
+        model = MounjaroCorrectionLog
+        fields = ["id", "actor_name", "original_date", "original_weight", "original_dose_mg", "reason", "created_at"]
+        read_only_fields = fields
 
 
 class DoctorNoteSerializer(serializers.ModelSerializer):

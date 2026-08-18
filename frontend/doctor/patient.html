@@ -677,6 +677,11 @@
         <h3>🔹 سجل الجرعات</h3>
         <div id="mounjaroTableWrap"></div>
       </div>
+      <div class="card" id="mounjaroCorrectionsCard" style="display:none;">
+        <h3>🔹 سجل تصحيحات السكرتيرة</h3>
+        <p style="color:var(--muted); font-size:.8rem; margin:0 0 10px;">مرئي للطبيب فقط — كل مرة تحذف فيها السكرتيرة سجل جرعة تُسجَّل هنا مع السبب.</p>
+        <div id="mounjaroCorrectionsWrap"></div>
+      </div>
     </div>
 
     <!-- PROGRESS TAB -->
@@ -727,8 +732,10 @@ const role = Auth.getRole();
 refreshUserChip("userChip", (role === "doctor" ? "د. " : "") + Auth.getName());
 
 // Secretary gets the same page, but only the front-desk tabs — medical-only
-// tabs (plan/labtests/mounjaro/progress/notes) are doctor-exclusive.
-const SECRETARY_HIDDEN_TABS = ["plan", "labtests", "mounjaro", "progress", "notes"];
+// tabs (plan/labtests/progress/notes) stay doctor-exclusive. Mounjaro dose
+// tracking is the one medical tab the secretary also gets full read/write
+// access to (she's often the one doing the weekly weigh-in/injection).
+const SECRETARY_HIDDEN_TABS = ["plan", "labtests", "progress", "notes"];
 if (role === "secretary") {
   document.getElementById("backLink").href = "../secretary/dashboard.html";
   document.querySelectorAll(".tab-link").forEach((link) => {
@@ -1802,12 +1809,48 @@ async function loadMounjaro() {
       <thead><tr><th>التاريخ</th><th>الوزن</th><th>الجرعة</th><th>ملاحظات</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
+
+  if (role === "doctor") loadMounjaroCorrections();
 }
 
 async function deleteMounjaroDose(entryId) {
-  if (!confirm("حذف هذه الجرعة؟")) return;
-  await apiFetch(`/api/patients/${patientId}/mounjaro/${entryId}`, { method: "DELETE" });
+  // A secretary's deletion needs a documented reason — logged for the
+  // doctor to review (see mounjaroCorrectionsCard); a doctor deleting their
+  // own entry needs no reason and isn't logged.
+  let body = null;
+  if (role === "secretary") {
+    const reason = prompt("سبب حذف/تصحيح هذا السجل (يظهر للطبيب):", "");
+    if (!reason || !reason.trim()) return;
+    body = JSON.stringify({ reason: reason.trim() });
+  } else {
+    if (!confirm("حذف هذه الجرعة؟")) return;
+  }
+  await apiFetch(`/api/patients/${patientId}/mounjaro/${entryId}`, { method: "DELETE", body });
   loadMounjaro();
+}
+
+async function loadMounjaroCorrections() {
+  const card = document.getElementById("mounjaroCorrectionsCard");
+  try {
+    const logs = await apiFetch(`/api/patients/${patientId}/mounjaro/corrections`);
+    if (!logs.length) { card.style.display = "none"; return; }
+    card.style.display = "";
+    document.getElementById("mounjaroCorrectionsWrap").innerHTML = `
+      <table>
+        <thead><tr><th>التاريخ</th><th>من قام بالحذف</th><th>السجل المحذوف</th><th>السبب</th></tr></thead>
+        <tbody>
+          ${logs.map((l) => `
+            <tr>
+              <td>${fmtDate(l.created_at)}</td>
+              <td>${escapeHtml(l.actor_name)}</td>
+              <td>وزن ${l.original_weight} كغم — جرعة ${l.original_dose_mg} ملغم (${fmtDate(l.original_date)})</td>
+              <td>${escapeHtml(l.reason)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+  } catch (err) {
+    card.style.display = "none";
+  }
 }
 
 function computeNextVisitDate(referenceDate, intervalValue, intervalUnit) {
@@ -2529,11 +2572,11 @@ document.getElementById("current_weight").addEventListener("input", () => {
     await loadRxCatalog();
     rxPopulateCategories();
     await loadRx();
+    await loadMounjaro();
     if (role !== "secretary") {
       await loadNpFoods();
       await loadNutritionPlans();
       await loadLabTests();
-      await loadMounjaro();
       await loadProgress();
       await loadNotes();
     }

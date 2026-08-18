@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>متابعة جرعات المونجارو — عيادة دكتورة ميس الربيعي</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> عيادة دكتورة ميس الربيعي</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="tabs-nav">
+      <a href="dashboard.html">الرئيسية</a>
+      <a href="assessment.html">استمارة التقييم</a>
+      <a href="plan.html">الخطة الغذائية</a>
+      <a href="mounjaro.html" class="active">متابعة المونجارو</a>
+      <a href="followup.html">ملف المتابعة</a>
+    </div>
+
+    <div class="card">
+      <h2>🔹 متابعة جرعات المونجارو الأسبوعية</h2>
+      <p style="color:var(--muted); font-size:.85rem; margin:0 0 14px;">
+        هذا السجل يُدخله الطاقم الطبي عند كل زيارة، وهو للعرض فقط من حسابك.
+      </p>
+      <div id="mounjaroSummary" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;"></div>
+      <div id="mounjaroTableWrap"><div class="empty-state">جاري التحميل...</div></div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("patient")) { throw new Error("redirect"); }
+refreshUserChip("userChip", Auth.getName());
+const patientId = Auth.getPatientId();
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s || "";
+  return div.innerHTML;
+}
+
+async function load() {
+  try {
+    const [entries, assessment] = await Promise.all([
+      apiFetch(`/api/patients/${patientId}/mounjaro`),
+      apiFetch(`/api/patients/${patientId}/assessment`),
+    ]);
+
+    const summary = document.getElementById("mounjaroSummary");
+    const targetWeight = assessment ? assessment.target_weight : 0;
+    const latest = entries.length ? entries[entries.length - 1] : null;
+    const summaryCards = [];
+    if (latest) {
+      summaryCards.push(`<span class="badge green">آخر وزن مسجّل: ${latest.weight} كغم</span>`);
+      summaryCards.push(`<span class="badge green">آخر جرعة: ${latest.dose_mg} ملغم</span>`);
+    }
+    if (targetWeight) {
+      summaryCards.push(`<span class="badge gray">الوزن المستهدف: ${targetWeight} كغم</span>`);
+      if (latest) {
+        const remaining = Math.max(latest.weight - targetWeight, 0).toFixed(1);
+        summaryCards.push(remaining > 0
+          ? `<span class="badge orange">المتبقي للوصول للهدف: ${remaining} كغم</span>`
+          : `<span class="badge green">تم الوصول للوزن المستهدف 🎉</span>`);
+      }
+    }
+    summary.innerHTML = summaryCards.length ? summaryCards.join("") : `<span class="badge gray">لا توجد بيانات كافية بعد</span>`;
+
+    const wrap = document.getElementById("mounjaroTableWrap");
+    if (!entries.length) {
+      wrap.innerHTML = `<div class="empty-state">لا توجد جرعات مسجلة بعد.</div>`;
+      return;
+    }
+    const rows = entries.slice().reverse().map((e, idx) => {
+      const orderNum = entries.length - idx;
+      return `
+      <tr>
+        <td>${fmtDate(e.date)}</td>
+        <td>الوزن${orderNum}: ${e.weight} كغم</td>
+        <td>الجرعة${orderNum}: ${e.dose_mg} ملغم</td>
+        <td>${escapeHtml(e.notes) || "-"}</td>
+      </tr>`;
+    }).join("");
+    wrap.innerHTML = `
+      <table>
+        <thead><tr><th>التاريخ</th><th>الوزن</th><th>الجرعة</th><th>ملاحظات</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  } catch (err) {
+    document.getElementById("mounjaroTableWrap").innerHTML = `<div class="msg error">${err.message}</div>`;
+  }
+}
+load();
+</script>
+</body>
+</html>

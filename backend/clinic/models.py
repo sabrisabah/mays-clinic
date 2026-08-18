@@ -380,6 +380,30 @@ class MounjaroDose(models.Model):
         return f"مونجارو - {self.patient.file_number} - {self.patient.user.full_name} ({self.date:%Y-%m-%d})"
 
 
+class MounjaroCorrectionLog(models.Model):
+    """Doctor-only-visible audit trail for a secretary deleting/correcting a
+    MounjaroDose entry (secretaries got write access to this log alongside
+    doctors, but deletions by a secretary require a documented reason and
+    leave a trace here — mirrors Invoice.last_correction_reason from the
+    revenue module). Doctor deletions are NOT logged here — only a
+    secretary's, since the point is oversight of staff other than the
+    doctor. Snapshots the deleted row's data since the row itself is gone
+    by the time this is read."""
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="mounjaro_corrections")
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    original_date = models.DateTimeField()
+    original_weight = models.FloatField()
+    original_dose_mg = models.FloatField()
+    reason = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"تصحيح مونجارو - {self.patient.file_number} - {self.created_at:%Y-%m-%d}"
+
+
 class LabTestEntry(models.Model):
     """Monthly lab-test tracking log — labs are repeated roughly every month,
     so each clinic visit gets its own dated row (like MounjaroDose/ProgressEntry)

@@ -4,6 +4,7 @@ from import_export import fields, resources, widgets
 from import_export.admin import ImportExportModelAdmin
 from .models import (
     User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, LabTestEntry,
+    MounjaroCorrectionLog,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
@@ -279,6 +280,23 @@ class AuditLogEntryAdmin(admin.ModelAdmin):
     list_display = ["created_at", "action", "actor", "invoice"]
     list_filter = ["action"]
     search_fields = ["detail"]
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(MounjaroCorrectionLog)
+class MounjaroCorrectionLogAdmin(admin.ModelAdmin):
+    """Read-only in /admin — same create-only pattern as AuditLogEntry."""
+    list_display = ["created_at", "patient", "actor", "original_dose_mg", "reason"]
+    search_fields = ["patient__file_number", "patient__user__full_name", "reason"]
     date_hierarchy = "created_at"
 
     def has_add_permission(self, request):
