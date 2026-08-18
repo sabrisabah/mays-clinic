@@ -742,6 +742,13 @@ if (role === "secretary") {
     if (SECRETARY_HIDDEN_TABS.includes(link.dataset.tab)) link.style.display = "none";
   });
 }
+// Logging a NEW weekly weigh-in/dose is now the secretary's job in
+// practice — the doctor keeps full view + delete/correct rights on the
+// Mounjaro log (see loadMounjaro/deleteMounjaroDose), just not this
+// add-entry form specifically.
+if (role === "doctor") {
+  document.getElementById("mounjaroForm").style.display = "none";
+}
 
 const params = new URLSearchParams(location.search);
 const patientId = params.get("id");
