@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>قوالب WhatsApp — عيادة دكتورة ميس الربيعي</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .badge.status-approved { background: #e2f5e9; color: #1c7a3d; }
+  .badge.status-pending { background: #fdecd8; color: #b9631a; }
+  .badge.status-rejected { background: #fbe4e1; color: var(--danger); }
+  .badge.status-disabled { background: #eee; color: var(--muted); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> الإعدادات ← WhatsApp ← قوالب التذكيرات</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin:0;">⚙️ قوالب تذكيرات WhatsApp</h2>
+      <a href="index.html" class="btn small secondary">⬅ لوحة التذكيرات</a>
+    </div>
+
+    <div class="card">
+      <p style="color:var(--muted); font-size:.85rem; margin:0 0 10px;">
+        عرض فقط — تعديل القوالب (النص المعتمد من Meta، المتغيرات، حالة الاعتماد) يتم حصرياً من
+        <strong>Django Admin ← Reminders ← Reminder templates</strong> (الطبيب فقط). القالب غير المعتمد
+        (Pending/Rejected/Disabled) لا يظهر كخيار عند إرسال تذكير جديد.
+      </p>
+      <div id="tableWrap"></div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
+const role = Auth.getRole();
+refreshUserChip("userChip", (role === "doctor" ? "د. " : "") + Auth.getName());
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function load() {
+  const wrap = document.getElementById("tableWrap");
+  wrap.innerHTML = `<p style="color:var(--muted);">جارِ التحميل...</p>`;
+  try {
+    const rows = await apiFetch("/api/reminders/template-settings");
+    wrap.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>اسم القالب</th><th>النوع</th><th>اللغة</th><th>اسم قالب Meta</th>
+            <th>الحالة</th><th>مفعّل</th><th>آخر تحديث</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((t) => `
+            <tr>
+              <td>${escapeHtml(t.display_name)}</td>
+              <td>${escapeHtml(t.reminder_type_display)}</td>
+              <td>${escapeHtml(t.language_display)}</td>
+              <td><code>${escapeHtml(t.meta_template_name)}</code></td>
+              <td><span class="badge status-${t.status}">${escapeHtml(t.status_display)}</span></td>
+              <td>${t.is_active ? '<span class="badge green">نعم</span>' : '<span class="badge gray">لا</span>'}</td>
+              <td>${fmtDate(t.updated_at)}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+  } catch (err) {
+    wrap.innerHTML = `<div class="msg error">${escapeHtml(err.message)}</div>`;
+  }
+}
+load();
+</script>
+</body>
+</html>

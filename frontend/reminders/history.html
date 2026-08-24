@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>سجل تذكيرات WhatsApp — عيادة دكتورة ميس الربيعي</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  tr.clickable { cursor: pointer; }
+  .timeline { list-style: none; padding: 0; margin: 12px 0 0; }
+  .timeline li { padding: 6px 0 6px 14px; border-right: 2px solid var(--primary-light); position: relative; margin-right: 6px; }
+  .timeline li::before {
+    content: ""; position: absolute; right: -6px; top: 10px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--primary);
+  }
+  .timeline .t { font-size: .76rem; color: var(--muted); }
+  .badge.status-draft, .badge.status-pending, .badge.status-sending { background: #eee; color: var(--muted); }
+  .badge.status-sent { background: #e0edfb; color: #1a5fa8; }
+  .badge.status-delivered { background: #e2f5e9; color: #1c7a3d; }
+  .badge.status-read { background: #e2f5e9; color: #1c7a3d; font-weight: 700; }
+  .badge.status-failed { background: #fbe4e1; color: var(--danger); }
+  .badge.status-cancelled { background: #eee; color: var(--muted); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> سجل تذكيرات WhatsApp</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin:0;">📋 سجل تذكيرات WhatsApp</h2>
+      <div class="btn-row" style="margin:0;">
+        <a href="index.html" class="btn small secondary">⬅ لوحة التذكيرات</a>
+        <a href="new.html" class="btn">+ تذكير جديد</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="grid-3">
+        <div class="field">
+          <label>الحالة</label>
+          <select id="statusFilter" onchange="load()">
+            <option value="">الكل</option>
+            <option value="sent">تم الإرسال</option>
+            <option value="delivered">تم التوصيل</option>
+            <option value="read">تمت القراءة</option>
+            <option value="failed">فشل الإرسال</option>
+            <option value="cancelled">أُلغي</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>نوع التذكير</label>
+          <select id="typeFilter" onchange="load()">
+            <option value="">الكل</option>
+            <option value="appointment">تذكير موعد زيارة</option>
+            <option value="dose">تذكير جرعة</option>
+            <option value="followup">تذكير مراجعة</option>
+            <option value="visit">تذكير زيارة</option>
+            <option value="test">تذكير فحص</option>
+            <option value="custom_admin">إشعار إداري</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button class="btn secondary" onclick="load()">تحديث</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div id="tableWrap"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="detailModal" style="display:none;" onclick="if(event.target===this) closeDetail()">
+    <div class="modal-box" id="detailBox" style="max-width:560px;">جارِ التحميل...</div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
+const role = Auth.getRole();
+refreshUserChip("userChip", (role === "doctor" ? "د. " : "") + Auth.getName());
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function load() {
+  const status = document.getElementById("statusFilter").value;
+  const type = document.getElementById("typeFilter").value;
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (type) params.set("reminder_type", type);
+  const wrap = document.getElementById("tableWrap");
+  wrap.innerHTML = `<p style="color:var(--muted);">جارِ التحميل...</p>`;
+  try {
+    const rows = await apiFetch(`/api/reminders/history?${params.toString()}`);
+    if (!rows.length) {
+      wrap.innerHTML = `<div class="empty-state">لا توجد تذكيرات مطابقة</div>`;
+      return;
+    }
+    wrap.innerHTML = `
+      <table>
+        <thead><tr><th>المريض</th><th>التذكير</th><th>أُرسل بواسطة</th><th>تاريخ الإرسال</th><th>الحالة</th></tr></thead>
+        <tbody>
+          ${rows.map((r) => `
+            <tr class="clickable" onclick="openDetail('${r.id}')">
+              <td>${escapeHtml(r.patient_name)}</td>
+              <td>${escapeHtml(r.template_name)}</td>
+              <td>${escapeHtml(r.sent_by_name || r.created_by_name || "-")}</td>
+              <td>${r.sent_at ? fmtDate(r.sent_at) : fmtDate(r.created_at)}</td>
+              <td><span class="badge status-${r.status}">${escapeHtml(r.status_display)}</span></td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+  } catch (err) {
+    wrap.innerHTML = `<div class="msg error">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+async function openDetail(id) {
+  document.getElementById("detailModal").style.display = "flex";
+  const box = document.getElementById("detailBox");
+  box.innerHTML = "جارِ التحميل...";
+  try {
+    const r = await apiFetch(`/api/reminders/history/${id}`);
+    box.innerHTML = `
+      <h3>تفاصيل التذكير</h3>
+      <div class="modal-row"><span class="k">المريض</span><span class="v">${escapeHtml(r.patient_name)}</span></div>
+      <div class="modal-row"><span class="k">الهاتف</span><span class="v">${escapeHtml(r.phone_masked)}</span></div>
+      <div class="modal-row"><span class="k">نوع التذكير</span><span class="v">${escapeHtml(r.reminder_type_display)}</span></div>
+      <div class="modal-row"><span class="k">القالب</span><span class="v">${escapeHtml(r.template_name)} (${escapeHtml(r.template_language)})</span></div>
+      <div class="modal-row"><span class="k">الحالة</span><span class="v"><span class="badge status-${r.status}">${escapeHtml(r.status_display)}</span></span></div>
+      ${r.error_message ? `<div class="modal-row"><span class="k">سبب الفشل</span><span class="v">${escapeHtml(r.error_message)}</span></div>` : ""}
+      <p style="margin:14px 0 4px; font-weight:700; font-size:.85rem;">نص الرسالة:</p>
+      <div class="wa-preview">${escapeHtml(r.message_preview)}</div>
+      <p style="margin:14px 0 4px; font-weight:700; font-size:.85rem;">السجل الزمني:</p>
+      <ul class="timeline">
+        ${r.events.map((e) => `<li><div>${escapeHtml(e.event_type_display)}${e.actor_name ? " — " + escapeHtml(e.actor_name) : ""}</div><div class="t">${fmtDate(e.created_at)}</div></li>`).join("")}
+      </ul>
+      <div class="btn-row"><button class="btn secondary" onclick="closeDetail()">إغلاق</button></div>
+    `;
+  } catch (err) {
+    box.innerHTML = `<div class="msg error">${escapeHtml(err.message)}</div><div class="btn-row"><button class="btn secondary" onclick="closeDetail()">إغلاق</button></div>`;
+  }
+}
+function closeDetail() { document.getElementById("detailModal").style.display = "none"; }
+
+load();
+</script>
+</body>
+</html>

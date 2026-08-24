@@ -62,6 +62,12 @@ class Patient(models.Model):
     # doctor's clinical care, so only the doctor may change the goal.
     doctor_first_opened_at = models.DateTimeField(null=True, blank=True)
 
+    # Used by the WhatsApp Reminder Center to auto-select the matching
+    # ReminderTemplate language when a secretary picks this patient — she
+    # can still override it per-message if needed.
+    LANGUAGE_CHOICES = [("ar", "العربية"), ("en", "English"), ("ckb", "کوردیی ناوەندی")]
+    preferred_language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default="ar")
+
     def __str__(self):
         return f"{self.file_number} - {self.user.full_name}"
 

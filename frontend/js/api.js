@@ -46,10 +46,11 @@ const Auth = {
 };
 
 // Figures out how many "../" are needed to reach the frontend root,
-// based on how deep the current page is (works for /patient/*.html, /doctor/*.html, /index.html)
+// based on how deep the current page is (works for /patient/*.html,
+// /doctor/*.html, /secretary/*.html, /reminders/*.html, /index.html)
 function rootPath() {
   const path = window.location.pathname;
-  if (path.includes("/patient/") || path.includes("/doctor/")) return "../";
+  if (path.includes("/patient/") || path.includes("/doctor/") || path.includes("/secretary/") || path.includes("/reminders/")) return "../";
   return "";
 }
 

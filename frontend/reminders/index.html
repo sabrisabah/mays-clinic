@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>مركز تذكيرات WhatsApp — عيادة دكتورة ميس الربيعي</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .grad-card.purple1 { background: linear-gradient(135deg, #7a5aa8, #4a2f6e); }
+  .grad-card.teal1 { background: linear-gradient(135deg, #2fa89b, #1a6e64); }
+  .grad-card.orange1 { background: linear-gradient(135deg, #d98a3d, #b9631a); }
+  .grad-card.red1 { background: linear-gradient(135deg, #c0392b, #96271d); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> مركز تذكيرات WhatsApp</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin:0;">📨 مركز تذكيرات WhatsApp</h2>
+      <div class="btn-row" style="margin:0;">
+        <a href="history.html" class="btn small secondary">📋 سجل التذكيرات</a>
+        <a href="templates.html" class="btn small secondary">⚙️ قوالب WhatsApp</a>
+        <a href="new.html" class="btn">+ تذكير جديد</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📊 اليوم</h3>
+      <div class="stats-row" id="statsRow">
+        <div class="grad-card teal1"><div class="value" id="statSent">-</div><div class="label">تم الإرسال</div></div>
+        <div class="grad-card purple1"><div class="value" id="statDelivered">-</div><div class="label">تم التوصيل</div></div>
+        <div class="grad-card blue1" style="background:linear-gradient(135deg,#2f80c4,#1a5fa8);"><div class="value" id="statRead">-</div><div class="label">تمت القراءة</div></div>
+        <div class="grad-card red1"><div class="value" id="statFailed">-</div><div class="label">فشل الإرسال</div></div>
+        <div class="grad-card orange1"><div class="value" id="statUpcomingAppt">-</div><div class="label">مواعيد قادمة (48 ساعة)</div></div>
+        <div class="grad-card green1" style="background:linear-gradient(135deg,#4a7a46,#283d26);"><div class="value" id="statUpcomingDose">-</div><div class="label">جرعات قادمة (48 ساعة)</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📅 المواعيد القادمة — تذكيرات مقترحة</h3>
+      <p style="color:var(--muted); font-size:.8rem; margin:0 0 10px;">
+        لا يتم إرسال أي رسالة تلقائياً — اضغط "إرسال تذكير" لفتح معالج التذكير الجديد مع تعبئة الحقول تلقائياً.
+      </p>
+      <div id="upcomingApptWrap"></div>
+    </div>
+
+    <div class="card">
+      <h3>💉 الجرعات القادمة — تذكيرات مقترحة</h3>
+      <div id="upcomingDoseWrap"></div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
+const role = Auth.getRole();
+refreshUserChip("userChip", (role === "doctor" ? "د. " : "") + Auth.getName());
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function fmtDateTime(iso) {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  return d.toLocaleDateString("ar-EG", { month: "2-digit", day: "2-digit" }) + " — " +
+    d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+}
+
+async function load() {
+  try {
+    const data = await apiFetch("/api/reminders/dashboard");
+    document.getElementById("statSent").textContent = data.today_sent;
+    document.getElementById("statDelivered").textContent = data.today_delivered;
+    document.getElementById("statRead").textContent = data.today_read;
+    document.getElementById("statFailed").textContent = data.today_failed;
+    document.getElementById("statUpcomingAppt").textContent = data.upcoming_appointments_count;
+    document.getElementById("statUpcomingDose").textContent = data.upcoming_doses_count;
+
+    const apptWrap = document.getElementById("upcomingApptWrap");
+    if (!data.upcoming_appointments.length) {
+      apptWrap.innerHTML = `<div class="empty-state">لا توجد مواعيد خلال الـ48 ساعة القادمة</div>`;
+    } else {
+      apptWrap.innerHTML = `
+        <table>
+          <thead><tr><th>المريض</th><th>الموعد</th><th>الهاتف</th><th>الحالة</th><th></th></tr></thead>
+          <tbody>
+            ${data.upcoming_appointments.map((a) => `
+              <tr>
+                <td>${escapeHtml(a.patient_name)}</td>
+                <td>${fmtDateTime(a.date)}</td>
+                <td>${escapeHtml(a.phone_masked)}</td>
+                <td>${a.reminder_sent_today ? '<span class="badge green">تم الإرسال اليوم ✓</span>' : '<span class="badge gray">لم يُرسل بعد</span>'}</td>
+                <td><a class="btn small" href="new.html">إرسال تذكير</a></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>`;
+    }
+
+    const doseWrap = document.getElementById("upcomingDoseWrap");
+    if (!data.upcoming_doses.length) {
+      doseWrap.innerHTML = `<div class="empty-state">لا توجد جرعات مستحقة خلال الـ48 ساعة القادمة</div>`;
+    } else {
+      doseWrap.innerHTML = `
+        <table>
+          <thead><tr><th>المريض</th><th>الجرعة</th><th>التاريخ المتوقع</th><th>الهاتف</th><th>الحالة</th><th></th></tr></thead>
+          <tbody>
+            ${data.upcoming_doses.map((d) => `
+              <tr>
+                <td>${escapeHtml(d.patient_name)}</td>
+                <td>${escapeHtml(d.dose_name)}</td>
+                <td>${fmtDateTime(d.date)}</td>
+                <td>${escapeHtml(d.phone_masked)}</td>
+                <td>${d.reminder_sent_today ? '<span class="badge green">تم الإرسال اليوم ✓</span>' : '<span class="badge gray">لم يُرسل بعد</span>'}</td>
+                <td><a class="btn small" href="new.html">إرسال تذكير</a></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>`;
+    }
+  } catch (err) {
+    document.getElementById("upcomingApptWrap").innerHTML = `<div class="msg error">${escapeHtml(err.message)}</div>`;
+  }
+}
+load();
+</script>
+</body>
+</html>

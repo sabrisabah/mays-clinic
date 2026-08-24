@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تذكير WhatsApp جديد — مركز تذكيرات WhatsApp</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .step-nav { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .step-nav .step {
+    padding: 6px 14px; border-radius: 20px; font-size: .8rem; background: #eee; color: var(--muted);
+  }
+  .step-nav .step.active { background: var(--primary); color: #fff; font-weight: 700; }
+  .step-nav .step.done { background: var(--primary-light); color: var(--primary-dark); }
+  .patient-result {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; cursor: pointer;
+  }
+  .patient-result:hover { background: var(--primary-light); }
+  .patient-result .name { font-weight: 700; }
+  .patient-result .meta { font-size: .8rem; color: var(--muted); }
+  .selected-patient-card {
+    display: flex; justify-content: space-between; flex-wrap: wrap; gap: 14px;
+    background: var(--primary-light); border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;
+  }
+  .selected-patient-card .item { font-size: .85rem; }
+  .selected-patient-card .item .k { color: var(--muted); display: block; font-size: .76rem; }
+  .duplicate-warning {
+    background: #fdecd8; border: 1px solid #f3cfa0; border-radius: 10px; padding: 14px 16px; margin-top: 12px; font-size: .88rem;
+  }
+  .duplicate-warning .btn-row { margin-top: 10px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> مركز تذكيرات WhatsApp — تذكير جديد</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin:0;">+ تذكير WhatsApp جديد</h2>
+      <a href="index.html" class="btn small secondary">⬅ العودة للوحة التذكيرات</a>
+    </div>
+
+    <div class="card">
+      <div class="step-nav" id="stepNav">
+        <span class="step" data-step="1">1. اختيار المريض</span>
+        <span class="step" data-step="2">2. نوع التذكير</span>
+        <span class="step" data-step="3">3. تعديل الحقول</span>
+        <span class="step" data-step="4">4. المعاينة والإرسال</span>
+      </div>
+
+      <div id="msg" class="msg" style="display:none;"></div>
+
+      <!-- STEP 1: patient search -->
+      <div id="step1">
+        <h3>🔍 ابحث عن المريض</h3>
+        <div class="search-row">
+          <input type="text" id="searchBox" placeholder="الاسم، رقم الملف، أو رقم الهاتف...">
+          <button class="btn secondary" onclick="searchPatients()">بحث</button>
+        </div>
+        <div id="searchResults"></div>
+      </div>
+
+      <!-- STEP 2+: everything after a patient is selected -->
+      <div id="afterPatient" style="display:none;">
+        <div class="selected-patient-card" id="selectedPatientCard"></div>
+        <button class="btn small secondary" onclick="resetWizard()" style="margin-bottom:16px;">↺ اختيار مريض آخر</button>
+
+        <h3>🔹 نوع التذكير</h3>
+        <div class="grid">
+          <div class="field">
+            <label>نوع التذكير</label>
+            <select id="reminderTypeSelect" onchange="onTypeOrLangChange()">
+              <option value="">اختر...</option>
+              <option value="appointment">تذكير بموعد زيارة (Appointment Reminder)</option>
+              <option value="dose">تذكير بجرعة (Dose Reminder)</option>
+              <option value="followup">تذكير بمراجعة (Follow-up Reminder)</option>
+              <option value="visit">تذكير بزيارة (Visit Reminder)</option>
+              <option value="test">تذكير بفحص (Test Reminder)</option>
+              <option value="custom_admin">إشعار إداري (Custom Administrative Reminder)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>اللغة</label>
+            <select id="languageSelect" onchange="onTypeOrLangChange()">
+              <option value="ar">العربية</option>
+              <option value="en">English</option>
+              <option value="ckb">کوردیی ناوەندی</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="noTemplateNote" style="display:none;" class="msg error" style="margin-top:12px;"></div>
+
+        <!-- STEP 3: dynamic fields -->
+        <div id="fieldsSection" style="display:none; margin-top:20px;">
+          <h3>✏️ تعديل الحقول</h3>
+          <div class="grid" id="dynamicFields"></div>
+        </div>
+
+        <!-- STEP 4: preview -->
+        <div id="previewSection" style="display:none; margin-top:20px;">
+          <h3>👁️ معاينة الرسالة</h3>
+          <div class="wa-preview" id="previewText">...</div>
+          <div id="duplicateWarningWrap"></div>
+          <div class="btn-row">
+            <button class="btn secondary" onclick="resetWizard()">إلغاء</button>
+            <button class="btn success" id="sendBtn" onclick="openConfirmModal()" disabled>إرسال عبر WhatsApp</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmation modal -->
+  <div class="modal-overlay" id="confirmModal" style="display:none;">
+    <div class="modal-box">
+      <h3>تأكيد إرسال التذكير</h3>
+      <div class="modal-row"><span class="k">المريض</span><span class="v" id="cm_patient"></span></div>
+      <div class="modal-row"><span class="k">الهاتف</span><span class="v" id="cm_phone"></span></div>
+      <div class="modal-row"><span class="k">القالب</span><span class="v" id="cm_template"></span></div>
+      <div class="modal-row"><span class="k">التاريخ/الوقت</span><span class="v" id="cm_datetime"></span></div>
+      <p style="margin:16px 0 6px; font-size:.88rem;">هل أنت متأكد من إرسال هذا التذكير؟</p>
+      <div class="btn-row">
+        <button class="btn secondary" onclick="closeConfirmModal()">إلغاء</button>
+        <button class="btn success" id="confirmSendBtn" onclick="confirmAndSend()">تأكيد وإرسال</button>
+      </div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
+const role = Auth.getRole();
+refreshUserChip("userChip", (role === "doctor" ? "د. " : "") + Auth.getName());
+
+const msgEl = document.getElementById("msg");
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+let selectedPatient = null;
+let currentTemplate = null;
+let autoFillValues = {};
+let lastPreview = null;
+
+// ---------------- STEP 1: patient search ----------------
+async function searchPatients() {
+  const q = document.getElementById("searchBox").value.trim();
+  const wrap = document.getElementById("searchResults");
+  wrap.innerHTML = `<p style="color:var(--muted);">جارِ البحث...</p>`;
+  try {
+    const results = await apiFetch(`/api/reminders/patients/search?q=${encodeURIComponent(q)}`);
+    if (!results.length) {
+      wrap.innerHTML = `<div class="empty-state">لا توجد نتائج</div>`;
+      return;
+    }
+    wrap.innerHTML = results.map((p) => `
+      <div class="patient-result" onclick='selectPatient(${JSON.stringify(p).replace(/'/g, "&#39;")})'>
+        <div>
+          <div class="name">${escapeHtml(p.full_name)}</div>
+          <div class="meta">رقم الملف: ${escapeHtml(p.file_number)} — WhatsApp: ${escapeHtml(p.phone_masked || "غير مسجل")}</div>
+        </div>
+        <span class="badge ${p.upcoming_appointment ? "green" : "gray"}">${p.upcoming_appointment ? "لديه موعد قادم" : "لا يوجد موعد"}</span>
+      </div>`).join("");
+  } catch (err) {
+    wrap.innerHTML = "";
+    showMsg(msgEl, err.message, "error");
+  }
+}
+document.getElementById("searchBox").addEventListener("keydown", (e) => { if (e.key === "Enter") searchPatients(); });
+
+function selectPatient(p) {
+  selectedPatient = p;
+  document.getElementById("step1").style.display = "none";
+  document.getElementById("afterPatient").style.display = "block";
+  renderSelectedPatientCard();
+  document.getElementById("languageSelect").value = p.preferred_language || "ar";
+  document.getElementById("reminderTypeSelect").value = p.upcoming_appointment ? "appointment" : "";
+  markStep(2);
+  if (p.upcoming_appointment) onTypeOrLangChange();
+}
+
+function renderSelectedPatientCard() {
+  const p = selectedPatient;
+  document.getElementById("selectedPatientCard").innerHTML = `
+    <div class="item"><span class="k">المريض</span>${escapeHtml(p.full_name)}</div>
+    <div class="item"><span class="k">WhatsApp</span>${escapeHtml(p.phone_masked || "⚠ غير مسجل")}</div>
+    <div class="item"><span class="k">اللغة المفضلة</span>${escapeHtml(p.preferred_language === "en" ? "English" : p.preferred_language === "ckb" ? "کوردیی ناوەندی" : "العربية")}</div>
+    <div class="item"><span class="k">الموعد القادم</span>${p.upcoming_appointment ? fmtDate(p.upcoming_appointment) : "لا يوجد"}</div>
+    <div class="item"><span class="k">الطبيب</span>${escapeHtml(p.doctor_name || "-")}</div>
+  `;
+}
+
+function resetWizard() {
+  selectedPatient = null;
+  currentTemplate = null;
+  autoFillValues = {};
+  lastPreview = null;
+  document.getElementById("step1").style.display = "block";
+  document.getElementById("afterPatient").style.display = "none";
+  document.getElementById("fieldsSection").style.display = "none";
+  document.getElementById("previewSection").style.display = "none";
+  document.getElementById("noTemplateNote").style.display = "none";
+  document.getElementById("searchResults").innerHTML = "";
+  markStep(1);
+  hideMsg(msgEl);
+}
+
+function markStep(n) {
+  document.querySelectorAll("#stepNav .step").forEach((el) => {
+    const s = parseInt(el.dataset.step, 10);
+    el.classList.toggle("active", s === n);
+    el.classList.toggle("done", s < n);
+  });
+}
+
+// ---------------- STEP 2: template + autofill ----------------
+async function onTypeOrLangChange() {
+  const reminderType = document.getElementById("reminderTypeSelect").value;
+  const language = document.getElementById("languageSelect").value;
+  document.getElementById("fieldsSection").style.display = "none";
+  document.getElementById("previewSection").style.display = "none";
+  document.getElementById("noTemplateNote").style.display = "none";
+  currentTemplate = null;
+  if (!reminderType) return;
+
+  try {
+    const [templates, autofill] = await Promise.all([
+      apiFetch(`/api/reminders/templates?reminder_type=${reminderType}&language=${language}`),
+      apiFetch(`/api/reminders/patients/${selectedPatient.patient_id}/autofill?reminder_type=${reminderType}`),
+    ]);
+    autoFillValues = autofill;
+    if (!templates.length) {
+      document.getElementById("noTemplateNote").style.display = "block";
+      document.getElementById("noTemplateNote").textContent = "لا يوجد قالب معتمد من Meta لهذا النوع/اللغة بعد — راجع الإعدادات > قوالب WhatsApp.";
+      return;
+    }
+    currentTemplate = templates[0];
+    renderDynamicFields();
+    markStep(3);
+  } catch (err) {
+    showMsg(msgEl, err.message, "error");
+  }
+}
+
+function renderDynamicFields() {
+  const fields = currentTemplate.fields_config.slice().sort((a, b) => a.display_order - b.display_order);
+  const wrap = document.getElementById("dynamicFields");
+  wrap.innerHTML = fields.map((f) => {
+    const autoVal = f.auto_fill_source ? (autoFillValues[f.auto_fill_source] || "") : (f.default_value || "");
+    const inputType = f.field_type === "date" ? "date" : f.field_type === "time" ? "time" : f.field_type === "number" ? "number" : "text";
+    const disabledAttr = f.editable ? "" : "disabled";
+    const requiredMark = f.required ? " *" : "";
+    const isNote = f.max_length ? true : false;
+    return `
+      <div class="field">
+        <label>${escapeHtml(f.label)}${requiredMark}</label>
+        <input type="${inputType}" id="fld_${f.variable_name}" data-varname="${f.variable_name}"
+          value="${escapeHtml(autoVal)}" ${disabledAttr} ${f.max_length ? `maxlength="${f.max_length}"` : ""}
+          oninput="onFieldInput(this)">
+        ${isNote ? `<div class="char-counter" id="counter_${f.variable_name}">0 / ${f.max_length}</div>` : ""}
+      </div>`;
+  }).join("");
+
+  fields.forEach((f) => {
+    if (f.max_length) updateCharCounter(f.variable_name, f.max_length);
+  });
+
+  document.getElementById("fieldsSection").style.display = "block";
+  document.getElementById("previewSection").style.display = "block";
+  requestPreview();
+}
+
+function updateCharCounter(varname, maxLength) {
+  const input = document.getElementById(`fld_${varname}`);
+  const counter = document.getElementById(`counter_${varname}`);
+  if (!input || !counter) return;
+  const len = input.value.length;
+  counter.textContent = `${len} / ${maxLength}`;
+  counter.classList.toggle("over", len > maxLength);
+}
+
+function onFieldInput(input) {
+  const varname = input.dataset.varname;
+  const field = currentTemplate.fields_config.find((f) => f.variable_name === varname);
+  if (field && field.max_length) updateCharCounter(varname, field.max_length);
+  requestPreviewDebounced();
+}
+
+function collectFieldValues() {
+  const values = {};
+  currentTemplate.fields_config.forEach((f) => {
+    const input = document.getElementById(`fld_${f.variable_name}`);
+    values[f.variable_name] = input ? input.value : "";
+  });
+  return values;
+}
+
+const requestPreviewDebounced = debounce(requestPreview, 400);
+
+async function requestPreview() {
+  if (!currentTemplate) return;
+  const fieldValues = collectFieldValues();
+  const noteField = currentTemplate.fields_config.find((f) => f.max_length);
+  try {
+    const result = await apiFetch("/api/reminders/preview", {
+      method: "POST",
+      body: JSON.stringify({
+        patient_id: selectedPatient.patient_id,
+        template_id: currentTemplate.id,
+        field_values: fieldValues,
+        additional_note: noteField ? fieldValues[noteField.variable_name] : "",
+      }),
+    });
+    lastPreview = result;
+    document.getElementById("previewText").textContent = result.preview;
+    document.getElementById("sendBtn").disabled = !result.ready_to_send;
+    renderDuplicateWarning(result.duplicate_warning);
+    markStep(4);
+  } catch (err) {
+    document.getElementById("previewText").textContent = "تعذّر توليد المعاينة: " + err.message;
+    document.getElementById("sendBtn").disabled = true;
+  }
+}
+
+function renderDuplicateWarning(dup) {
+  const wrap = document.getElementById("duplicateWarningWrap");
+  if (!dup) { wrap.innerHTML = ""; return; }
+  wrap.innerHTML = `
+    <div class="duplicate-warning">
+      ⚠ تم إرسال هذا التذكير مسبقاً<br>
+      <strong>الإرسال السابق:</strong> ${dup.sent_at ? fmtDate(dup.sent_at) : "-"} — الحالة: ${escapeHtml(dup.status_display)}
+    </div>`;
+}
+
+// ---------------- STEP 4: confirm + send ----------------
+function openConfirmModal() {
+  if (!currentTemplate || !lastPreview) return;
+  document.getElementById("cm_patient").textContent = selectedPatient.full_name;
+  document.getElementById("cm_phone").textContent = lastPreview.phone_masked;
+  document.getElementById("cm_template").textContent = `${currentTemplate.display_name}`;
+  const values = collectFieldValues();
+  const dateField = currentTemplate.fields_config.find((f) => f.field_type === "date");
+  const timeField = currentTemplate.fields_config.find((f) => f.field_type === "time");
+  document.getElementById("cm_datetime").textContent = [
+    dateField ? values[dateField.variable_name] : "", timeField ? values[timeField.variable_name] : "",
+  ].filter(Boolean).join(" — ") || "-";
+  document.getElementById("confirmModal").style.display = "flex";
+}
+function closeConfirmModal() { document.getElementById("confirmModal").style.display = "none"; }
+
+async function confirmAndSend(forceResend) {
+  const btn = document.getElementById("confirmSendBtn");
+  btn.disabled = true;
+  btn.textContent = "جارِ الإرسال...";
+  const fieldValues = collectFieldValues();
+  const noteField = currentTemplate.fields_config.find((f) => f.max_length);
+  const payload = {
+    patient_id: selectedPatient.patient_id,
+    template_id: currentTemplate.id,
+    field_values: fieldValues,
+    additional_note: noteField ? fieldValues[noteField.variable_name] : "",
+    force_resend: !!forceResend,
+  };
+  try {
+    const res = await fetch((window.MAYS_API_BASE || "") + "/api/reminders/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + Auth.getToken() },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (res.status === 409) {
+      closeConfirmModal();
+      if (confirm(`⚠ تم إرسال هذا التذكير مسبقاً بتاريخ ${data.sent_at ? fmtDate(data.sent_at) : ""} (الحالة: ${data.status_display}).\nهل تريد إعادة الإرسال؟`)) {
+        openConfirmModal();
+        return confirmAndSend(true);
+      }
+      return;
+    }
+    if (!res.ok) {
+      throw new Error(data.detail || "فشل إرسال التذكير");
+    }
+    closeConfirmModal();
+    showMsg(msgEl, "✅ تم إرسال التذكير بنجاح عبر WhatsApp", "success");
+    document.getElementById("previewSection").style.display = "none";
+    document.getElementById("fieldsSection").style.display = "none";
+    setTimeout(() => { window.location.href = "history.html"; }, 1200);
+  } catch (err) {
+    closeConfirmModal();
+    showMsg(msgEl, err.message, "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "تأكيد وإرسال";
+  }
+}
+</script>
+</body>
+</html>

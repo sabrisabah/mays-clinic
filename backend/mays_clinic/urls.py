@@ -16,6 +16,11 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/health", health),
     path("api/", include("clinic.urls")),
+    path("api/reminders/", include("reminders.urls")),
+
+    # Meta WhatsApp Cloud API webhook — called directly by Meta, not a
+    # logged-in clinic user, so it lives outside /api/ and JWT auth.
+    path("webhooks/whatsapp/", include("reminders.webhook_urls")),
 
     # User-uploaded files (profile photos). Served directly by Django rather
     # than WhiteNoise — small-scale app, no separate media host/CDN needed.

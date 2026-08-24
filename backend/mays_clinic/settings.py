@@ -47,7 +47,19 @@ INSTALLED_APPS = [
     "corsheaders",
     "import_export",
     "clinic",
+    "reminders",
 ]
+
+# ---- WhatsApp Reminder Center (Meta WhatsApp Business Cloud API) ----
+# All secrets ONLY here, sourced from environment variables — never
+# hardcoded, never committed. See reminders/services/whatsapp.py for how
+# these are used, and the README section on connecting a Meta WhatsApp
+# Business account for how to obtain them.
+WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+WHATSAPP_BUSINESS_ACCOUNT_ID = os.environ.get("WHATSAPP_BUSINESS_ACCOUNT_ID", "")
+WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
+META_APP_SECRET = os.environ.get("META_APP_SECRET", "")
 
 # django-import-export: default export format is xlsx (Excel), matching what
 # clinic staff expect when exporting the user list from /admin.

@@ -186,3 +186,27 @@ tr:hover td { background: #fafdfc; }
 
 footer.hint { text-align: center; color: var(--muted); font-size: .8rem; margin-top: 14px; }
 a.plain { color: var(--primary); }
+
+/* Modal (confirmation dialogs — e.g. "Confirm & Send WhatsApp") */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(20, 30, 20, .55);
+  display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px;
+}
+.modal-box {
+  background: var(--card); border-radius: var(--radius); box-shadow: 0 8px 30px rgba(0,0,0,.25);
+  padding: 24px; max-width: 480px; width: 100%; max-height: 90vh; overflow-y: auto;
+}
+.modal-box h3 { margin-top: 0; color: var(--primary-dark); }
+.modal-row { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: .9rem; }
+.modal-row:last-of-type { border-bottom: none; }
+.modal-row .k { color: var(--muted); }
+.modal-row .v { font-weight: 700; text-align: left; }
+
+/* Message preview box (WhatsApp-style, monospace-ish, preserves line breaks) */
+.wa-preview {
+  background: #e9f7ef; border: 1px solid #cfead9; border-radius: 10px; padding: 16px;
+  white-space: pre-wrap; font-size: .92rem; line-height: 1.7; color: var(--text);
+}
+
+.char-counter { font-size: .76rem; color: var(--muted); text-align: left; margin-top: 2px; }
+.char-counter.over { color: var(--danger); font-weight: 700; }
