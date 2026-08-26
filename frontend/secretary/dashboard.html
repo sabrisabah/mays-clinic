@@ -94,7 +94,10 @@ function isUpcoming(p) {
 
 function renderUpcoming(patients) {
   const wrap = document.getElementById("upcomingWrap");
-  const upcoming = patients.filter(isUpcoming); // already sorted ascending by caller
+  // Soonest-first here regardless of how the main table below is sorted —
+  // this box is for advance prep, so the visit that's coming up next should
+  // be the one the secretary sees first.
+  const upcoming = patients.filter(isUpcoming).sort((a, b) => new Date(a.next_visit_at) - new Date(b.next_visit_at));
   if (!upcoming.length) {
     wrap.innerHTML = `<div class="empty-state">لا توجد مواعيد قادمة محجوزة بعد.</div>`;
     return;
@@ -120,16 +123,16 @@ async function load() {
   try {
     const qs = search ? `?search=${encodeURIComponent(search)}` : "";
     const patients = await apiFetch(`/api/patients${qs}`);
-    // Secretary view only: soonest/most-overdue appointment first, so
-    // whoever has the next visit (or is already late) surfaces at the top.
-    // Patients with no scheduled appointment sort to the bottom.
-    patients.sort((a, b) => {
-      const ta = a.next_visit_at ? new Date(a.next_visit_at).getTime() : Infinity;
-      const tb = b.next_visit_at ? new Date(b.next_visit_at).getTime() : Infinity;
-      return ta - tb;
-    });
     patientsCache = patients;
     renderUpcoming(patients);
+
+    // Main list: newest/furthest-future appointment date first — patients
+    // with no scheduled appointment yet still sort last either way.
+    patients.sort((a, b) => {
+      const ta = a.next_visit_at ? new Date(a.next_visit_at).getTime() : -Infinity;
+      const tb = b.next_visit_at ? new Date(b.next_visit_at).getTime() : -Infinity;
+      return tb - ta;
+    });
 
     if (!patients.length) {
       wrap.innerHTML = `<div class="empty-state">لا يوجد مراجعون بعد.</div>`;
