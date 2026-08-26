@@ -33,6 +33,7 @@
 
   <div class="container">
     <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <div id="navLinks"></div>
       <h2 style="margin:0;">📋 سجل تذكيرات WhatsApp</h2>
       <div class="btn-row" style="margin:0;">
         <a href="index.html" class="btn small secondary">⬅ لوحة التذكيرات</a>
@@ -86,6 +87,9 @@
 if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
 const role = Auth.getRole();
 refreshUserChip("userChip", (role === "doctor" ? "د. " : "") + Auth.getName());
+document.getElementById("navLinks").innerHTML = role === "doctor"
+  ? `<a href="../doctor/dashboard.html" class="btn small secondary">لوحة الطبيب</a>`
+  : `<a href="../secretary/dashboard.html" class="btn small secondary">لوحة السكرتيرة</a>`;
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

@@ -18,7 +18,10 @@
   <div class="container">
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <a href="invoices.html" class="btn small secondary">&rarr; كل الفواتير</a>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <a href="invoices.html" class="btn small secondary">&rarr; كل الفواتير</a>
+          <span id="navLinks"></span>
+        </div>
         <div>
           <h2 style="margin:0; display:inline;">فاتورة #<span id="invNumber">-</span></h2>
           <span class="badge gray" id="invStatusBadge" style="margin-right:10px;">-</span>
@@ -143,6 +146,9 @@
 if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
 refreshUserChip("userChip", Auth.getName());
 const role = Auth.getRole();
+document.getElementById("navLinks").innerHTML = role === "doctor"
+  ? `<a href="dashboard.html" class="btn small secondary">لوحة الطبيب</a>`
+  : `<a href="../secretary/dashboard.html" class="btn small secondary">لوحة السكرتيرة</a>`;
 const msgEl = document.getElementById("msg");
 const params = new URLSearchParams(location.search);
 const invoiceId = params.get("id");
