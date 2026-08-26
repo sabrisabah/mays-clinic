@@ -56,6 +56,7 @@
           <div class="field"><label>العنوان</label><input type="text" id="address"></div>
           <div class="field"><label>المهنة</label><input type="text" id="occupation"></div>
           <div class="field"><label>البريد الإلكتروني</label><input type="text" id="email" disabled></div>
+          <div class="field"><label>تاريخ الزيارة الأولى</label><input type="text" id="firstVisitDate" disabled></div>
         </div>
         <div class="btn-row"><button type="submit" class="btn">حفظ المعلومات الشخصية</button></div>
       </form>
@@ -1048,6 +1049,7 @@ async function loadProfile() {
   document.getElementById("address").value = p.address || "";
   document.getElementById("occupation").value = p.occupation || "";
   document.getElementById("email").value = p.email || "";
+  document.getElementById("firstVisitDate").value = fmtDate(p.created_at);
   setRadioValue("gender", p.gender);
   updatePcosVisibility();
   currentPatient = p;

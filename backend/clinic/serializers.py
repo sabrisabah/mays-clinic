@@ -109,6 +109,10 @@ class PatientProfileSerializer(serializers.Serializer):
     email = serializers.EmailField(source="user.email", read_only=True)
     preferred_language = serializers.CharField(read_only=True)
     next_followup_date = serializers.DateTimeField(read_only=True)
+    # Informational only, shown read-only in the doctor's profile tab — this
+    # is when the patient's file was first created (registration), i.e.
+    # their first visit. Never editable, no downstream logic depends on it.
+    created_at = serializers.DateTimeField(read_only=True)
 
 
 class PatientProfileUpdateSerializer(serializers.Serializer):
