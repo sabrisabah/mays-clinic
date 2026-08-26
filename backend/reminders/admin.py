@@ -32,11 +32,14 @@ class ReminderTemplateAdmin(admin.ModelAdmin):
     readonly_fields = ["created_at", "updated_at"]
     fieldsets = (
         (None, {"fields": ("reminder_type", "language", "display_name", "description")}),
-        ("قالب Meta المعتمد", {
+        ("نص الرسالة", {
             "fields": ("meta_template_name", "meta_template_language_code", "body_text"),
-            "description": "يجب أن يطابق نص وحالة الاعتماد ما هو مسجّل فعلياً في Meta Business Manager تماماً — لا تُرسل رسائل بقالب لم يُعتمد بعد.",
+            "description": "الإرسال يتم عبر جلسة WhatsApp الخاصة بالعيادة (WhatsApp Web) — النص هنا هو ما يُرسل للمريض حرفياً بعد تعويض {{1}} {{2}} ... بالقيم. حقول meta_template_name/language_code لم تعد مستخدمة فعلياً للإرسال (كانت خاصة بربط Meta Business API سابقاً) ويمكن تركها كما هي.",
         }),
-        ("الحالة", {"fields": ("status", "is_active")}),
+        ("الحالة", {
+            "fields": ("status", "is_active"),
+            "description": "status اختياري الآن (تنظيمي فقط، مثال: \"راجعناها داخلياً\") ولا يمنع الإرسال — is_active هو المفتاح الوحيد الذي يوقف قالباً عن الاستخدام.",
+        }),
         ("تواريخ", {"fields": ("created_at", "updated_at")}),
     )
 

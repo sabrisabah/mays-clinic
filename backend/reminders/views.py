@@ -87,11 +87,13 @@ class ReminderTemplateListView(APIView):
         if language:
             qs = qs.filter(language=language)
         # Secretaries only ever see templates that are actually sendable —
-        # a pending/rejected/disabled template should not even appear as an
-        # option in the New Reminder wizard. Doctors can pass ?all=1 to see
-        # everything (used by the Settings > Reminder Templates page).
+        # a disabled template should not even appear as an option in the
+        # New Reminder wizard. Doctors can pass ?all=1 to see everything
+        # (used by the Settings > Reminder Templates page). Approval
+        # `status` is no longer a hard gate (see ReminderTemplate.is_sendable)
+        # so it's intentionally not part of this filter anymore.
         if not (request.user.role == "doctor" and request.query_params.get("all")):
-            qs = qs.filter(is_active=True, status=ReminderTemplate.APPROVED)
+            qs = qs.filter(is_active=True)
         return Response(sz.ReminderTemplateSerializer(qs, many=True).data)
 
 
@@ -332,6 +334,38 @@ class ReminderCancelView(APIView):
         reminder.status = WhatsAppReminder.CANCELLED
         reminder.save(update_fields=["status"])
         WhatsAppReminderEvent.objects.create(reminder=reminder, event_type=WhatsAppReminderEvent.CANCELLED, actor=request.user)
+        return Response({"ok": True})
+
+
+# ---------------- WHATSAPP CONNECTION (bridge status/QR) ----------------
+# Thin proxies over reminders/services/whatsapp.py's bridge helpers — the
+# frontend connection page polls these instead of talking to the bridge
+# service directly (the bridge has no public domain; it's only reachable
+# from this Django service over Railway's private network).
+
+class WhatsAppConnectionStatusView(APIView):
+    def get(self, request):
+        _require(can_manage_reminder_templates, request)
+        return Response(whatsapp.get_bridge_status())
+
+
+class WhatsAppConnectionQrView(APIView):
+    def get(self, request):
+        _require(can_manage_reminder_templates, request)
+        from django.http import HttpResponse
+        png, reason = whatsapp.get_bridge_qr_png()
+        if png is None:
+            return Response({"detail": reason}, status=404)
+        return HttpResponse(png, content_type="image/png")
+
+
+class WhatsAppConnectionLogoutView(APIView):
+    def post(self, request):
+        _require(can_manage_reminder_templates, request)
+        try:
+            whatsapp.logout_bridge()
+        except whatsapp.WhatsAppServiceError as e:
+            return Response({"detail": e.user_message}, status=502)
         return Response({"ok": True})
 
 

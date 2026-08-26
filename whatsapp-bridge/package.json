@@ -1,0 +1,20 @@
+{
+  "name": "mays-clinic-whatsapp-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Internal-only Node.js service that holds one WhatsApp Web session (via Baileys, no browser/Chromium required) and exposes a tiny HTTP API for the Django backend to send plain-text reminder messages through it. Never exposed publicly — reached only over Railway's private network, and every request must carry the shared WA_BRIDGE_TOKEN.",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "express": "^4.21.2",
+    "pino": "^9.5.0",
+    "qrcode": "^1.5.4"
+  }
+}

@@ -18,4 +18,8 @@ urlpatterns = [
     path("history/<uuid:reminder_id>/cancel", views.ReminderCancelView.as_view()),
 
     path("dashboard", views.ReminderDashboardView.as_view()),
+
+    path("whatsapp-connection/status", views.WhatsAppConnectionStatusView.as_view()),
+    path("whatsapp-connection/qr", views.WhatsAppConnectionQrView.as_view()),
+    path("whatsapp-connection/logout", views.WhatsAppConnectionLogoutView.as_view()),
 ]

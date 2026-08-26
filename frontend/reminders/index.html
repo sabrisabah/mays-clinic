@@ -27,6 +27,7 @@
       <div class="btn-row" style="margin:0;">
         <a href="history.html" class="btn small secondary">📋 سجل التذكيرات</a>
         <a href="templates.html" class="btn small secondary">⚙️ قوالب WhatsApp</a>
+        <a href="connection.html" class="btn small secondary" id="connectionLink" style="display:none;">🔗 الاتصال بالواتساب</a>
         <a href="new.html" class="btn">+ تذكير جديد</a>
       </div>
     </div>
@@ -62,6 +63,7 @@
 if (!requireRole(["doctor", "secretary"])) { throw new Error("redirect"); }
 const role = Auth.getRole();
 refreshUserChip("userChip", (role === "doctor" ? "د. " : "") + Auth.getName());
+if (role === "doctor") { document.getElementById("connectionLink").style.display = ""; }
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

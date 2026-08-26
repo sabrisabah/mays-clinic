@@ -92,7 +92,16 @@ class ReminderTemplate(models.Model):
 
     @property
     def is_sendable(self):
-        return self.is_active and self.status == self.APPROVED
+        # `status` (approved/pending/rejected/disabled) was originally a hard
+        # gate tied to Meta's official template-approval workflow — a
+        # template could only be used once Meta had approved its exact
+        # wording. Since sending now goes through the clinic's own WhatsApp
+        # number (WhatsApp Web session via the internal bridge service, not
+        # the Meta Business Cloud API), there is no external approval step
+        # anymore: `status` is kept only as an informational/organizational
+        # field (e.g. "we've reviewed this wording internally"), and the
+        # only thing that actually blocks sending is `is_active`.
+        return self.is_active
 
 
 class ReminderTemplateField(models.Model):

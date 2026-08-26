@@ -50,11 +50,20 @@ INSTALLED_APPS = [
     "reminders",
 ]
 
-# ---- WhatsApp Reminder Center (Meta WhatsApp Business Cloud API) ----
-# All secrets ONLY here, sourced from environment variables — never
-# hardcoded, never committed. See reminders/services/whatsapp.py for how
-# these are used, and the README section on connecting a Meta WhatsApp
-# Business account for how to obtain them.
+# ---- WhatsApp Reminder Center ----
+# Sending goes through the clinic's own WhatsApp number via the internal
+# whatsapp-bridge/ service (WhatsApp Web session, Baileys) — WA_BRIDGE_URL
+# is that service's private Railway network URL, WA_BRIDGE_TOKEN is the
+# shared secret both services are configured with. See
+# reminders/services/whatsapp.py for how these are used.
+WA_BRIDGE_URL = os.environ.get("WA_BRIDGE_URL", "")
+WA_BRIDGE_TOKEN = os.environ.get("WA_BRIDGE_TOKEN", "")
+
+# ---- Legacy: Meta WhatsApp Business Cloud API ----
+# No longer used for sending (see above) — kept only so the existing
+# /webhooks/whatsapp/ signature-verification endpoint still behaves
+# correctly (returns 403) if ever hit while unconfigured, rather than
+# erroring. Safe to remove entirely if that endpoint is ever deleted.
 WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
 WHATSAPP_BUSINESS_ACCOUNT_ID = os.environ.get("WHATSAPP_BUSINESS_ACCOUNT_ID", "")

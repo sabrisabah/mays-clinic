@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الاتصال بالواتساب — عيادة دكتورة ميس الربيعي</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .wa-conn-box { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 20px 10px; }
+  .wa-qr-img { width: 280px; height: 280px; border: 2px solid #1a1a1a; border-radius: 10px; background: #fff; object-fit: contain; }
+  .wa-qr-placeholder { width: 280px; height: 280px; border: 2px dashed var(--muted); border-radius: 10px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); padding: 12px; }
+  .wa-status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-inline-end: 6px; }
+  .wa-status-dot.connected { background: #1c7a3d; }
+  .wa-status-dot.waiting { background: #b9631a; }
+  .wa-status-dot.off { background: var(--danger); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> مركز تذكيرات WhatsApp ← الاتصال</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <h2 style="margin:0;">🔗 الاتصال بواتساب العيادة</h2>
+      <a href="index.html" class="btn small secondary">⬅ لوحة التذكيرات</a>
+    </div>
+
+    <div class="card">
+      <p style="color:var(--muted); font-size:.85rem; margin:0 0 10px;">
+        الإرسال يتم عبر جلسة WhatsApp Web مربوطة برقم العيادة (لا عبر Meta Business API) — افتحي واتساب على تلفون
+        العيادة ← الإعدادات ← الأجهزة المرتبطة ← ربط جهاز، وامسحي رمز QR أدناه مرة واحدة. الجلسة تبقى متصلة تلقائياً
+        بعدها، إلا إذا انقطعت من طرف واتساب نفسه — عندها لازم إعادة المسح.
+      </p>
+      <div id="msg" class="msg" style="display:none;"></div>
+      <div class="wa-conn-box" id="connBox">
+        <p style="color:var(--muted);">جارِ التحقق من حالة الاتصال...</p>
+      </div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole(["doctor"])) { throw new Error("redirect"); }
+refreshUserChip("userChip", "د. " + Auth.getName());
+
+const msgEl = document.getElementById("msg");
+const connBox = document.getElementById("connBox");
+let pollTimer = null;
+let currentQrObjectUrl = null;
+
+function renderConnected(status) {
+  connBox.innerHTML = `
+    <div style="text-align:center;">
+      <p style="font-size:1.4rem; margin:0 0 6px;"><span class="wa-status-dot connected"></span> متصل ✅</p>
+      <p style="color:var(--muted); margin:0;">الرقم المرتبط: <b>${escapeHtml(status.phone || "-")}</b></p>
+      <button type="button" class="btn small secondary" id="logoutBtn" style="margin-top:14px;">قطع الاتصال (لربط رقم آخر)</button>
+    </div>`;
+  document.getElementById("logoutBtn").addEventListener("click", doLogout);
+}
+
+function renderWaitingForQr() {
+  connBox.innerHTML = `
+    <p style="margin:0;"><span class="wa-status-dot waiting"></span> بانتظار مسح رمز QR</p>
+    <div id="qrSlot" class="wa-qr-placeholder">جارِ تحميل الرمز...</div>
+    <p style="color:var(--muted); font-size:.8rem; margin:0;">يتجدد الرمز تلقائياً — إذا انتهت صلاحيته، انتظري قليلاً للحصول على رمز جديد.</p>`;
+  loadQr();
+}
+
+function renderDisconnected(status) {
+  const reason = status.error ? `(${escapeHtml(status.error)})` : "";
+  connBox.innerHTML = `
+    <p style="margin:0;"><span class="wa-status-dot off"></span> غير متصل ${reason}</p>
+    <p style="color:var(--muted); font-size:.85rem;">جارِ محاولة الاتصال... إذا استمرت هذه الحالة، راجعي الدعم الفني.</p>`;
+}
+
+function renderNotConfigured() {
+  connBox.innerHTML = `<div class="msg error">خدمة الواتساب غير مُهيّأة على الخادم — راجعي الدعم الفني.</div>`;
+}
+
+async function loadQr() {
+  const slot = document.getElementById("qrSlot");
+  if (!slot) return;
+  try {
+    const token = Auth.getToken();
+    const res = await fetch(`${API_BASE}/api/reminders/whatsapp-connection/qr`, {
+      headers: { Authorization: "Bearer " + token },
+    });
+    if (res.status === 404) {
+      slot.textContent = "لا يوجد رمز QR بالوقت الحالي — جارِ الانتظار...";
+      return;
+    }
+    if (!res.ok) {
+      slot.textContent = "تعذر تحميل رمز QR";
+      return;
+    }
+    const blob = await res.blob();
+    if (currentQrObjectUrl) URL.revokeObjectURL(currentQrObjectUrl);
+    currentQrObjectUrl = URL.createObjectURL(blob);
+    slot.outerHTML = `<img id="qrSlot" class="wa-qr-img" src="${currentQrObjectUrl}" alt="رمز QR لربط واتساب">`;
+  } catch (err) {
+    slot.textContent = "تعذر الاتصال بالخادم";
+  }
+}
+
+async function doLogout() {
+  if (!confirm("فصل الجلسة الحالية؟ راح تحتاجين تمسحين رمز QR جديد لإعادة الربط.")) return;
+  hideMsg(msgEl);
+  try {
+    await apiFetch("/api/reminders/whatsapp-connection/logout", { method: "POST" });
+    showMsg(msgEl, "تم فصل الجلسة ✅", "success");
+    poll();
+  } catch (err) {
+    showMsg(msgEl, err.message, "error");
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function poll() {
+  try {
+    const status = await apiFetch("/api/reminders/whatsapp-connection/status");
+    if (status.state === "not_configured") {
+      renderNotConfigured();
+    } else if (status.connected) {
+      renderConnected(status);
+    } else if (status.state === "waiting_for_qr") {
+      // Only (re)build the shell once per waiting period (avoids flicker),
+      // but always refresh the QR image itself — Baileys rotates the QR
+      // string periodically until it's scanned, so a stale image would
+      // stop working.
+      if (!document.getElementById("qrSlot")) { renderWaitingForQr(); } else { loadQr(); }
+    } else {
+      renderDisconnected(status);
+    }
+  } catch (err) {
+    connBox.innerHTML = `<div class="msg error">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+poll();
+pollTimer = setInterval(poll, 5000);
+window.addEventListener("beforeunload", () => { if (pollTimer) clearInterval(pollTimer); });
+</script>
+</body>
+</html>
