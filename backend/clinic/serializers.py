@@ -25,6 +25,8 @@ class RegisterSerializer(serializers.Serializer):
     gender = serializers.ChoiceField(choices=["ذكر", "أنثى"])
     phone = serializers.CharField(max_length=30)
     occupation = serializers.CharField(max_length=150, required=False, allow_blank=True, default="")
+    weight = serializers.FloatField(required=False, min_value=0, default=0)
+    height = serializers.FloatField(required=False, min_value=0, default=0)
     visit_date = serializers.DateField()
     visit_time = serializers.TimeField(required=False, allow_null=True, default=None)
     password = serializers.RegexField(

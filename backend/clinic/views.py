@@ -94,7 +94,17 @@ class RegisterView(APIView):
         )
         visit_time = data.get("visit_time") or datetime.min.time()
         visit_datetime = timezone.make_aware(datetime.combine(data["visit_date"], visit_time))
-        Assessment.objects.create(patient=patient, visit_date=visit_datetime)
+        # Weight/height are optional at registration (secretary may not have
+        # them yet) — accept height in cm or m like the rest of the app, and
+        # compute BMI immediately if both were given so the doctor's file
+        # already shows it on first open.
+        weight = data.get("weight", 0) or 0
+        height = normalize_height_m(data.get("height", 0))
+        bmi, bmi_class = compute_bmi(weight, height)
+        Assessment.objects.create(
+            patient=patient, visit_date=visit_datetime,
+            weight=weight, height=height, bmi=bmi, bmi_class=bmi_class,
+        )
 
         return Response(issue_token_response(user, patient.id), status=status.HTTP_201_CREATED)
 

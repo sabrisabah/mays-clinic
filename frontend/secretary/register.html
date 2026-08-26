@@ -60,6 +60,10 @@
           <div class="field"><label>تاريخ الزيارة</label><input type="date" id="regVisitDate" required></div>
           <div class="field"><label>وقت الزيارة</label><input type="time" id="regVisitTime"></div>
         </div>
+        <div class="grid-3">
+          <div class="field"><label>الوزن (كغم، اختياري)</label><input type="number" id="regWeight" min="0" step="0.1"></div>
+          <div class="field"><label>الطول (سم، اختياري)</label><input type="number" id="regHeight" min="0" step="0.1"></div>
+        </div>
         <div class="grid-2">
           <div class="field"><label>العنوان (اختياري)</label><input type="text" id="regAddress"></div>
           <div class="field"><label>المهنة (اختياري)</label><input type="text" id="regOccupation"></div>
@@ -112,6 +116,8 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
     phone,
     address: document.getElementById("regAddress").value.trim(),
     occupation: document.getElementById("regOccupation").value.trim(),
+    weight: parseFloat(document.getElementById("regWeight").value) || 0,
+    height: parseFloat(document.getElementById("regHeight").value) || 0,
     visit_date: document.getElementById("regVisitDate").value,
     visit_time: document.getElementById("regVisitTime").value || null,
     password,
