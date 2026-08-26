@@ -699,7 +699,7 @@ class ProgressDeleteView(APIView):
 class MounjaroDoseListView(APIView):
     def get(self, request, patient_id):
         patient = get_patient_or_403(request, patient_id)
-        entries = patient.mounjaro_doses.order_by("date")
+        entries = patient.mounjaro_doses.order_by("-date")  # newest first
         return Response(sz.MounjaroDoseSerializer(entries, many=True).data)
 
     def post(self, request, patient_id):
@@ -791,7 +791,7 @@ class MounjaroCorrectionLogListView(APIView):
 class OzempicDoseListView(APIView):
     def get(self, request, patient_id):
         patient = get_patient_or_403(request, patient_id)
-        entries = patient.ozempic_doses.order_by("date")
+        entries = patient.ozempic_doses.order_by("-date")  # newest first
         return Response(sz.OzempicDoseSerializer(entries, many=True).data)
 
     def post(self, request, patient_id):
@@ -807,6 +807,7 @@ class OzempicDoseListView(APIView):
             patient=patient,
             weight=data["weight"],
             dose_mg=data["dose_mg"],
+            pen_strength=data.get("pen_strength", ""),
             notes=data.get("notes", ""),
             created_by=request.user,
         )
@@ -829,8 +830,9 @@ class OzempicDoseDetailView(APIView):
 
         entry.weight = data["weight"]
         entry.dose_mg = data["dose_mg"]
+        entry.pen_strength = data.get("pen_strength", "")
         entry.notes = data.get("notes", "")
-        entry.save(update_fields=["weight", "dose_mg", "notes"])
+        entry.save(update_fields=["weight", "dose_mg", "pen_strength", "notes"])
         return Response(sz.OzempicDoseSerializer(entry).data)
 
     def delete(self, request, patient_id, entry_id):

@@ -386,7 +386,9 @@ class MounjaroDose(models.Model):
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
-        ordering = ["date"]
+        # Newest first — matches the dose log UI (frontend renders in
+        # whatever order the API returns, see clinic/views.py::MounjaroDoseListView).
+        ordering = ["-date"]
 
     def __str__(self):
         return f"مونجارو - {self.patient.file_number} - {self.patient.user.full_name} ({self.date:%Y-%m-%d})"
@@ -423,15 +425,33 @@ class OzempicDose(models.Model):
         (2.0, "2 ملغم"),
     ]
 
+    # The physical pen's fixed concentration (printed on the pen itself),
+    # as distinct from `dose_mg` (the actual injected amount dialed in at
+    # that visit — e.g. the 2mg/1.5mL pen can deliver either a 0.25mg or a
+    # 0.5mg dose). Optional/informational — added per the clinic owner's
+    # request to track which pen strength is in use from the secretary's
+    # account, alongside the injected dose.
+    PEN_2MG = "2/1.5"
+    PEN_4MG = "4/3"
+    PEN_8MG = "8/3"
+    PEN_STRENGTH_CHOICES = [
+        (PEN_2MG, "٢ ملغم / ١.٥ مل (لجرعة ٠.٢٥ أو ٠.٥ ملغم)"),
+        (PEN_4MG, "٤ ملغم / ٣ مل (لجرعة ١ ملغم)"),
+        (PEN_8MG, "٨ ملغم / ٣ مل (لجرعة ٢ ملغم)"),
+    ]
+
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="ozempic_doses")
     date = models.DateTimeField(auto_now_add=True)
     weight = models.FloatField(default=0)
     dose_mg = models.FloatField(default=0, choices=DOSE_CHOICES)
+    pen_strength = models.CharField(max_length=10, choices=PEN_STRENGTH_CHOICES, blank=True, default="")
     notes = models.CharField(max_length=255, blank=True, default="")
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
-        ordering = ["date"]
+        # Newest first — matches the dose log UI (frontend renders in
+        # whatever order the API returns, see clinic/views.py::OzempicDoseListView).
+        ordering = ["-date"]
 
     def __str__(self):
         return f"أوزمبك - {self.patient.file_number} - {self.patient.user.full_name} ({self.date:%Y-%m-%d})"

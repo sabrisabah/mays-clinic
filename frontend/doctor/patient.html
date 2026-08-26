@@ -774,6 +774,15 @@
               <option value="2">2 ملغم</option>
             </select>
           </div>
+          <div class="field">
+            <label>تركيز القلم (اختياري)</label>
+            <select id="oz_pen">
+              <option value="">-- غير محدد --</option>
+              <option value="2/1.5">٢ ملغم / ١.٥ مل (لجرعة ٠.٢٥ أو ٠.٥ ملغم)</option>
+              <option value="4/3">٤ ملغم / ٣ مل (لجرعة ١ ملغم)</option>
+              <option value="8/3">٨ ملغم / ٣ مل (لجرعة ٢ ملغم)</option>
+            </select>
+          </div>
           <div class="field"><label>ملاحظات</label><input type="text" id="oz_notes"></div>
         </div>
         <div class="btn-row"><button type="submit" class="btn">إضافة الجرعة</button></div>
@@ -1875,7 +1884,8 @@ async function loadMounjaro() {
   mounjaroEntries = entries;
   const summary = document.getElementById("mounjaroSummary");
   const targetWeight = lastAssessment ? lastAssessment.target_weight : 0;
-  const latest = entries.length ? entries[entries.length - 1] : null;
+  // API now returns newest-first (see clinic/views.py::MounjaroDoseListView).
+  const latest = entries.length ? entries[0] : null;
   const summaryCards = [];
   if (latest) {
     summaryCards.push(`<span class="badge green">آخر وزن مسجّل: ${latest.weight} كغم</span>`);
@@ -1897,7 +1907,10 @@ async function loadMounjaro() {
     wrap.innerHTML = `<div class="empty-state">لا توجد جرعات مسجلة بعد.</div>`;
     return;
   }
-  const rows = entries.slice().reverse().map((e, idx) => {
+  // entries is newest-first (from the API) — orderNum keeps the "Nth
+  // chronological entry" numbering (oldest=1) even though the newest row
+  // renders at the top of the table.
+  const rows = entries.map((e, idx) => {
     const orderNum = entries.length - idx;
     return `
     <tr>
@@ -1999,7 +2012,8 @@ async function loadOzempic() {
   const entries = await apiFetch(`/api/patients/${patientId}/ozempic`);
   ozempicEntries = entries;
   const summary = document.getElementById("ozempicSummary");
-  const latest = entries.length ? entries[entries.length - 1] : null;
+  // API now returns newest-first (see clinic/views.py::OzempicDoseListView).
+  const latest = entries.length ? entries[0] : null;
   const summaryCards = [];
   if (latest) {
     summaryCards.push(`<span class="badge green">آخر وزن مسجّل: ${latest.weight} كغم</span>`);
@@ -2012,13 +2026,17 @@ async function loadOzempic() {
     wrap.innerHTML = `<div class="empty-state">لا توجد جرعات مسجلة بعد.</div>`;
     return;
   }
-  const rows = entries.slice().reverse().map((e, idx) => {
+  // entries is newest-first (from the API) — orderNum keeps the "Nth
+  // chronological entry" numbering (oldest=1) even though the newest row
+  // renders at the top of the table.
+  const rows = entries.map((e, idx) => {
     const orderNum = entries.length - idx;
     return `
     <tr>
       <td>${fmtDate(e.date)}</td>
       <td>الوزن${orderNum}: ${e.weight} كغم</td>
       <td>الجرعة${orderNum}: ${e.dose_mg} ملغم</td>
+      <td>${escapeHtml(e.pen_strength_display) || "-"}</td>
       <td>${escapeHtml(e.notes) || "-"}</td>
       <td>
         ${role === "doctor" ? `<button class="btn small success" onclick="editOzempicDose(${e.id})">تعديل</button>` : ""}
@@ -2028,7 +2046,7 @@ async function loadOzempic() {
   }).join("");
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>التاريخ</th><th>الوزن</th><th>الجرعة</th><th>ملاحظات</th><th></th></tr></thead>
+      <thead><tr><th>التاريخ</th><th>الوزن</th><th>الجرعة</th><th>تركيز القلم</th><th>ملاحظات</th><th></th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
@@ -2039,6 +2057,7 @@ function editOzempicDose(entryId) {
   editingOzempicEntryId = entryId;
   document.getElementById("oz_weight").value = entry.weight;
   document.getElementById("oz_dose").value = entry.dose_mg;
+  document.getElementById("oz_pen").value = entry.pen_strength || "";
   document.getElementById("oz_notes").value = entry.notes || "";
   document.getElementById("ozempicForm").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
@@ -2064,6 +2083,7 @@ document.getElementById("ozempicForm").addEventListener("submit", async (e) => {
     const payload = {
       weight: parseFloat(document.getElementById("oz_weight").value),
       dose_mg: parseFloat(document.getElementById("oz_dose").value),
+      pen_strength: document.getElementById("oz_pen").value,
       notes: document.getElementById("oz_notes").value.trim(),
     };
     if (editingOzempicEntryId) {

@@ -415,22 +415,31 @@ class MounjaroCorrectionLogSerializer(serializers.ModelSerializer):
 
 class OzempicDoseSerializer(serializers.ModelSerializer):
     patient_id = serializers.IntegerField(source="patient.id", read_only=True)
+    pen_strength_display = serializers.CharField(source="get_pen_strength_display", read_only=True)
 
     class Meta:
         model = OzempicDose
-        fields = ["id", "patient_id", "date", "weight", "dose_mg", "notes"]
+        fields = ["id", "patient_id", "date", "weight", "dose_mg", "pen_strength", "pen_strength_display", "notes"]
         read_only_fields = ["id", "patient_id", "date"]
 
 
 class OzempicDoseCreateSerializer(serializers.Serializer):
     weight = serializers.FloatField()
     dose_mg = serializers.FloatField()
+    # Optional — the pen's fixed concentration, distinct from dose_mg (the
+    # actual injected amount). Blank means "not recorded".
+    pen_strength = serializers.CharField(required=False, allow_blank=True, default="")
     notes = serializers.CharField(required=False, allow_blank=True, default="")
 
     def validate_dose_mg(self, value):
         allowed = [c[0] for c in OzempicDose.DOSE_CHOICES]
         if value not in allowed:
             raise serializers.ValidationError("جرعة غير صالحة")
+        return value
+
+    def validate_pen_strength(self, value):
+        if value and value not in [c[0] for c in OzempicDose.PEN_STRENGTH_CHOICES]:
+            raise serializers.ValidationError("تركيز قلم غير صالح")
         return value
 
 
