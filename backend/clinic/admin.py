@@ -4,7 +4,7 @@ from import_export import fields, resources, widgets
 from import_export.admin import ImportExportModelAdmin
 from .models import (
     User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, LabTestEntry,
-    MounjaroCorrectionLog,
+    MounjaroCorrectionLog, OzempicCorrectionLog, HealthStatusNote,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
@@ -297,6 +297,41 @@ class MounjaroCorrectionLogAdmin(admin.ModelAdmin):
     """Read-only in /admin — same create-only pattern as AuditLogEntry."""
     list_display = ["created_at", "patient", "actor", "original_dose_mg", "reason"]
     search_fields = ["patient__file_number", "patient__user__full_name", "reason"]
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(OzempicCorrectionLog)
+class OzempicCorrectionLogAdmin(admin.ModelAdmin):
+    """Read-only in /admin — exact mirror of MounjaroCorrectionLogAdmin."""
+    list_display = ["created_at", "patient", "actor", "original_dose_mg", "reason"]
+    search_fields = ["patient__file_number", "patient__user__full_name", "reason"]
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(HealthStatusNote)
+class HealthStatusNoteAdmin(admin.ModelAdmin):
+    """Read-only in /admin — created only via the app (doctor/secretary
+    "متابعة حالة صحية" section)."""
+    list_display = ["created_at", "patient", "created_by"]
+    search_fields = ["patient__file_number", "patient__user__full_name", "note"]
     date_hierarchy = "created_at"
 
     def has_add_permission(self, request):

@@ -11,7 +11,7 @@ from rest_framework import status
 
 from .models import (
     User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose,
-    MounjaroCorrectionLog, LabTestEntry,
+    MounjaroCorrectionLog, OzempicDose, OzempicCorrectionLog, HealthStatusNote, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
@@ -636,8 +636,10 @@ class ProgressListView(APIView):
         return Response(sz.ProgressEntrySerializer(entries, many=True).data)
 
     def post(self, request, patient_id):
-        if request.user.role != "doctor":
-            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        # Secretary can also log a follow-up weigh-in from her consolidated
+        # "ملف المتابعة" tab (متابعة وزن) — deletion stays doctor-only below.
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح لطاقم العيادة فقط")
         patient = get_patient_or_403(request, patient_id)
 
         serializer = sz.ProgressEntryCreateSerializer(data=request.data)
@@ -757,6 +759,134 @@ class MounjaroCorrectionLogListView(APIView):
         patient = get_patient_or_403(request, patient_id)
         logs = patient.mounjaro_corrections.select_related("actor")
         return Response(sz.MounjaroCorrectionLogSerializer(logs, many=True).data)
+
+
+# ---------------- OZEMPIC DOSE TRACKING ----------------
+# Exact structural mirror of MOUNJARO DOSE TRACKING above, for the
+# secretary's consolidated "ملف المتابعة" tab (متابعة أوزمبك). Same
+# permission model: doctor+secretary can add, only doctor can edit in
+# place, secretary deletions require a documented reason logged to
+# OzempicCorrectionLog (doctor-only visible), doctor deletions are
+# unlogged.
+
+class OzempicDoseListView(APIView):
+    def get(self, request, patient_id):
+        patient = get_patient_or_403(request, patient_id)
+        entries = patient.ozempic_doses.order_by("date")
+        return Response(sz.OzempicDoseSerializer(entries, many=True).data)
+
+    def post(self, request, patient_id):
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح للطبيب أو السكرتيرة فقط")
+        patient = get_patient_or_403(request, patient_id)
+
+        serializer = sz.OzempicDoseCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        entry = OzempicDose.objects.create(
+            patient=patient,
+            weight=data["weight"],
+            dose_mg=data["dose_mg"],
+            notes=data.get("notes", ""),
+            created_by=request.user,
+        )
+        return Response(sz.OzempicDoseSerializer(entry).data, status=status.HTTP_201_CREATED)
+
+
+class OzempicDoseDetailView(APIView):
+    def put(self, request, patient_id, entry_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("تعديل سجل موجود متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        try:
+            entry = OzempicDose.objects.get(id=entry_id, patient=patient)
+        except OzempicDose.DoesNotExist:
+            raise NotFound("السجل غير موجود")
+
+        serializer = sz.OzempicDoseCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        entry.weight = data["weight"]
+        entry.dose_mg = data["dose_mg"]
+        entry.notes = data.get("notes", "")
+        entry.save(update_fields=["weight", "dose_mg", "notes"])
+        return Response(sz.OzempicDoseSerializer(entry).data)
+
+    def delete(self, request, patient_id, entry_id):
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح للطبيب أو السكرتيرة فقط")
+        patient = get_patient_or_403(request, patient_id)
+        try:
+            entry = OzempicDose.objects.get(id=entry_id, patient=patient)
+        except OzempicDose.DoesNotExist:
+            return Response({"ok": True})
+
+        if request.user.role == "secretary":
+            reason = request.data.get("reason", "").strip()
+            if not reason:
+                raise ValidationError({"reason": "سبب حذف/تصحيح السجل مطلوب"})
+            OzempicCorrectionLog.objects.create(
+                patient=patient,
+                actor=request.user,
+                original_date=entry.date,
+                original_weight=entry.weight,
+                original_dose_mg=entry.dose_mg,
+                reason=reason,
+            )
+
+        entry.delete()
+        return Response({"ok": True})
+
+
+class OzempicCorrectionLogListView(APIView):
+    def get(self, request, patient_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("سجل التصحيحات متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        logs = patient.ozempic_corrections.select_related("actor")
+        return Response(sz.OzempicCorrectionLogSerializer(logs, many=True).data)
+
+
+# ---------------- HEALTH STATUS NOTES ----------------
+# Simple free-text log for the secretary's consolidated "ملف المتابعة" tab
+# (متابعة حالة صحية) — both doctor and secretary can add/view; append-only,
+# no edit/delete (same create-only spirit as ProgressEntry/LabTestEntry).
+
+class HealthStatusNoteListView(APIView):
+    def get(self, request, patient_id):
+        patient = get_patient_or_403(request, patient_id)
+        notes = patient.health_status_notes.select_related("created_by")
+        return Response(sz.HealthStatusNoteSerializer(notes, many=True).data)
+
+    def post(self, request, patient_id):
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح للطبيب أو السكرتيرة فقط")
+        patient = get_patient_or_403(request, patient_id)
+        note_text = request.data.get("note", "").strip()
+        if not note_text:
+            raise ValidationError({"note": "الملاحظة مطلوبة"})
+        note = HealthStatusNote.objects.create(patient=patient, note=note_text, created_by=request.user)
+        return Response(sz.HealthStatusNoteSerializer(note).data, status=status.HTTP_201_CREATED)
+
+
+# ---------------- NEXT FOLLOW-UP DATE ----------------
+# A simple, separate "موعد المتابعة القادمة" note field on Patient — distinct
+# from Assessment.visit_date/appointment_booked (the actual appointment-
+# booking mechanism used elsewhere). Secretary-managed from her
+# consolidated "ملف المتابعة" tab.
+
+class NextFollowupDateView(APIView):
+    def put(self, request, patient_id):
+        if request.user.role not in ("doctor", "secretary"):
+            raise PermissionDenied("هذا الإجراء متاح للطبيب أو السكرتيرة فقط")
+        patient = get_patient_or_403(request, patient_id)
+        serializer = sz.NextFollowupDateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        patient.next_followup_date = serializer.validated_data["next_followup_date"]
+        patient.save(update_fields=["next_followup_date"])
+        return Response({"next_followup_date": patient.next_followup_date})
 
 
 # ---------------- LAB TEST TRACKING (monthly, doctor-only) ----------------

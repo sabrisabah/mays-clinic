@@ -68,6 +68,12 @@ class Patient(models.Model):
     LANGUAGE_CHOICES = [("ar", "العربية"), ("en", "English"), ("ckb", "کوردیی ناوەندی")]
     preferred_language = models.CharField(max_length=5, choices=LANGUAGE_CHOICES, default="ar")
 
+    # Secretary's consolidated "ملف المتابعة" tab (§ موعد المتابعة القادمة) —
+    # a distinct field from Assessment.visit_date/appointment_booked (the
+    # main appointment-booking mechanism), set directly by the secretary
+    # as a simple next-follow-up-date note.
+    next_followup_date = models.DateTimeField(null=True, blank=True)
+
     def __str__(self):
         return f"{self.file_number} - {self.user.full_name}"
 
@@ -402,6 +408,62 @@ class MounjaroCorrectionLog(models.Model):
     original_dose_mg = models.FloatField()
     reason = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class OzempicDose(models.Model):
+    """Weekly Ozempic (semaglutide) dose tracking log — structurally an
+    exact mirror of MounjaroDose (see that model's docstring), just for a
+    different medication. Dose steps follow the standard Ozempic
+    escalation schedule (0.25/0.5/1/2 mg); adjust DOSE_CHOICES + a
+    migration if the clinic's actual protocol differs."""
+    DOSE_CHOICES = [
+        (0.25, "0.25 ملغم"),
+        (0.5, "0.5 ملغم"),
+        (1.0, "1 ملغم"),
+        (2.0, "2 ملغم"),
+    ]
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="ozempic_doses")
+    date = models.DateTimeField(auto_now_add=True)
+    weight = models.FloatField(default=0)
+    dose_mg = models.FloatField(default=0, choices=DOSE_CHOICES)
+    notes = models.CharField(max_length=255, blank=True, default="")
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+
+    class Meta:
+        ordering = ["date"]
+
+    def __str__(self):
+        return f"أوزمبك - {self.patient.file_number} - {self.patient.user.full_name} ({self.date:%Y-%m-%d})"
+
+
+class OzempicCorrectionLog(models.Model):
+    """Doctor-only-visible audit trail for a secretary deleting/correcting
+    an OzempicDose entry — exact mirror of MounjaroCorrectionLog."""
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="ozempic_corrections")
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    original_date = models.DateTimeField()
+    original_weight = models.FloatField()
+    original_dose_mg = models.FloatField()
+    reason = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class HealthStatusNote(models.Model):
+    """Simple free-text health-status log for the secretary's consolidated
+    "ملف المتابعة" tab (§ متابعة حالة صحية) — append-only, both doctor and
+    secretary can add/view, nobody edits/deletes an existing entry (same
+    create-only spirit as DoctorNote/ProgressEntry)."""
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="health_status_notes")
+    note = models.TextField()
+    created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"حالة صحية - {self.patient.file_number} ({self.created_at:%Y-%m-%d})"
 
     class Meta:
         ordering = ["-created_at"]

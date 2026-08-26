@@ -2,7 +2,7 @@ import datetime
 from rest_framework import serializers
 from .models import (
     User, Patient, Assessment, NutritionPlan, ProgressEntry, DoctorNote, FollowUpRecord, MounjaroDose,
-    MounjaroCorrectionLog, LabTestEntry,
+    MounjaroCorrectionLog, OzempicDose, OzempicCorrectionLog, HealthStatusNote, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
@@ -105,6 +105,8 @@ class PatientProfileSerializer(serializers.Serializer):
     occupation = serializers.CharField(allow_blank=True)
     file_number = serializers.CharField(read_only=True)
     email = serializers.EmailField(source="user.email", read_only=True)
+    preferred_language = serializers.CharField(read_only=True)
+    next_followup_date = serializers.DateTimeField(read_only=True)
 
 
 class PatientProfileUpdateSerializer(serializers.Serializer):
@@ -407,6 +409,50 @@ class MounjaroCorrectionLogSerializer(serializers.ModelSerializer):
         model = MounjaroCorrectionLog
         fields = ["id", "actor_name", "original_date", "original_weight", "original_dose_mg", "reason", "created_at"]
         read_only_fields = fields
+
+
+class OzempicDoseSerializer(serializers.ModelSerializer):
+    patient_id = serializers.IntegerField(source="patient.id", read_only=True)
+
+    class Meta:
+        model = OzempicDose
+        fields = ["id", "patient_id", "date", "weight", "dose_mg", "notes"]
+        read_only_fields = ["id", "patient_id", "date"]
+
+
+class OzempicDoseCreateSerializer(serializers.Serializer):
+    weight = serializers.FloatField()
+    dose_mg = serializers.FloatField()
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_dose_mg(self, value):
+        allowed = [c[0] for c in OzempicDose.DOSE_CHOICES]
+        if value not in allowed:
+            raise serializers.ValidationError("جرعة غير صالحة")
+        return value
+
+
+class OzempicCorrectionLogSerializer(serializers.ModelSerializer):
+    actor_name = serializers.CharField(source="actor.full_name", read_only=True, default="")
+
+    class Meta:
+        model = OzempicCorrectionLog
+        fields = ["id", "actor_name", "original_date", "original_weight", "original_dose_mg", "reason", "created_at"]
+        read_only_fields = fields
+
+
+class HealthStatusNoteSerializer(serializers.ModelSerializer):
+    patient_id = serializers.IntegerField(source="patient.id", read_only=True)
+    created_by_name = serializers.CharField(source="created_by.full_name", read_only=True, default="")
+
+    class Meta:
+        model = HealthStatusNote
+        fields = ["id", "patient_id", "note", "created_by_name", "created_at"]
+        read_only_fields = ["id", "patient_id", "created_by_name", "created_at"]
+
+
+class NextFollowupDateSerializer(serializers.Serializer):
+    next_followup_date = serializers.DateTimeField(allow_null=True)
 
 
 class DoctorNoteSerializer(serializers.ModelSerializer):

@@ -726,6 +726,73 @@
         <div id="notesWrap"></div>
       </div>
     </div>
+
+    <!-- SECRETARY'S CONSOLIDATED FOLLOW-UP TAB — shown instead of tab-followup
+         for role=secretary only (see the tab-link click handler below). The
+         "متابعة مونجارو" and "متابعة وزن" sections reuse the existing
+         tab-mounjaro/tab-progress panels moved here at init() (same
+         elements/IDs, not duplicated); "العلاج أو الوصفة الطبية" reuses the
+         existing #rxCard, which is already role-gated read-only for
+         secretary (see rxRenderCurrentItems/rxRenderHistory canEdit checks).
+         Doctor's own tab-followup (FollowUpRecord form + #rxCard) is
+         completely untouched. -->
+    <div class="tab-panel" id="tab-followup-secretary" style="display:none;">
+      <div class="card">
+        <h3>🔹 موعد المتابعة القادمة</h3>
+        <div class="grid">
+          <div class="field">
+            <label>التاريخ والوقت</label>
+            <input type="datetime-local" id="nextFollowupInput">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button type="button" class="btn" id="nextFollowupSaveBtn">حفظ الموعد</button>
+          <button type="button" class="btn secondary" id="nextFollowupClearBtn">مسح الموعد</button>
+        </div>
+        <p id="nextFollowupCurrent" style="color:var(--muted); font-size:.85rem; margin-top:10px;"></p>
+      </div>
+
+      <div id="secMounjaroSlot"></div>
+
+      <div class="card">
+        <h3>🔹 متابعة جرعات أوزمبك الأسبوعية</h3>
+        <div id="ozempicSummary" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px;"></div>
+      </div>
+      <form id="ozempicForm" class="card">
+        <h3>🔹 إضافة جرعة جديدة</h3>
+        <div class="grid-3">
+          <div class="field"><label>الوزن (كغم)</label><input type="number" step="0.1" id="oz_weight" required></div>
+          <div class="field">
+            <label>الجرعة</label>
+            <select id="oz_dose" required>
+              <option value="0.25">0.25 ملغم</option>
+              <option value="0.5">0.5 ملغم</option>
+              <option value="1">1 ملغم</option>
+              <option value="2">2 ملغم</option>
+            </select>
+          </div>
+          <div class="field"><label>ملاحظات</label><input type="text" id="oz_notes"></div>
+        </div>
+        <div class="btn-row"><button type="submit" class="btn">إضافة الجرعة</button></div>
+      </form>
+      <div class="card">
+        <h3>🔹 سجل جرعات أوزمبك</h3>
+        <div id="ozempicTableWrap"></div>
+      </div>
+
+      <div id="secProgressSlot"></div>
+
+      <div class="card">
+        <h3>🔹 متابعة حالة صحية</h3>
+        <form id="healthStatusForm">
+          <div class="field"><textarea id="hs_note" placeholder="اكتب ملاحظة عن الحالة الصحية..." required></textarea></div>
+          <div class="btn-row"><button type="submit" class="btn">إضافة ملاحظة</button></div>
+        </form>
+        <div id="healthStatusWrap" style="margin-top:14px;"></div>
+      </div>
+
+      <div id="secPrescriptionSlot"></div>
+    </div>
   </div>
 
 <script src="../js/api.js"></script>
@@ -735,15 +802,32 @@ const role = Auth.getRole();
 refreshUserChip("userChip", (role === "doctor" ? "د. " : "") + Auth.getName());
 
 // Secretary gets the same page, but only the front-desk tabs — medical-only
-// tabs (plan/labtests/progress/notes) stay doctor-exclusive. Mounjaro dose
-// tracking is the one medical tab the secretary also gets full read/write
-// access to (she's often the one doing the weekly weigh-in/injection).
-const SECRETARY_HIDDEN_TABS = ["plan", "labtests", "progress", "notes"];
+// tabs (plan/labtests/notes) stay doctor-exclusive. "ملف المتابعة" (followup)
+// stays visible for her, but shows a different, consolidated panel instead
+// of the doctor's clinical FollowUpRecord form — see tab-followup-secretary
+// below and the tab-link click handler. Mounjaro/progress get their own
+// separate tab-links hidden for her since those sections now live inside
+// that consolidated tab instead (same underlying panels, just relocated).
+const SECRETARY_HIDDEN_TABS = ["plan", "labtests", "notes", "mounjaro", "progress"];
 if (role === "secretary") {
   document.getElementById("backLink").href = "../secretary/dashboard.html";
   document.querySelectorAll(".tab-link").forEach((link) => {
     if (SECRETARY_HIDDEN_TABS.includes(link.dataset.tab)) link.style.display = "none";
   });
+  // Relocate (not duplicate) the existing Mounjaro/Progress panels and the
+  // existing read-only-for-secretary prescription card into the new
+  // consolidated tab, so there is exactly one copy of each element/ID on
+  // the page — the doctor's own tab-followup is completely untouched since
+  // this block only runs for role === "secretary".
+  document.getElementById("secMounjaroSlot").appendChild(document.getElementById("tab-mounjaro"));
+  document.getElementById("tab-mounjaro").classList.remove("tab-panel");
+  document.getElementById("tab-mounjaro").style.display = "block";
+
+  document.getElementById("secProgressSlot").appendChild(document.getElementById("tab-progress"));
+  document.getElementById("tab-progress").classList.remove("tab-panel");
+  document.getElementById("tab-progress").style.display = "block";
+
+  document.getElementById("secPrescriptionSlot").appendChild(document.getElementById("rxCard"));
 }
 // Logging a NEW weekly weigh-in/dose is now the secretary's job in
 // practice — the doctor keeps full view + delete/correct rights on the
@@ -845,7 +929,10 @@ document.querySelectorAll(".tab-link").forEach(link => {
     document.querySelectorAll(".tab-link").forEach(l => l.classList.remove("active"));
     document.querySelectorAll(".tab-panel").forEach(p => p.style.display = "none");
     link.classList.add("active");
-    document.getElementById("tab-" + link.dataset.tab).style.display = "block";
+    // Secretary's "ملف المتابعة" click shows the consolidated panel instead
+    // of the doctor's clinical FollowUpRecord form (see tab-followup-secretary).
+    const targetTab = (link.dataset.tab === "followup" && role === "secretary") ? "followup-secretary" : link.dataset.tab;
+    document.getElementById("tab-" + targetTab).style.display = "block";
   });
 });
 
@@ -1897,6 +1984,180 @@ async function loadMounjaroCorrections() {
   }
 }
 
+// ---------------- OZEMPIC DOSE TRACKING (secretary's consolidated tab) ----------------
+// Structural mirror of the Mounjaro section above, for a different
+// medication — only shown inside tab-followup-secretary, i.e. only ever
+// reached by role === "secretary" in the current UI (the backend still
+// supports doctor add/edit/delete for consistency — see clinic/views.py).
+let ozempicEntries = [];
+let editingOzempicEntryId = null;
+
+async function loadOzempic() {
+  const entries = await apiFetch(`/api/patients/${patientId}/ozempic`);
+  ozempicEntries = entries;
+  const summary = document.getElementById("ozempicSummary");
+  const latest = entries.length ? entries[entries.length - 1] : null;
+  const summaryCards = [];
+  if (latest) {
+    summaryCards.push(`<span class="badge green">آخر وزن مسجّل: ${latest.weight} كغم</span>`);
+    summaryCards.push(`<span class="badge green">آخر جرعة: ${latest.dose_mg} ملغم</span>`);
+  }
+  summary.innerHTML = summaryCards.length ? summaryCards.join("") : `<span class="badge gray">لا توجد بيانات كافية بعد</span>`;
+
+  const wrap = document.getElementById("ozempicTableWrap");
+  if (!entries.length) {
+    wrap.innerHTML = `<div class="empty-state">لا توجد جرعات مسجلة بعد.</div>`;
+    return;
+  }
+  const rows = entries.slice().reverse().map((e, idx) => {
+    const orderNum = entries.length - idx;
+    return `
+    <tr>
+      <td>${fmtDate(e.date)}</td>
+      <td>الوزن${orderNum}: ${e.weight} كغم</td>
+      <td>الجرعة${orderNum}: ${e.dose_mg} ملغم</td>
+      <td>${escapeHtml(e.notes) || "-"}</td>
+      <td>
+        ${role === "doctor" ? `<button class="btn small success" onclick="editOzempicDose(${e.id})">تعديل</button>` : ""}
+        <button class="btn small danger" onclick="deleteOzempicDose(${e.id})">حذف</button>
+      </td>
+    </tr>`;
+  }).join("");
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>التاريخ</th><th>الوزن</th><th>الجرعة</th><th>ملاحظات</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function editOzempicDose(entryId) {
+  const entry = ozempicEntries.find((e) => e.id === entryId);
+  if (!entry) return;
+  editingOzempicEntryId = entryId;
+  document.getElementById("oz_weight").value = entry.weight;
+  document.getElementById("oz_dose").value = entry.dose_mg;
+  document.getElementById("oz_notes").value = entry.notes || "";
+  document.getElementById("ozempicForm").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function deleteOzempicDose(entryId) {
+  let body = null;
+  if (role === "secretary") {
+    const reason = prompt("سبب حذف/تصحيح هذا السجل (يظهر للطبيب):", "");
+    if (!reason || !reason.trim()) return;
+    body = JSON.stringify({ reason: reason.trim() });
+  } else {
+    if (!confirm("حذف هذه الجرعة؟")) return;
+  }
+  editingOzempicEntryId = null;
+  await apiFetch(`/api/patients/${patientId}/ozempic/${entryId}`, { method: "DELETE", body });
+  loadOzempic();
+}
+
+document.getElementById("ozempicForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    const payload = {
+      weight: parseFloat(document.getElementById("oz_weight").value),
+      dose_mg: parseFloat(document.getElementById("oz_dose").value),
+      notes: document.getElementById("oz_notes").value.trim(),
+    };
+    if (editingOzempicEntryId) {
+      await apiFetch(`/api/patients/${patientId}/ozempic/${editingOzempicEntryId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      editingOzempicEntryId = null;
+      showMsg(msgEl, "تم تحديث الجرعة ✅", "success");
+    } else {
+      await apiFetch(`/api/patients/${patientId}/ozempic`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      showMsg(msgEl, "تمت إضافة الجرعة ✅", "success");
+    }
+    document.getElementById("ozempicForm").reset();
+    loadOzempic();
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+// ---------------- HEALTH STATUS NOTES (secretary's consolidated tab) ----------------
+async function loadHealthStatus() {
+  const notes = await apiFetch(`/api/patients/${patientId}/health-status-notes`);
+  const wrap = document.getElementById("healthStatusWrap");
+  if (!notes.length) {
+    wrap.innerHTML = `<div class="empty-state">لا توجد ملاحظات بعد.</div>`;
+    return;
+  }
+  wrap.innerHTML = notes.map((n) => `
+    <div class="note-item">
+      <div class="meta">${fmtDate(n.created_at)}${n.created_by_name ? " — " + escapeHtml(n.created_by_name) : ""}</div>
+      <div>${escapeHtml(n.note)}</div>
+    </div>`).join("");
+}
+
+document.getElementById("healthStatusForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    const noteEl = document.getElementById("hs_note");
+    await apiFetch(`/api/patients/${patientId}/health-status-notes`, {
+      method: "POST",
+      body: JSON.stringify({ note: noteEl.value.trim() }),
+    });
+    noteEl.value = "";
+    loadHealthStatus();
+    showMsg(msgEl, "تمت إضافة الملاحظة ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+// ---------------- NEXT FOLLOW-UP DATE (secretary's consolidated tab) ----------------
+// Distinct from the doctor's "المتابعة بعد ..." interval booking inside her
+// own FollowUpRecord form — this is a simple, separately-tracked note field.
+function isoToDatetimeLocal(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function loadNextFollowupDate() {
+  const current = currentPatient ? currentPatient.next_followup_date : null;
+  document.getElementById("nextFollowupInput").value = isoToDatetimeLocal(current);
+  document.getElementById("nextFollowupCurrent").textContent = current
+    ? `الموعد الحالي المسجَّل: ${fmtDate(current)}`
+    : "لا يوجد موعد متابعة مسجَّل حالياً.";
+}
+
+document.getElementById("nextFollowupSaveBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  const val = document.getElementById("nextFollowupInput").value;
+  if (!val) { showMsg(msgEl, "اختر تاريخاً ووقتاً أولاً", "error"); return; }
+  try {
+    const result = await apiFetch(`/api/patients/${patientId}/next-followup-date`, {
+      method: "PUT",
+      body: JSON.stringify({ next_followup_date: new Date(val).toISOString() }),
+    });
+    if (currentPatient) currentPatient.next_followup_date = result.next_followup_date;
+    loadNextFollowupDate();
+    showMsg(msgEl, "تم حفظ موعد المتابعة القادمة ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("nextFollowupClearBtn").addEventListener("click", async () => {
+  hideMsg(msgEl);
+  try {
+    const result = await apiFetch(`/api/patients/${patientId}/next-followup-date`, {
+      method: "PUT",
+      body: JSON.stringify({ next_followup_date: null }),
+    });
+    if (currentPatient) currentPatient.next_followup_date = result.next_followup_date;
+    loadNextFollowupDate();
+    showMsg(msgEl, "تم مسح موعد المتابعة القادمة", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
 function computeNextVisitDate(referenceDate, intervalValue, intervalUnit) {
   if (!intervalValue) return null;
   const d = new Date(referenceDate);
@@ -1958,7 +2219,7 @@ async function loadProgress() {
       <td>${e.bmi}</td>
       <td>${e.commitment ? `<span class="badge green">${e.commitment}</span>` : "-"}</td>
       <td>${escapeHtml(e.notes) || "-"}</td>
-      <td><button class="btn small danger" onclick="deleteProgress(${e.id})">حذف</button></td>
+      <td>${role === "doctor" ? `<button class="btn small danger" onclick="deleteProgress(${e.id})">حذف</button>` : ""}</td>
     </tr>`).join("");
   wrap.innerHTML = `
     <table>
@@ -2628,12 +2889,16 @@ document.getElementById("current_weight").addEventListener("input", () => {
     rxPopulateCategories();
     await loadRx();
     await loadMounjaro();
+    await loadProgress();
     if (role !== "secretary") {
       await loadNpFoods();
       await loadNutritionPlans();
       await loadLabTests();
-      await loadProgress();
       await loadNotes();
+    } else {
+      await loadOzempic();
+      await loadHealthStatus();
+      loadNextFollowupDate();
     }
   } catch (err) {
     showMsg(msgEl, err.message, "error");
