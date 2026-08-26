@@ -13,6 +13,13 @@
     padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: .8rem;
   }
   .alert-note { font-size: .74rem; color: var(--danger); font-weight: 700; margin-top: 2px; }
+  /* Keep "المريض وصل" + "فتح الملف" on one line instead of wrapping onto
+     two — the column shrinks the buttons' text/padding a bit first, and
+     only falls back to horizontal scroll (via #tableWrap below) if the
+     viewport is still too narrow. */
+  .actions-cell { display: flex; flex-wrap: nowrap; gap: 6px; white-space: nowrap; }
+  .actions-cell .btn { padding: 6px 9px; font-size: .78rem; }
+  #tableWrap { overflow-x: auto; }
 </style>
 </head>
 <body>
@@ -160,8 +167,10 @@ async function load() {
             : `<span class="badge gray">لم يصل</span>`}
         </td>
         <td>
-          <button class="btn small ${alert ? "" : "secondary"}" onclick="markArrived(${p.patient_id})" ${p.checked_in ? "disabled" : ""}>المريض وصل</button>
-          <a class="btn small secondary" href="../doctor/patient.html?id=${p.patient_id}">فتح الملف</a>
+          <div class="actions-cell">
+            <button class="btn small ${alert ? "" : "secondary"}" onclick="markArrived(${p.patient_id})" ${p.checked_in ? "disabled" : ""}>المريض وصل</button>
+            <a class="btn small secondary" href="../doctor/patient.html?id=${p.patient_id}">فتح الملف</a>
+          </div>
         </td>
       </tr>`;
     }).join("");
