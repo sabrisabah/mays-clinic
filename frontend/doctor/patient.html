@@ -59,11 +59,8 @@
         </div>
         <div class="btn-row"><button type="submit" class="btn">حفظ المعلومات الشخصية</button></div>
       </form>
-    </div>
 
-    <!-- ASSESSMENT TAB -->
-    <div class="tab-panel" id="tab-assessment" style="display:none;">
-      <form id="assessForm">
+      <form id="anthroGoalForm">
         <div class="card">
           <h3>🔹 القياسات الجسمية</h3>
           <div class="grid-3">
@@ -80,6 +77,44 @@
           </div>
         </div>
 
+        <div class="card">
+          <h3>🔹 الهدف العلاجي</h3>
+          <div id="goalLockedNote" class="msg error" style="display:none; margin-bottom:12px;">
+            🔒 هذا القسم مقفل بعد فتح الطبيب لملف المريض — أي تعديل على الهدف أو الوزن الحالي/المستهدف يحتاج الطبيب.
+          </div>
+          <div class="grid" id="goalSectionFields">
+            <div class="field"><label>الهدف</label>
+              <div class="radio-row"><label class="radio-item"><input type="radio" name="goal_type" value="نزول وزن"> نزول وزن</label>
+              <label class="radio-item"><input type="radio" name="goal_type" value="زيادة وزن"> زيادة وزن</label>
+              <label class="radio-item"><input type="radio" name="goal_type" value="تثبيت"> تثبيت</label>
+              <label class="radio-item"><input type="radio" name="goal_type" value="تحسين صحي"> تحسين صحي</label></div>
+            </div>
+            <div class="field">
+              <label>الوزن الحالي</label>
+              <input type="number" step="0.1" id="current_weight">
+              <span id="currentWeightLockedNote" style="display:none; font-size:.78rem; color:var(--muted);">🔒 ثابت منذ أول حفظ — وزن البداية عند تحديد الهدف، لا يتغير لاحقاً.</span>
+            </div>
+            <div class="field"><label>الوزن المستهدف</label><input type="number" step="0.1" id="target_weight"></div>
+            <div class="field">
+              <label>المدة المتوقعة</label>
+              <div style="display:flex; gap:8px;">
+                <select id="goal_duration_unit" style="flex:1;">
+                  <option value="يوم">يوم</option>
+                  <option value="أسبوع">أسبوع</option>
+                  <option value="شهر">شهر</option>
+                </select>
+                <input type="number" min="1" id="goal_duration_value" style="flex:1;" placeholder="العدد">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="btn-row"><button type="submit" class="btn">حفظ القياسات والهدف العلاجي</button></div>
+      </form>
+    </div>
+
+    <!-- ASSESSMENT TAB -->
+    <div class="tab-panel" id="tab-assessment" style="display:none;">
+      <form id="assessForm">
         <div class="card">
           <h3>🔹 التاريخ الطبي</h3>
           <div class="field" style="margin-bottom:12px;">
@@ -198,38 +233,6 @@
               <div class="radio-row"><label class="radio-item"><input type="radio" name="sugar_intake" value="منخفض"> منخفض</label>
               <label class="radio-item"><input type="radio" name="sugar_intake" value="متوسط"> متوسط</label>
               <label class="radio-item"><input type="radio" name="sugar_intake" value="عالي"> عالي</label></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>🔹 الهدف العلاجي</h3>
-          <div id="goalLockedNote" class="msg error" style="display:none; margin-bottom:12px;">
-            🔒 هذا القسم مقفل بعد فتح الطبيب لملف المريض — أي تعديل على الهدف أو الوزن الحالي/المستهدف يحتاج الطبيب.
-          </div>
-          <div class="grid" id="goalSectionFields">
-            <div class="field"><label>الهدف</label>
-              <div class="radio-row"><label class="radio-item"><input type="radio" name="goal_type" value="نزول وزن"> نزول وزن</label>
-              <label class="radio-item"><input type="radio" name="goal_type" value="زيادة وزن"> زيادة وزن</label>
-              <label class="radio-item"><input type="radio" name="goal_type" value="تثبيت"> تثبيت</label>
-              <label class="radio-item"><input type="radio" name="goal_type" value="تحسين صحي"> تحسين صحي</label></div>
-            </div>
-            <div class="field">
-              <label>الوزن الحالي</label>
-              <input type="number" step="0.1" id="current_weight">
-              <span id="currentWeightLockedNote" style="display:none; font-size:.78rem; color:var(--muted);">🔒 ثابت منذ أول حفظ — وزن البداية عند تحديد الهدف، لا يتغير لاحقاً.</span>
-            </div>
-            <div class="field"><label>الوزن المستهدف</label><input type="number" step="0.1" id="target_weight"></div>
-            <div class="field">
-              <label>المدة المتوقعة</label>
-              <div style="display:flex; gap:8px;">
-                <select id="goal_duration_unit" style="flex:1;">
-                  <option value="يوم">يوم</option>
-                  <option value="أسبوع">أسبوع</option>
-                  <option value="شهر">شهر</option>
-                </select>
-                <input type="number" min="1" id="goal_duration_value" style="flex:1;" placeholder="العدد">
-              </div>
             </div>
           </div>
         </div>
@@ -2313,7 +2316,7 @@ document.getElementById("profileForm").addEventListener("submit", async (e) => {
   } catch (err) { showMsg(msgEl, err.message, "error"); }
 });
 
-document.getElementById("assessForm").addEventListener("submit", async (e) => {
+document.getElementById("anthroGoalForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideMsg(msgEl);
   try {
@@ -2322,6 +2325,23 @@ document.getElementById("assessForm").addEventListener("submit", async (e) => {
       height: heightToMeters(document.getElementById("height").value),
       waist: parseFloat(document.getElementById("waist").value) || 0,
       hip: parseFloat(document.getElementById("hip").value) || 0,
+      goal_type: getRadioValue("goal_type"),
+      current_weight: parseFloat(document.getElementById("current_weight").value) || 0,
+      target_weight: parseFloat(document.getElementById("target_weight").value) || 0,
+      goal_duration: getGoalDuration(),
+    };
+    const result = await apiFetch(`/api/patients/${patientId}/assessment`, { method: "PUT", body: JSON.stringify(payload) });
+    updateComputed(result.bmi, result.bmi_class, result.whr, result.whr_class, result.activity_level);
+    lastAssessment = result;
+    showMsg(msgEl, "تم حفظ القياسات والهدف العلاجي ✅", "success");
+  } catch (err) { showMsg(msgEl, err.message, "error"); }
+});
+
+document.getElementById("assessForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  hideMsg(msgEl);
+  try {
+    const payload = {
       medical_history: getCheckedValues("medicalHistoryGroup"),
       medical_other: document.getElementById("medical_other").value.trim(),
       surgeries: document.getElementById("surgeries").value.trim(),
@@ -2349,10 +2369,6 @@ document.getElementById("assessForm").addEventListener("submit", async (e) => {
       water_liters: parseFloat(document.getElementById("water_liters").value) || 0,
       coffee_per_day: parseInt(document.getElementById("coffee_per_day").value) || 0,
       sugar_intake: getRadioValue("sugar_intake"),
-      goal_type: getRadioValue("goal_type"),
-      current_weight: parseFloat(document.getElementById("current_weight").value) || 0,
-      target_weight: parseFloat(document.getElementById("target_weight").value) || 0,
-      goal_duration: getGoalDuration(),
     };
     const result = await apiFetch(`/api/patients/${patientId}/assessment`, { method: "PUT", body: JSON.stringify(payload) });
     updateComputed(result.bmi, result.bmi_class, result.whr, result.whr_class, result.activity_level);

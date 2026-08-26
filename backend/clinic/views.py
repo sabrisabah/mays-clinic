@@ -289,10 +289,19 @@ class AssessmentView(APIView):
         if "height" in data:
             data["height"] = normalize_height_m(data.get("height", 0))
 
-        bmi, bmi_class = compute_bmi(data.get("weight", 0), data.get("height", 0))
-        whr = compute_whr(data.get("waist", 0), data.get("hip", 0))
+        # BMI/WHR/activity_level are derived from weight/height/waist/hip/
+        # sport_days_per_week — but the frontend now saves anthropometrics+
+        # goal and the rest of the assessment as two separate partial PUTs,
+        # so a field not present in THIS request doesn't mean it's 0; it
+        # means "unchanged", and the derived values must be recomputed from
+        # the assessment's current (possibly just-updated-above) state, not
+        # from this request's payload alone.
+        bmi, bmi_class = compute_bmi(
+            data.get("weight", assessment.weight), data.get("height", assessment.height)
+        )
+        whr = compute_whr(data.get("waist", assessment.waist), data.get("hip", assessment.hip))
         whr_class = compute_whr_class(whr, patient.gender)
-        activity_level = compute_activity_level(data.get("sport_days_per_week", 0))
+        activity_level = compute_activity_level(data.get("sport_days_per_week", assessment.sport_days_per_week))
 
         for field, value in data.items():
             setattr(assessment, field, value)
