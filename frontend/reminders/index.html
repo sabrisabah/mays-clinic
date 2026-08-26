@@ -6,6 +6,17 @@
 <title>مركز تذكيرات WhatsApp — عيادة دكتورة ميس الربيعي</title>
 <link rel="stylesheet" href="../css/style.css">
 <style>
+  /* Base card look (padding/rounding/white text) was missing here — the
+     gradient backgrounds were defined below but the value/label text had
+     no explicit color, so it rendered in the default dark body text on
+     top of these dark gradients and was unreadable. Matches the working
+     .grad-card rule already used in doctor/dashboard.html. */
+  .grad-card {
+    border-radius: var(--radius); padding: 18px 16px; text-align: center; box-shadow: var(--shadow);
+    color: #fff;
+  }
+  .grad-card .value { font-size: 1.8rem; font-weight: 800; }
+  .grad-card .label { font-size: .82rem; margin-top: 6px; opacity: .95; }
   .grad-card.purple1 { background: linear-gradient(135deg, #7a5aa8, #4a2f6e); }
   .grad-card.teal1 { background: linear-gradient(135deg, #2fa89b, #1a6e64); }
   .grad-card.orange1 { background: linear-gradient(135deg, #d98a3d, #b9631a); }
