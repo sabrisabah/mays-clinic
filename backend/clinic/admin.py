@@ -14,13 +14,42 @@ from .models import (
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
 )
 from .export import build_all_patients_workbook
-from .utils import compute_bmi, compute_whr, compute_whr_class, compute_activity_level, normalize_height_m
+from .utils import compute_bmi, compute_whr, compute_whr_class, compute_activity_level, normalize_height_m, log_action
 
 # Custom login page (silver background) — see templates/clinic/admin_login.html
 admin.site.login_template = "clinic/admin_login.html"
 admin.site.site_header = "عيادة دكتورة ميس الربيعي للتغذية"
 admin.site.site_title = "إدارة عيادة دكتورة ميس الربيعي"
 admin.site.index_title = "لوحة التحكم"
+
+
+def _force_unlock_patient_deletion(patient, actor):
+    """Invoice.patient is deliberately on_delete=PROTECT everywhere in the
+    app (see Invoice's docstring — "financial records are never silently
+    destroyed") — that's what makes the doctor-facing delete button in the
+    frontend correctly refuse to delete a patient with billing history
+    (see clinic/views.py::PatientDetailView.delete).
+
+    /admin is a different, more trusted context (Django staff/superuser
+    login only, not reachable by a doctor/secretary account), and the
+    clinic owner explicitly asked for an unconditional override here — so
+    this deletes the patient's invoices (which cascades their InvoiceItems,
+    and nulls out any AuditLogEntry.invoice references via SET_NULL) before
+    the patient/user deletion proceeds, clearing the only thing that would
+    otherwise block it. Logs what it did first, since the invoices
+    themselves won't exist afterward to look back at.
+    """
+    invoices = list(patient.invoices.all())
+    if invoices:
+        log_action(
+            actor, "patient_force_deleted_admin",
+            detail=(
+                f"حذف قسري من /admin: {patient.file_number} - {patient.user.full_name} "
+                f"(تضمّن حذف {len(invoices)} فاتورة: "
+                f"{'، '.join('#' + str(i.invoice_number) for i in invoices)})"
+            ),
+        )
+        patient.invoices.all().delete()
 
 
 class UserResource(resources.ModelResource):
@@ -81,13 +110,48 @@ class UserAdmin(ImportExportModelAdmin, BaseUserAdmin):
             "fields": ("email", "full_name", "role", "phone", "password1", "password2", "is_staff", "is_superuser"),
         }),
     )
+    actions = ["force_delete_selected"]
+
+    def force_delete_selected(self, request, queryset):
+        # Django's normal delete confirmation page pre-computes the deletion
+        # graph via get_deleted_objects() and refuses to even show a confirm
+        # button when it hits a PROTECT relation — so overriding
+        # delete_model/delete_queryset alone can't bypass this, since
+        # Django never calls them in that case. An action sidesteps that
+        # pre-check entirely and just does the deletes directly.
+        count = 0
+        for user in queryset:
+            patient = getattr(user, "patient", None)
+            if patient is not None:
+                _force_unlock_patient_deletion(patient, request.user)
+            user.delete()
+            count += 1
+        self.message_user(request, f"تم حذف {count} حساب نهائياً (بما في ذلك أي فواتير مرتبطة).")
+    force_delete_selected.short_description = "🗑️ حذف نهائي (حتى لو مرتبط بفواتير أو أي شيء آخر)"
 
 
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
     list_display = ["file_number", "user", "age", "gender", "created_at"]
     search_fields = ["file_number", "user__full_name", "user__email"]
-    actions = ["export_all_data"]
+    actions = ["export_all_data", "force_delete_patients"]
+
+    def force_delete_patients(self, request, queryset):
+        # Django's normal "Delete selected patients" action pre-checks the
+        # deletion graph and refuses to proceed at all once it hits a
+        # PROTECT relation (Invoice.patient) — it never even reaches
+        # delete_queryset in that case, so overriding that alone doesn't
+        # help. This action bypasses that pre-check entirely: it deletes
+        # each selected patient's invoices first (see
+        # _force_unlock_patient_deletion), then deletes their login account
+        # (which cascades everything else — assessment, doses, notes, etc.).
+        count = 0
+        for patient in queryset:
+            _force_unlock_patient_deletion(patient, request.user)
+            patient.user.delete()
+            count += 1
+        self.message_user(request, f"تم حذف {count} مريض نهائياً (بما في ذلك أي فواتير مرتبطة).")
+    force_delete_patients.short_description = "🗑️ حذف نهائي (حتى لو مرتبط بفواتير أو أي شيء آخر)"
 
     def export_all_data(self, request, queryset):
         """Bulk export (select rows above, or "تحديد كل X مريض" to grab
