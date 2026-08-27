@@ -18,9 +18,14 @@
   <div class="container">
     <a href="dashboard.html" id="backLink" class="btn secondary small">→ العودة لقائمة المراجعين</a>
 
-    <div class="card" style="margin-top:12px;">
-      <h2 id="patientTitle">جاري التحميل...</h2>
-      <p style="color:var(--muted); margin:0;">رقم الملف: <b id="fileNumber">-</b></p>
+    <div class="card" style="margin-top:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <div>
+        <h2 id="patientTitle" style="margin:0;">جاري التحميل...</h2>
+        <p style="color:var(--muted); margin:4px 0 0;">رقم الملف: <b id="fileNumber">-</b></p>
+      </div>
+      <!-- Doctor-only (see role check below) — dumps every record the clinic
+           holds on this patient, including billing, into one .xlsx file. -->
+      <button type="button" id="exportBtn" class="btn small secondary" style="display:none;">⬇️ تصدير كل بيانات المريض (Excel)</button>
     </div>
 
     <div id="msg" class="msg" style="display:none;"></div>
@@ -856,6 +861,28 @@ const params = new URLSearchParams(location.search);
 const patientId = params.get("id");
 const msgEl = document.getElementById("msg");
 if (!patientId) location.href = role === "secretary" ? "../secretary/dashboard.html" : "dashboard.html";
+
+// Full-data Excel export — doctor-only (includes billing/الحسابات, which
+// the secretary shouldn't be able to pull; backend also enforces this via
+// IsDoctor, this is just the UI-level hide).
+if (role === "doctor") {
+  const exportBtn = document.getElementById("exportBtn");
+  exportBtn.style.display = "";
+  exportBtn.addEventListener("click", async () => {
+    exportBtn.disabled = true;
+    const originalText = exportBtn.textContent;
+    exportBtn.textContent = "⏳ جاري التصدير...";
+    hideMsg(msgEl);
+    try {
+      await downloadAuthedFile(`/api/patients/${patientId}/export`, `ملف_المريض_${patientId}.xlsx`);
+    } catch (err) {
+      showMsg(msgEl, err.message, "error");
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.textContent = originalText;
+    }
+  });
+}
 let lastAssessment = null;
 let lastFollowup = null;
 let currentPatient = null;

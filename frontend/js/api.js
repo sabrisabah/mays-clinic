@@ -87,6 +87,46 @@ async function apiFetch(path, options = {}) {
   return data;
 }
 
+// apiFetch always parses the response as JSON, so it can't be used for
+// binary responses (e.g. the doctor's patient-export .xlsx). This does the
+// same authenticated fetch but streams the response as a Blob and triggers
+// a normal browser "save file" via a throwaway <a download> — a plain
+// <a href="/api/..."> wouldn't carry the Authorization header at all.
+async function downloadAuthedFile(path, fallbackFilename) {
+  const token = Auth.getToken();
+  const headers = {};
+  if (token) headers["Authorization"] = "Bearer " + token;
+
+  const res = await fetch(API_BASE + path, { headers });
+  if (res.status === 401 && token) {
+    Auth.clear();
+    window.location.href = rootPath() + "index.html";
+    return;
+  }
+  if (!res.ok) {
+    let data = null;
+    try { data = await res.json(); } catch (e) { /* not JSON */ }
+    throw new Error(extractErrorMessage(data));
+  }
+
+  // Prefer the server-provided filename (Content-Disposition) over the
+  // caller's fallback, so renames on the backend just work.
+  let filename = fallbackFilename;
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  if (match) filename = decodeURIComponent(match[1]);
+
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 // Django REST Framework returns either {"detail": "..."} (permission/auth
 // errors) or field-keyed validation errors like {"phone": ["..."], ...}.
 // Flatten either shape into one readable message.

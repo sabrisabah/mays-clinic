@@ -1,6 +1,9 @@
+import io
 from datetime import datetime, timedelta
+from urllib.parse import quote
 from django.db import IntegrityError
 from django.db.models import Q
+from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -17,6 +20,7 @@ from .models import (
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
 )
 from .permissions import IsDoctor, IsClinicStaff
+from .export import build_patient_workbook
 from .utils import (
     compute_bmi,
     compute_whr,
@@ -1670,3 +1674,29 @@ class RevenueReportView(APIView):
             "mounjaro": [{"dose": k, **v} for k, v in mounjaro.items()],
             "invoice_count": qs.count(),
         })
+
+
+class PatientExportView(APIView):
+    """Doctor-only: dumps every record the clinic holds on one patient
+    (profile, assessment, follow-up file, progress/dose/lab logs,
+    prescriptions, nutrition plans, notes, and billing) into a single
+    multi-sheet .xlsx file — see clinic/export.py::build_patient_workbook
+    for the actual sheet layout. Excludes the secretary from this endpoint
+    on purpose since it surfaces invoice/billing data ("الحسابات")."""
+    permission_classes = [IsDoctor]
+
+    def get(self, request, patient_id):
+        patient = get_patient_or_403(request, patient_id)
+        wb = build_patient_workbook(patient)
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        safe_name = (patient.user.full_name or patient.file_number).strip().replace(" ", "_")
+        filename = f"{patient.file_number}_{safe_name}.xlsx"
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
+        return response

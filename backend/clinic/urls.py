@@ -25,6 +25,7 @@ urlpatterns = [
     path("patients/<int:patient_id>/lab-tests", views.LabTestEntryListView.as_view()),
     path("patients/<int:patient_id>/lab-tests/<int:entry_id>", views.LabTestEntryDeleteView.as_view()),
     path("patients/<int:patient_id>/appointment", views.AppointmentView.as_view()),
+    path("patients/<int:patient_id>/export", views.PatientExportView.as_view()),
 
     path("dashboard/stats", views.DoctorDashboardStatsView.as_view()),
 
