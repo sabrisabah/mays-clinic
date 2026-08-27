@@ -284,3 +284,246 @@ def build_patient_workbook(patient):
     _autosize(ws)
 
     return wb
+
+
+def build_all_patients_workbook(patients):
+    """Same idea as build_patient_workbook, but for many patients at once —
+    every sheet becomes "one row per record across ALL selected patients"
+    instead of "one row per field for one patient", with رقم الملف/الاسم
+    columns added so rows stay traceable to their patient. Used by the
+    /admin "تصدير كل البيانات المحددة" action on PatientAdmin (see
+    clinic/admin.py) — /admin already requires Django staff/superuser login,
+    so no extra doctor-role check is needed here the way the single-patient
+    export needs IsDoctor.
+
+    Login credentials: only رقم الهاتف (phone, the actual login identifier)
+    is included — passwords are one-way hashed and can never be exported in
+    a usable form, by design (see User.set_password/AbstractUser).
+    """
+    patients = list(
+        patients.select_related("user", "assessment", "followup")
+        .prefetch_related(
+            "progress_entries__created_by",
+            "mounjaro_doses__created_by",
+            "ozempic_doses__created_by",
+            "lab_test_entries__created_by",
+            "prescriptions__created_by", "prescriptions__items__medication", "prescriptions__items__medication_dose",
+            "nutrition_plans__created_by", "nutrition_plans__meals__items__food",
+            "notes__created_by",
+            "health_status_notes__created_by",
+            "invoices__created_by", "invoices__items",
+        )
+    )
+
+    def pid(p):
+        return [p.file_number, p.user.full_name]
+
+    wb = openpyxl.Workbook()
+
+    # ---- 1. المرضى ----
+    ws = _new_sheet(wb, "المرضى", [
+        "رقم الملف", "الاسم الكامل", "رقم الهاتف (تسجيل الدخول)", "العمر", "الجنس",
+        "العنوان", "المهنة", "اللغة المفضلة", "تاريخ التسجيل", "تاريخ أول فتح للطبيب",
+        "موعد المتابعة القادم",
+    ], first=True)
+    for p in patients:
+        ws.append([
+            p.file_number, p.user.full_name, p.user.phone or "", p.age, p.gender,
+            p.address, p.occupation, p.get_preferred_language_display(),
+            _fmt_dt(p.created_at), _fmt_dt(p.doctor_first_opened_at), _fmt_dt(p.next_followup_date),
+        ])
+    _autosize(ws)
+
+    # ---- 2. القياسات والهدف العلاجي ----
+    ws = _new_sheet(wb, "القياسات والهدف العلاجي", [
+        "رقم الملف", "الاسم", "تاريخ الزيارة", "وصل المريض؟", "تم حجز الموعد؟",
+        "الوزن (كغم)", "الطول (م)", "BMI", "تصنيف BMI", "محيط الخصر", "محيط الورك",
+        "WHR", "تصنيف WHR", "الهدف", "الوزن الحالي (ثابت)", "الوزن المستهدف",
+        "المدة المتوقعة", "الاستمارة محفوظة نهائياً؟", "آخر تحديث",
+    ])
+    for p in patients:
+        a = getattr(p, "assessment", None)
+        if not a:
+            continue
+        ws.append(pid(p) + [
+            _fmt_dt(a.visit_date), _bool(a.checked_in), _bool(a.appointment_booked),
+            a.weight, a.height, a.bmi, a.bmi_class, a.waist, a.hip, a.whr, a.whr_class,
+            a.goal_type, a.current_weight, a.target_weight, a.goal_duration,
+            _bool(a.is_submitted), _fmt_dt(a.updated_at),
+        ])
+    _autosize(ws)
+
+    # ---- 3. التاريخ الطبي ونمط الحياة ----
+    ws = _new_sheet(wb, "التاريخ الطبي ونمط الحياة", [
+        "رقم الملف", "الاسم", "الأمراض", "أمراض أخرى", "عمليات جراحية", "حساسية غذائية",
+        "مشاكل هضمية", "الأدوية الحالية", "أدوية إنقاص الوزن", "أخرى (أدوية إنقاص وزن)",
+        "المكملات", "النشاط البدني", "نوع الرياضة", "أيام الرياضة/أسبوع", "ساعات النوم",
+        "جودة النوم", "التوتر", "الشهية", "الجوع الليلي", "اشتهاء السكريات",
+        "مقاومة الإنسولين (تقييم سريع)", "أعراض هرمونية", "عدد الوجبات/يوم", "سناك",
+        "نمط الأكل", "أطعمة مفضلة", "أطعمة غير مفضلة", "الماء (لتر)", "القهوة/يوم", "استهلاك السكريات",
+    ])
+    for p in patients:
+        a = getattr(p, "assessment", None)
+        if not a:
+            continue
+        ws.append(pid(p) + [
+            _list_join(a.medical_history), a.medical_other, a.surgeries, a.food_allergy,
+            _list_join(a.digestive_issues), a.current_medications, _list_join(a.weight_loss_meds),
+            a.weight_loss_meds_other, a.supplements, a.activity_level, a.sport_type,
+            a.sport_days_per_week, a.sleep_hours, a.sleep_quality, a.stress_level, a.appetite,
+            _bool(a.night_hunger), _bool(a.sugar_craving), _bool(a.insulin_resistance),
+            _bool(a.hormonal_symptoms), a.meals_per_day, _bool(a.snack), a.eating_type,
+            a.favorite_foods, a.disliked_foods, a.water_liters, a.coffee_per_day, a.sugar_intake,
+        ])
+    _autosize(ws)
+
+    # ---- 4. ملف المتابعة ----
+    ws = _new_sheet(wb, "ملف المتابعة", [
+        "رقم الملف", "الاسم", "نتائج التحاليل", "نوع النظام الغذائي", "تفاصيل النظام الغذائي",
+        "سعرات النظام الغذائي", "الإبر", "أدوية ومكملات", "جلسات تكسير الشحم",
+        "مدة المتابعة القادمة", "غرض المتابعة", "أُنشئ/عُدّل بواسطة", "آخر تحديث",
+    ])
+    for p in patients:
+        followup = getattr(p, "followup", None)
+        if not followup:
+            continue
+        ws.append(pid(p) + [
+            _dict_join(followup.lab_results), followup.diet_type, followup.diet_details,
+            followup.diet_calories, _list_join(followup.treatment_injections),
+            followup.treatment_medications, _bool(followup.treatment_fat_burning_sessions),
+            f"{followup.followup_interval_value or ''} {followup.followup_interval_unit}".strip(),
+            _list_join(followup.followup_purpose), _who(followup.created_by), _fmt_dt(followup.updated_at),
+        ])
+    _autosize(ws)
+
+    # ---- 5. متابعة التقدم ----
+    ws = _new_sheet(wb, "متابعة التقدم", ["رقم الملف", "الاسم", "التاريخ", "الوزن", "BMI", "الالتزام", "ملاحظات", "أُدخل بواسطة"])
+    for p in patients:
+        for e in p.progress_entries.all():
+            ws.append(pid(p) + [_fmt_dt(e.date), e.weight, e.bmi, e.commitment, e.notes, _who(e.created_by)])
+    _autosize(ws)
+
+    # ---- 6. جرعات مونجارو ----
+    ws = _new_sheet(wb, "جرعات مونجارو", ["رقم الملف", "الاسم", "التاريخ", "الوزن", "الجرعة (ملغم)", "ملاحظات", "أُدخل بواسطة"])
+    for p in patients:
+        for e in p.mounjaro_doses.all():
+            ws.append(pid(p) + [_fmt_dt(e.date), e.weight, e.dose_mg, e.notes, _who(e.created_by)])
+    _autosize(ws)
+
+    # ---- 7. جرعات أوزمبك ----
+    ws = _new_sheet(wb, "جرعات أوزمبك", ["رقم الملف", "الاسم", "التاريخ", "الوزن", "الجرعة (ملغم)", "تركيز القلم", "ملاحظات", "أُدخل بواسطة"])
+    for p in patients:
+        for e in p.ozempic_doses.all():
+            ws.append(pid(p) + [
+                _fmt_dt(e.date), e.weight, e.dose_mg,
+                e.get_pen_strength_display() if e.pen_strength else "", e.notes, _who(e.created_by),
+            ])
+    _autosize(ws)
+
+    # ---- 8. متابعة التحاليل ----
+    ws = _new_sheet(wb, "متابعة التحاليل", ["رقم الملف", "الاسم", "التاريخ", "نتائج التحاليل", "ملاحظات أخرى", "أُدخل بواسطة"])
+    for p in patients:
+        for e in p.lab_test_entries.all():
+            ws.append(pid(p) + [_fmt_dt(e.date), _dict_join(e.lab_results), e.other_notes, _who(e.created_by)])
+    _autosize(ws)
+
+    # ---- 9. الوصفات الطبية ----
+    ws = _new_sheet(wb, "الوصفات الطبية", [
+        "رقم الملف", "الاسم", "تاريخ الوصفة", "الدواء/المكمل", "الجرعة", "طريقة الاستخدام",
+        "التكرار", "التوقيت", "المدة", "تاريخ البدء", "تاريخ الانتهاء", "الكمية",
+        "الحالة العلاجية", "التعليمات", "ملاحظات الصنف", "ملاحظات عامة للوصفة", "كُتبت بواسطة",
+    ])
+    for p in patients:
+        for pres in p.prescriptions.all():
+            items = list(pres.items.all())
+            if not items:
+                ws.append(pid(p) + [_fmt_dt(pres.prescription_date), "", "", "", "", "", "", "", "", "", "", "", "", pres.general_notes, _who(pres.created_by)])
+                continue
+            for it in items:
+                dose = it.medication_dose.display_name if it.medication_dose_id else it.custom_dose
+                duration = f"{it.duration_value or ''} {it.duration_unit}".strip()
+                ws.append(pid(p) + [
+                    _fmt_dt(pres.prescription_date), it.display_name(), dose, it.route, it.frequency, it.timing,
+                    duration, _fmt_date(it.start_date), _fmt_date(it.end_date), it.quantity, it.treatment_status,
+                    it.instructions, it.notes, pres.general_notes, _who(pres.created_by),
+                ])
+    _autosize(ws)
+
+    # ---- 10. الخطط الغذائية ----
+    ws = _new_sheet(wb, "الخطط الغذائية", [
+        "رقم الملف", "الاسم", "اسم الخطة", "الحالة", "الإصدار", "تاريخ البدء", "المدة",
+        "هدف العلاج", "مستوى النشاط", "BMR", "TDEE", "السعرات المستهدفة", "سبب الاستهداف",
+        "بروتين %", "كارب %", "دهون %", "ملاحظات للطبيب", "ملاحظات للمريض",
+        "أُنشئت بواسطة", "تاريخ الاعتماد", "تاريخ الإنشاء",
+    ])
+    for p in patients:
+        for plan in p.nutrition_plans.all():
+            duration = f"{plan.duration_value or ''} {plan.duration_unit}".strip()
+            ws.append(pid(p) + [
+                plan.name, plan.get_status_display(), plan.version, _fmt_date(plan.start_date), duration,
+                plan.treatment_objective, plan.activity_level, plan.bmr, plan.tdee, plan.calorie_target,
+                plan.target_reason, plan.protein_pct, plan.carbs_pct, plan.fat_pct, plan.plan_notes,
+                plan.patient_notes, _who(plan.created_by), _fmt_dt(plan.approved_at), _fmt_dt(plan.created_at),
+            ])
+    _autosize(ws)
+
+    # ---- 11. تفاصيل الوجبات ----
+    ws = _new_sheet(wb, "تفاصيل الوجبات", [
+        "رقم الملف", "الاسم", "الخطة (اسم/إصدار)", "الوجبة", "وقت الوجبة", "الصنف",
+        "الكمية", "الوحدة", "الحالة", "سعرات", "بروتين", "كارب", "دهون", "بديل", "تعليمات",
+    ])
+    for p in patients:
+        for plan in p.nutrition_plans.all():
+            plan_label = f"{plan.name or 'خطة'} v{plan.version}"
+            for meal in plan.meals.all():
+                for item in meal.items.all():
+                    ws.append(pid(p) + [
+                        plan_label, meal.get_meal_type_display(), meal.time.strftime("%H:%M") if meal.time else "",
+                        item.display_name(), item.quantity, item.unit, item.food_state,
+                        item.calories, item.protein, item.carbs, item.fat, item.alternative_text, item.instructions,
+                    ])
+    _autosize(ws)
+
+    # ---- 12. ملاحظات الطبيب ----
+    ws = _new_sheet(wb, "ملاحظات الطبيب", ["رقم الملف", "الاسم", "التاريخ", "الملاحظة", "أُدخلت بواسطة"])
+    for p in patients:
+        for n in p.notes.all():
+            ws.append(pid(p) + [_fmt_dt(n.created_at), n.note, _who(n.created_by)])
+    _autosize(ws)
+
+    # ---- 13. ملاحظات الحالة الصحية ----
+    ws = _new_sheet(wb, "ملاحظات الحالة الصحية", ["رقم الملف", "الاسم", "التاريخ", "الملاحظة", "أُدخلت بواسطة"])
+    for p in patients:
+        for n in p.health_status_notes.all():
+            ws.append(pid(p) + [_fmt_dt(n.created_at), n.note, _who(n.created_by)])
+    _autosize(ws)
+
+    # ---- 14. الفواتير ----
+    ws = _new_sheet(wb, "الفواتير", [
+        "رقم الملف", "الاسم", "رقم الفاتورة", "التاريخ", "نسبة الخصم %", "سبب الخصم",
+        "طريقة الدفع", "المبلغ المدفوع", "حالة الدفع", "ملاحظات", "أُنشئت بواسطة",
+    ])
+    for p in patients:
+        for inv in p.invoices.all():
+            discount_reason = inv.discount_reason_custom or (inv.get_discount_reason_key_display() if inv.discount_reason_key else "")
+            ws.append(pid(p) + [
+                inv.invoice_number, _fmt_dt(inv.created_at), inv.discount_pct, discount_reason,
+                inv.payment_method, inv.amount_paid, inv.payment_status, inv.notes, _who(inv.created_by),
+            ])
+    _autosize(ws)
+
+    # ---- 15. تفاصيل الفواتير ----
+    ws = _new_sheet(wb, "تفاصيل الفواتير", [
+        "رقم الملف", "الاسم", "رقم الفاتورة", "التاريخ", "الصنف", "سعر الوحدة",
+        "الكمية", "الإجمالي", "متابعة مجانية؟",
+    ])
+    for p in patients:
+        for inv in p.invoices.all():
+            for it in inv.items.all():
+                ws.append(pid(p) + [
+                    inv.invoice_number, _fmt_dt(inv.created_at), it.item_name, it.unit_price,
+                    it.quantity, it.line_total(), _bool(it.is_free_followup),
+                ])
+    _autosize(ws)
+
+    return wb

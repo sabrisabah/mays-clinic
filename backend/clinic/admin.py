@@ -1,5 +1,9 @@
+import io
+from urllib.parse import quote
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.http import HttpResponse
+from django.utils import timezone
 from import_export import fields, resources, widgets
 from import_export.admin import ImportExportModelAdmin
 from .models import (
@@ -9,6 +13,7 @@ from .models import (
     Food, Meal, MealItem,
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
 )
+from .export import build_all_patients_workbook
 from .utils import compute_bmi, compute_whr, compute_whr_class, compute_activity_level, normalize_height_m
 
 # Custom login page (silver background) — see templates/clinic/admin_login.html
@@ -82,6 +87,30 @@ class UserAdmin(ImportExportModelAdmin, BaseUserAdmin):
 class PatientAdmin(admin.ModelAdmin):
     list_display = ["file_number", "user", "age", "gender", "created_at"]
     search_fields = ["file_number", "user__full_name", "user__email"]
+    actions = ["export_all_data"]
+
+    def export_all_data(self, request, queryset):
+        """Bulk export (select rows above, or "تحديد كل X مريض" to grab
+        everyone) — one .xlsx with 15 sheets covering every record the
+        clinic holds on the selected patients: profile (incl. رقم الهاتف,
+        their login identifier — actual passwords are hashed and can never
+        be exported), assessment, follow-up file, progress/dose/lab logs,
+        prescriptions, nutrition plans, notes, and billing. See
+        clinic/export.py::build_all_patients_workbook. Only reachable here
+        in /admin, which already requires Django staff/superuser login."""
+        wb = build_all_patients_workbook(queryset)
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+
+        filename = f"بيانات_المرضى_{timezone.now():%Y-%m-%d_%H%M}.xlsx"
+        response = HttpResponse(
+            buffer.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
+        return response
+    export_all_data.short_description = "⬇️ تصدير كل البيانات (Excel) — كل التفاصيل + الاسم ورقم الهاتف"
 
 
 class AssessmentResource(resources.ModelResource):
