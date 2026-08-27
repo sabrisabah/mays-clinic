@@ -13,6 +13,7 @@ from .models import (
     Food, Meal, MealItem,
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
 )
+from reminders.models import WhatsAppReminder
 from .export import build_all_patients_workbook
 from .utils import compute_bmi, compute_whr, compute_whr_class, compute_activity_level, normalize_height_m, log_action
 
@@ -24,32 +25,47 @@ admin.site.index_title = "لوحة التحكم"
 
 
 def _force_unlock_patient_deletion(patient, actor):
-    """Invoice.patient is deliberately on_delete=PROTECT everywhere in the
-    app (see Invoice's docstring — "financial records are never silently
-    destroyed") — that's what makes the doctor-facing delete button in the
-    frontend correctly refuse to delete a patient with billing history
-    (see clinic/views.py::PatientDetailView.delete).
+    """Two relations are deliberately on_delete=PROTECT against Patient,
+    each for its own reason, and BOTH have to be cleared or a patient with
+    either can't be deleted at all (Django's collector blocks the whole
+    operation if it hits even one PROTECT anywhere in the graph):
+
+    - clinic.Invoice.patient — "financial records are never silently
+      destroyed" (see Invoice's docstring). This is what makes the
+      doctor-facing delete button in the frontend correctly refuse to
+      delete a patient with billing history (see clinic/views.py::
+      PatientDetailView.delete).
+    - reminders.WhatsAppReminder.patient — sent-message history is
+      create-only/audit-only by design (WhatsAppReminderAdmin even has
+      has_delete_permission return False unconditionally — see
+      reminders/admin.py — which is exactly the "ليس له صلاحية حذف...
+      whats app reminder" message this was built to fix).
 
     /admin is a different, more trusted context (Django staff/superuser
     login only, not reachable by a doctor/secretary account), and the
     clinic owner explicitly asked for an unconditional override here — so
-    this deletes the patient's invoices (which cascades their InvoiceItems,
-    and nulls out any AuditLogEntry.invoice references via SET_NULL) before
-    the patient/user deletion proceeds, clearing the only thing that would
-    otherwise block it. Logs what it did first, since the invoices
-    themselves won't exist afterward to look back at.
+    this deletes both before the patient/user deletion proceeds. Logs what
+    it did first, since neither will exist afterward to look back at.
     """
     invoices = list(patient.invoices.all())
+    reminders = list(patient.whatsapp_reminders.all())
+    if not invoices and not reminders:
+        return
+
+    detail_parts = [f"حذف قسري من /admin: {patient.file_number} - {patient.user.full_name}"]
     if invoices:
-        log_action(
-            actor, "patient_force_deleted_admin",
-            detail=(
-                f"حذف قسري من /admin: {patient.file_number} - {patient.user.full_name} "
-                f"(تضمّن حذف {len(invoices)} فاتورة: "
-                f"{'، '.join('#' + str(i.invoice_number) for i in invoices)})"
-            ),
+        detail_parts.append(
+            f"تضمّن حذف {len(invoices)} فاتورة: "
+            f"{'، '.join('#' + str(i.invoice_number) for i in invoices)}"
         )
+    if reminders:
+        detail_parts.append(f"وحذف {len(reminders)} سجل تذكير WhatsApp")
+    log_action(actor, "patient_force_deleted_admin", detail=" — ".join(detail_parts))
+
+    if invoices:
         patient.invoices.all().delete()
+    if reminders:
+        patient.whatsapp_reminders.all().delete()
 
 
 class UserResource(resources.ModelResource):
@@ -126,7 +142,7 @@ class UserAdmin(ImportExportModelAdmin, BaseUserAdmin):
                 _force_unlock_patient_deletion(patient, request.user)
             user.delete()
             count += 1
-        self.message_user(request, f"تم حذف {count} حساب نهائياً (بما في ذلك أي فواتير مرتبطة).")
+        self.message_user(request, f"تم حذف {count} حساب نهائياً (بما في ذلك أي فواتير أو تذكيرات واتساب مرتبطة).")
     force_delete_selected.short_description = "🗑️ حذف نهائي (حتى لو مرتبط بفواتير أو أي شيء آخر)"
 
 
@@ -139,18 +155,19 @@ class PatientAdmin(admin.ModelAdmin):
     def force_delete_patients(self, request, queryset):
         # Django's normal "Delete selected patients" action pre-checks the
         # deletion graph and refuses to proceed at all once it hits a
-        # PROTECT relation (Invoice.patient) — it never even reaches
-        # delete_queryset in that case, so overriding that alone doesn't
-        # help. This action bypasses that pre-check entirely: it deletes
-        # each selected patient's invoices first (see
-        # _force_unlock_patient_deletion), then deletes their login account
-        # (which cascades everything else — assessment, doses, notes, etc.).
+        # PROTECT relation (Invoice.patient, WhatsAppReminder.patient) —
+        # it never even reaches delete_queryset in that case, so
+        # overriding that alone doesn't help. This action bypasses that
+        # pre-check entirely: it clears both first (see
+        # _force_unlock_patient_deletion), then deletes their login
+        # account (which cascades everything else — assessment, doses,
+        # notes, etc.).
         count = 0
         for patient in queryset:
             _force_unlock_patient_deletion(patient, request.user)
             patient.user.delete()
             count += 1
-        self.message_user(request, f"تم حذف {count} مريض نهائياً (بما في ذلك أي فواتير مرتبطة).")
+        self.message_user(request, f"تم حذف {count} مريض نهائياً (بما في ذلك أي فواتير أو تذكيرات واتساب مرتبطة).")
     force_delete_patients.short_description = "🗑️ حذف نهائي (حتى لو مرتبط بفواتير أو أي شيء آخر)"
 
     def export_all_data(self, request, queryset):
