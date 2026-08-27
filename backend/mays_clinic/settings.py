@@ -169,3 +169,28 @@ SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+
+# Without this, Django's default logging config only reports unhandled
+# view exceptions (500s) via mail_admins — which does nothing here since
+# no SMTP is configured — and stays completely silent on the console when
+# DEBUG=False (the console handler for django.request is gated behind
+# require_debug_true). That made every production 500 invisible in
+# Railway's deploy logs, with only the bare status code showing up in the
+# HTTP logs. This makes every unhandled exception's full traceback print
+# to stdout/stderr, which Railway does capture as deploy logs, without
+# touching DEBUG (so error pages/response bodies stay generic — no stack
+# traces are ever exposed to the client).
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+    },
+}
