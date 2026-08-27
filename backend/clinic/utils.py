@@ -90,9 +90,24 @@ def compute_activity_level(sport_days_per_week):
 
 
 def next_file_number():
+    """MAYS-#### file numbers must never repeat (Patient.file_number is
+    unique=True). This used to be Patient.objects.count() + 1, which broke
+    permanently the moment any patient was ever deleted (see the doctor-only
+    delete feature) — count() drops but the surviving patients can still
+    hold higher numbers than the new count, so the "next" number it computed
+    was often already taken, and every registration attempt collided on the
+    exact same value deterministically (not a rare race — this is why
+    retrying the same computation 5 times in RegisterView still failed
+    every time). Deriving it from the highest MAYS-#### number that
+    actually exists is immune to gaps left behind by deletions."""
     from .models import Patient
-    count = Patient.objects.count() + 1
-    return f"MAYS-{count:04d}"
+    prefix = "MAYS-"
+    max_n = 0
+    for file_number in Patient.objects.filter(file_number__startswith=prefix).values_list("file_number", flat=True):
+        suffix = file_number[len(prefix):]
+        if suffix.isdigit():
+            max_n = max(max_n, int(suffix))
+    return f"{prefix}{max_n + 1:04d}"
 
 
 def next_invoice_number():
