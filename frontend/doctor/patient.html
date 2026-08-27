@@ -45,6 +45,8 @@
           <div class="field"><label>اسم الأب</label><input type="text" id="name_father"></div>
           <div class="field"><label>اسم الجد</label><input type="text" id="name_grandfather"></div>
           <div class="field"><label>العمر</label><input type="number" id="age" min="0"></div>
+          <div class="field"><label>الوزن (كغم)</label><input type="number" step="0.1" id="weight"></div>
+          <div class="field"><label>الطول (سم)</label><input type="number" step="0.1" id="height" placeholder="170"></div>
           <div class="field">
             <label>الجنس</label>
             <div class="radio-row">
@@ -63,9 +65,10 @@
       <form id="anthroGoalForm">
         <div class="card">
           <h3>🔹 القياسات الجسمية</h3>
+          <p style="color:var(--muted); font-size:.82rem; margin:0 0 10px;">
+            الوزن والطول أصبحا يُدخلان من مربع "المعلومات الشخصية" أعلاه — يظهران هنا فقط ضمن حساب BMI/WHR.
+          </p>
           <div class="grid-3">
-            <div class="field"><label>الوزن (كغم)</label><input type="number" step="0.1" id="weight"></div>
-            <div class="field"><label>الطول (سم)</label><input type="number" step="0.1" id="height" placeholder="170"></div>
             <div class="field"><label>محيط الخصر (سم)</label><input type="number" step="0.1" id="waist"></div>
             <div class="field"><label>محيط الورك (سم)</label><input type="number" step="0.1" id="hip"></div>
           </div>
@@ -2314,6 +2317,28 @@ async function deleteNote(noteId) {
   } catch (err) { showMsg(msgEl, err.message, "error"); }
 }
 
+// Shared by both profileForm (وزن/طول live there now) and anthroGoalForm
+// (waist/hip/goal live there) — both forms submit the same 8-field
+// assessment payload so neither save action can blank out the other's
+// fields (weight/height moved into "المعلومات الشخصية" per secretary
+// request; see id="weight"/id="height" in the profile grid above).
+async function saveAnthroGoal() {
+  const payload = {
+    weight: parseFloat(document.getElementById("weight").value) || 0,
+    height: heightToMeters(document.getElementById("height").value),
+    waist: parseFloat(document.getElementById("waist").value) || 0,
+    hip: parseFloat(document.getElementById("hip").value) || 0,
+    goal_type: getRadioValue("goal_type"),
+    current_weight: parseFloat(document.getElementById("current_weight").value) || 0,
+    target_weight: parseFloat(document.getElementById("target_weight").value) || 0,
+    goal_duration: getGoalDuration(),
+  };
+  const result = await apiFetch(`/api/patients/${patientId}/assessment`, { method: "PUT", body: JSON.stringify(payload) });
+  updateComputed(result.bmi, result.bmi_class, result.whr, result.whr_class, result.activity_level);
+  lastAssessment = result;
+  return result;
+}
+
 document.getElementById("profileForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideMsg(msgEl);
@@ -2332,6 +2357,7 @@ document.getElementById("profileForm").addEventListener("submit", async (e) => {
       }),
     });
     document.getElementById("patientTitle").textContent = result.full_name;
+    await saveAnthroGoal();
     showMsg(msgEl, "تم حفظ المعلومات الشخصية ✅", "success");
   } catch (err) { showMsg(msgEl, err.message, "error"); }
 });
@@ -2340,19 +2366,7 @@ document.getElementById("anthroGoalForm").addEventListener("submit", async (e) =
   e.preventDefault();
   hideMsg(msgEl);
   try {
-    const payload = {
-      weight: parseFloat(document.getElementById("weight").value) || 0,
-      height: heightToMeters(document.getElementById("height").value),
-      waist: parseFloat(document.getElementById("waist").value) || 0,
-      hip: parseFloat(document.getElementById("hip").value) || 0,
-      goal_type: getRadioValue("goal_type"),
-      current_weight: parseFloat(document.getElementById("current_weight").value) || 0,
-      target_weight: parseFloat(document.getElementById("target_weight").value) || 0,
-      goal_duration: getGoalDuration(),
-    };
-    const result = await apiFetch(`/api/patients/${patientId}/assessment`, { method: "PUT", body: JSON.stringify(payload) });
-    updateComputed(result.bmi, result.bmi_class, result.whr, result.whr_class, result.activity_level);
-    lastAssessment = result;
+    await saveAnthroGoal();
     showMsg(msgEl, "تم حفظ القياسات والهدف العلاجي ✅", "success");
   } catch (err) { showMsg(msgEl, err.message, "error"); }
 });
