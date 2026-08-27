@@ -72,7 +72,7 @@
           <label>كلمة مرور المريض (أرقام، 4 على الأقل)</label>
           <input type="password" id="regPassword" required minlength="4" inputmode="numeric" pattern="[0-9]{4,}">
         </div>
-        <button type="submit" class="btn">تسجيل المريض</button>
+        <button type="submit" class="btn" id="regSubmitBtn">تسجيل المريض</button>
       </form>
     </div>
   </div>
@@ -122,6 +122,12 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
     visit_time: document.getElementById("regVisitTime").value || null,
     password,
   };
+  // Guard against double-clicking submit (e.g. slow connection, impatient
+  // re-click) sending two near-simultaneous registrations — the backend now
+  // handles that safely too, but disabling the button avoids sending the
+  // duplicate request in the first place.
+  const submitBtn = document.getElementById("regSubmitBtn");
+  submitBtn.disabled = true;
   try {
     // Uses the public registration endpoint but deliberately does NOT call
     // Auth.save() with the response — that would log the secretary out and
@@ -137,6 +143,8 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
     document.getElementById("successBox").style.display = "block";
   } catch (err) {
     showMsg(msgEl, err.message, "error");
+  } finally {
+    submitBtn.disabled = false;
   }
 });
 </script>

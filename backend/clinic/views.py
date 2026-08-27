@@ -1,7 +1,7 @@
 import io
 from datetime import datetime, timedelta
 from urllib.parse import quote
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q, ProtectedError
 from django.http import HttpResponse
 from django.utils import timezone
@@ -78,24 +78,6 @@ class RegisterView(APIView):
             part for part in [data["name_first"], data["name_father"], data.get("name_grandfather", "")] if part
         ).strip()
 
-        user = User.objects.create_user(
-            email=placeholder_email,
-            password=data["password"],
-            full_name=full_name,
-            phone=data["phone"],
-            role="patient",
-        )
-        patient = Patient.objects.create(
-            user=user,
-            file_number=next_file_number(),
-            name_first=data["name_first"],
-            name_father=data["name_father"],
-            name_grandfather=data.get("name_grandfather", ""),
-            address=data.get("address", ""),
-            age=data["age"],
-            gender=data["gender"],
-            occupation=data.get("occupation", ""),
-        )
         visit_time = data.get("visit_time") or datetime.min.time()
         visit_datetime = timezone.make_aware(datetime.combine(data["visit_date"], visit_time))
         # Weight/height are optional at registration (secretary may not have
@@ -105,10 +87,51 @@ class RegisterView(APIView):
         weight = data.get("weight", 0) or 0
         height = normalize_height_m(data.get("height", 0))
         bmi, bmi_class = compute_bmi(weight, height)
-        Assessment.objects.create(
-            patient=patient, visit_date=visit_datetime,
-            weight=weight, height=height, bmi=bmi, bmi_class=bmi_class,
-        )
+
+        # next_file_number() derives the next file number from a plain
+        # Patient.objects.count(), which is unsafe if two registrations land
+        # close together (double-click on the submit button, two secretaries
+        # registering at once, etc.) — both can read the same count and then
+        # collide on Patient.file_number's unique constraint. Retry the
+        # whole creation, wrapped in one atomic block per attempt so a
+        # collision rolls back the User row too (otherwise the user ends up
+        # created but orphaned — no Patient/Assessment — and every retry
+        # with the same phone number then fails validation instead of
+        # actually completing the registration).
+        user = patient = None
+        last_error = None
+        for _attempt in range(5):
+            try:
+                with transaction.atomic():
+                    user = User.objects.create_user(
+                        email=placeholder_email,
+                        password=data["password"],
+                        full_name=full_name,
+                        phone=data["phone"],
+                        role="patient",
+                    )
+                    patient = Patient.objects.create(
+                        user=user,
+                        file_number=next_file_number(),
+                        name_first=data["name_first"],
+                        name_father=data["name_father"],
+                        name_grandfather=data.get("name_grandfather", ""),
+                        address=data.get("address", ""),
+                        age=data["age"],
+                        gender=data["gender"],
+                        occupation=data.get("occupation", ""),
+                    )
+                    Assessment.objects.create(
+                        patient=patient, visit_date=visit_datetime,
+                        weight=weight, height=height, bmi=bmi, bmi_class=bmi_class,
+                    )
+                break
+            except IntegrityError as exc:
+                last_error = exc
+                user = patient = None
+                continue
+        else:
+            raise last_error
 
         return Response(issue_token_response(user, patient.id), status=status.HTTP_201_CREATED)
 
