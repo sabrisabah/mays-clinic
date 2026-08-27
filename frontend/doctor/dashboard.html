@@ -25,6 +25,9 @@
   .grad-card.blue2 { background: linear-gradient(135deg, #4aa3d9, #2f80c4); }
   .grad-card.green1 { background: linear-gradient(135deg, #4a7a46, #283d26); }
   .grad-card.green2 { background: linear-gradient(135deg, #6fae5f, #3d5a3a); }
+  .actions-cell { display: flex; flex-wrap: nowrap; gap: 6px; white-space: nowrap; }
+  .actions-cell .btn { padding: 6px 9px; font-size: .78rem; }
+  #tableWrap { overflow-x: auto; }
 </style>
 </head>
 <body>
@@ -139,7 +142,12 @@ async function load() {
         <td>${p.latest_weight || "-"}</td>
         <td>${p.latest_bmi ? `<span class="badge ${bmiBadgeClass(bmiClassOf(p.latest_bmi))}">${p.latest_bmi}</span>` : "-"}</td>
         <td>${fmtDate(p.last_visit)}</td>
-        <td><a class="btn small secondary" href="patient.html?id=${p.patient_id}">فتح الملف</a></td>
+        <td>
+          <div class="actions-cell">
+            <a class="btn small secondary" href="patient.html?id=${p.patient_id}">فتح الملف</a>
+            <button type="button" class="btn small danger" onclick="deletePatient(event, ${p.patient_id}, '${escapeHtml(p.full_name)}', '${escapeHtml(p.file_number)}')">🗑 حذف</button>
+          </div>
+        </td>
       </tr>`).join("");
     wrap.innerHTML = `
       <table>
@@ -148,6 +156,28 @@ async function load() {
       </table>`;
   } catch (err) {
     wrap.innerHTML = `<div class="msg error">${err.message}</div>`;
+  }
+}
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+// Doctor-only, permanent, irreversible — deletes the patient's entire file
+// (clinical + billing history). Backend blocks it if the patient has
+// invoices on file (financial records are never silently destroyed) and
+// returns a clear error, which we just surface as-is.
+async function deletePatient(event, patientId, fullName, fileNumber) {
+  event.stopPropagation(); // don't also trigger the row's "open file" navigation
+  const sure = confirm(
+    `تحذير: هذا سيحذف ملف المريض "${fullName}" (${fileNumber}) نهائياً — ` +
+    `الاستمارة، الجرعات، الوصفات، الخطط الغذائية، الملاحظات، وكل السجل الطبي. ` +
+    `هذا الإجراء لا يمكن التراجع عنه.\n\nهل أنتِ متأكدة من الحذف؟`
+  );
+  if (!sure) return;
+  try {
+    await apiFetch(`/api/patients/${patientId}`, { method: "DELETE" });
+    load();
+  } catch (err) {
+    alert(err.message);
   }
 }
 function bmiClassOf(bmi) {

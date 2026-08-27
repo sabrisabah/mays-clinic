@@ -2,7 +2,7 @@ import io
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from django.db import IntegrityError
-from django.db.models import Q
+from django.db.models import Q, ProtectedError
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -180,6 +180,15 @@ class PatientListView(APIView):
                 "appointment_booked": assessment.appointment_booked if assessment else False,
                 "goal_type": assessment.goal_type if assessment else "",
             })
+
+        # Newest last-visit first (doctor's "قائمة المراجعين والمواعيد" table
+        # request) — last_visit is computed above, not a DB column, so this
+        # has to be a Python sort rather than an order_by(). Patients with no
+        # visit at all (last_visit=None) sort to the bottom, same convention
+        # used for the secretary dashboard's missing-appointment handling.
+        very_old = timezone.now() - timedelta(days=365000)
+        results.sort(key=lambda r: r["last_visit"] or very_old, reverse=True)
+
         return Response(sz.PatientListItemSerializer(results, many=True).data)
 
 
@@ -235,6 +244,36 @@ class PatientDetailView(APIView):
         patient.save()
 
         return Response(sz.PatientProfileSerializer(patient).data)
+
+    def delete(self, request, patient_id):
+        """Permanently deletes a patient's entire file — doctor-only,
+        irreversible. Deleting patient.user (not just the Patient row)
+        cascades through every clinical record tied to them (assessment,
+        follow-up file, progress/dose/lab logs, prescriptions, nutrition
+        plans, notes — all CASCADE from Patient). Invoice.patient is
+        on_delete=PROTECT on purpose (the revenue module's whole design is
+        "financial records are never silently destroyed"), so this fails
+        loudly with a clear message instead of quietly cascading billing
+        history away — the doctor has to resolve invoices separately first.
+        """
+        if request.user.role != "doctor":
+            raise PermissionDenied("حذف ملف المريض متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+
+        summary = f"{patient.file_number} - {patient.user.full_name}"
+        try:
+            patient.user.delete()
+        except ProtectedError:
+            raise ValidationError({
+                "detail": (
+                    "لا يمكن حذف هذا المريض لأن لديه فواتير مسجّلة — السجلات المالية "
+                    "لا تُحذف نهائياً. راجعي الفواتير من صفحة الفواتير (إلغاء/استرداد "
+                    "إن لزم) قبل حذف ملف المريض."
+                )
+            })
+        log_action(request.user, "patient_deleted", detail=f"حذف ملف المريض بالكامل: {summary}")
+
+        return Response(status=204)
 
 
 # ---------------- ASSESSMENT ----------------
