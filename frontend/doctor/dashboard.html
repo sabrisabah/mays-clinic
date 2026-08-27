@@ -56,6 +56,7 @@
       </div>
       <div class="grad-stats-row" id="gradStatsRow">
         <div class="grad-card blue1"><div class="value" id="statTotal">-</div><div class="label">إجمالي المراجعين</div></div>
+        <div class="grad-card green2"><div class="value" id="statUnderweight">-</div><div class="label">نقص وزن</div></div>
         <div class="grad-card green1"><div class="value" id="statObese">-</div><div class="label">تصنيف سمنة</div></div>
         <div class="grad-card blue2"><div class="value" id="statOverweight">-</div><div class="label">زيادة وزن</div></div>
         <div class="grad-card green2"><div class="value" id="statNormal">-</div><div class="label">وزن طبيعي</div></div>
@@ -96,6 +97,7 @@ async function loadPeriodStats() {
   try {
     const s = await apiFetch(`/api/dashboard/stats?period=${currentPeriod}`);
     document.getElementById("statTotal").textContent = s.total_patients;
+    document.getElementById("statUnderweight").textContent = s.underweight;
     document.getElementById("statObese").textContent = s.obese;
     document.getElementById("statOverweight").textContent = s.overweight;
     document.getElementById("statNormal").textContent = s.normal;

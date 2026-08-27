@@ -1062,7 +1062,7 @@ class DoctorDashboardStatsView(APIView):
         period_patients = Patient.objects.filter(created_at__gte=since)
         total_patients = period_patients.count()
 
-        obese = overweight = normal = 0
+        obese = overweight = normal = underweight = 0
         goal_counts = {"نزول وزن": 0, "زيادة وزن": 0, "تثبيت": 0, "تحسين صحي": 0}
         for pt in period_patients.select_related("assessment"):
             last_entry = pt.progress_entries.order_by("-date").first()
@@ -1075,6 +1075,8 @@ class DoctorDashboardStatsView(APIView):
                     overweight += 1
                 elif bmi >= 18.5:
                     normal += 1
+                else:
+                    underweight += 1
             if assessment and assessment.goal_type in goal_counts:
                 goal_counts[assessment.goal_type] += 1
 
@@ -1114,6 +1116,7 @@ class DoctorDashboardStatsView(APIView):
             "obese": obese,
             "overweight": overweight,
             "normal": normal,
+            "underweight": underweight,
             "goal_loss": goal_counts["نزول وزن"],
             "goal_gain": goal_counts["زيادة وزن"],
             "goal_maintain": goal_counts["تثبيت"],
