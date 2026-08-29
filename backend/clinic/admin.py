@@ -12,6 +12,7 @@ from .models import (
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
     Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry, NutritionAIRequestLog,
+    NutritionAISettings,
 )
 from reminders.models import WhatsAppReminder
 from .export import build_all_patients_workbook
@@ -418,6 +419,29 @@ class NutritionAIRequestLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(NutritionAISettings)
+class NutritionAISettingsAdmin(admin.ModelAdmin):
+    """Singleton settings row — lets the OpenAI API key used by "إنشاء خطة
+    بالذكاء الاصطناعي" be rotated from here instead of a Railway env var +
+    redeploy. There is always exactly one row (pk=1, see
+    NutritionAISettings.save()); the changelist redirects straight to it so
+    this behaves like a single settings page rather than a list."""
+    fields = ["openai_api_key", "updated_at"]
+    readonly_fields = ["updated_at"]
+
+    def has_add_permission(self, request):
+        return not NutritionAISettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        from django.shortcuts import redirect
+        from django.urls import reverse
+        obj = NutritionAISettings.get_solo()
+        return redirect(reverse("admin:clinic_nutritionaisettings_change", args=[obj.pk]))
 
     def has_delete_permission(self, request, obj=None):
         return False

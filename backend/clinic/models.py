@@ -812,6 +812,40 @@ class NutritionAIRequestLog(models.Model):
         return f"AI {self.status} - {self.patient.file_number if self.patient_id else '?'} - {self.created_at:%Y-%m-%d %H:%M}"
 
 
+class NutritionAISettings(models.Model):
+    """Singleton row (always pk=1) letting the OpenAI API key be changed
+    from /admin without touching Railway env vars or redeploying. Read via
+    NutritionAISettings.get_solo() from
+    clinic/services/nutrition_ai/openai_provider.py — if openai_api_key is
+    blank here, the OPENAI_API_KEY environment variable is used instead, so
+    nothing changes for a deployment that only sets the env var and never
+    touches this table."""
+    openai_api_key = models.CharField(
+        max_length=255, blank=True, default="",
+        help_text="مفتاح OpenAI API. اتركه فارغاً لاستخدام متغير البيئة OPENAI_API_KEY على الخادم بدلاً منه.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "إعدادات الذكاء الاصطناعي"
+        verbose_name_plural = "إعدادات الذكاء الاصطناعي"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1  # enforce singleton regardless of how it's constructed
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass  # singleton row is never actually deleted
+
+    @classmethod
+    def get_solo(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "إعدادات الذكاء الاصطناعي (OpenAI)"
+
+
 class AuditLogEntry(models.Model):
     """Append-only trail for anything money-related (invoice create/edit/
     cancel/refund, discounts, service price changes, locked-invoice

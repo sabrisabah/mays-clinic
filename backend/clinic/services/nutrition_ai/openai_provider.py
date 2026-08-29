@@ -22,11 +22,29 @@ OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 MAX_RESPONSE_BYTES = 2_000_000
 
 
+def _resolve_openai_api_key() -> str:
+    """The key set from /admin (NutritionAISettings, a singleton row) always
+    wins when present, so a doctor/admin can rotate it without a Railway
+    redeploy; falls back to the OPENAI_API_KEY env var otherwise. Any DB
+    error here (e.g. migration not yet applied) is swallowed and falls back
+    to the env var too — a broken settings table must never turn into a
+    hard 500 for the doctor."""
+    try:
+        from clinic.models import NutritionAISettings
+        row = NutritionAISettings.objects.filter(pk=1).first()
+        db_key = (row.openai_api_key or "").strip() if row else ""
+        if db_key:
+            return db_key
+    except Exception:
+        pass
+    return getattr(settings, "OPENAI_API_KEY", "")
+
+
 class OpenAINutritionAIProvider(NutritionAIProvider):
     name = "openai"
 
     def generate_plan(self, context: dict) -> dict:
-        api_key = getattr(settings, "OPENAI_API_KEY", "")
+        api_key = _resolve_openai_api_key()
         if not api_key:
             raise NutritionAIError("لم يتم إعداد مفتاح خدمة الذكاء الاصطناعي على الخادم", category="not_configured")
 
