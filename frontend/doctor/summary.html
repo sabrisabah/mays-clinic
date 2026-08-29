@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ملخص المعلومات — عيادة دكتورة ميس الربيعي</title>
+<link rel="stylesheet" href="../css/style.css">
+<style>
+  .period-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+  .period-toggle button {
+    padding: 8px 18px; border: 1px solid var(--border); background: #fff; color: var(--muted);
+    border-radius: 20px; cursor: pointer; font-family: inherit; font-size: .88rem;
+  }
+  .period-toggle button.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; }
+  .grad-stats-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 14px; margin-bottom: 18px;
+  }
+  .grad-card {
+    border-radius: var(--radius); padding: 18px 16px; text-align: center; box-shadow: var(--shadow);
+    color: #fff;
+  }
+  .grad-card .value { font-size: 1.8rem; font-weight: 800; }
+  .grad-card .label { font-size: .82rem; margin-top: 6px; opacity: .95; }
+  .grad-card.blue1 { background: linear-gradient(135deg, #2f80c4, #1a5fa8); }
+  .grad-card.blue2 { background: linear-gradient(135deg, #4aa3d9, #2f80c4); }
+  .grad-card.green1 { background: linear-gradient(135deg, #4a7a46, #283d26); }
+  .grad-card.green2 { background: linear-gradient(135deg, #6fae5f, #3d5a3a); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand"><img src="../images/logo.png" alt="شعار عيادة دكتورة ميس الربيعي"> عيادة دكتورة ميس الربيعي — ملخص المعلومات</div>
+    <nav>
+      <span class="user-chip" id="userChip">...</span>
+      <button class="link" onclick="Auth.logout()">تسجيل الخروج</button>
+    </nav>
+  </div>
+
+  <div class="container">
+    <div class="card" style="display:flex; gap:10px; flex-wrap:wrap;">
+      <a href="dashboard.html" class="btn small secondary">لوحة الطبيب</a>
+      <a href="invoices.html" class="btn small secondary">🧾 الفواتير</a>
+      <a href="services.html" class="btn small secondary">💊 دليل الخدمات</a>
+      <a href="reports.html" class="btn small secondary">📈 التقارير المالية</a>
+      <a href="../reminders/index.html" class="btn small secondary">📨 تذكيرات WhatsApp</a>
+    </div>
+
+    <div class="card">
+      <h2>📊 إحصائيات الفترة</h2>
+      <div class="period-toggle" id="periodToggle">
+        <button data-period="week">آخر أسبوع</button>
+        <button data-period="month" class="active">آخر شهر</button>
+        <button data-period="year">آخر سنة</button>
+      </div>
+      <div class="grad-stats-row" id="gradStatsRow">
+        <div class="grad-card blue1"><div class="value" id="statTotal">-</div><div class="label">إجمالي المراجعين</div></div>
+        <div class="grad-card green2"><div class="value" id="statUnderweight">-</div><div class="label">نقص وزن</div></div>
+        <div class="grad-card green1"><div class="value" id="statObese">-</div><div class="label">تصنيف سمنة</div></div>
+        <div class="grad-card blue2"><div class="value" id="statOverweight">-</div><div class="label">زيادة وزن</div></div>
+        <div class="grad-card green2"><div class="value" id="statNormal">-</div><div class="label">وزن طبيعي</div></div>
+        <div class="grad-card blue1"><div class="value" id="statBookings">-</div><div class="label">عدد الحجوزات</div></div>
+        <div class="grad-card green1"><div class="value" id="statFollowups">-</div><div class="label">مراجعين للمتابعة</div></div>
+        <div class="grad-card blue2"><div class="value" id="statMounjaro">-</div><div class="label">مراجعين مونجارو</div></div>
+        <div class="grad-card green2"><div class="value" id="statOzempic">-</div><div class="label">مراجعين أوزمبك</div></div>
+        <div class="grad-card blue1"><div class="value" id="statDiet">-</div><div class="label">مراجعين نظام غذائي</div></div>
+        <div class="grad-card green1"><div class="value" id="statFatBurning">-</div><div class="label">مراجعين للتذويب</div></div>
+        <div class="grad-card blue2"><div class="value" id="statGoalLoss">-</div><div class="label">🔹 الهدف: نزول وزن</div></div>
+        <div class="grad-card green2"><div class="value" id="statGoalGain">-</div><div class="label">🔹 الهدف: زيادة وزن</div></div>
+        <div class="grad-card blue1"><div class="value" id="statGoalMaintain">-</div><div class="label">🔹 الهدف: تثبيت</div></div>
+        <div class="grad-card green1"><div class="value" id="statGoalHealth">-</div><div class="label">🔹 الهدف: تحسين صحي</div></div>
+      </div>
+    </div>
+  </div>
+
+<script src="../js/api.js"></script>
+<script>
+if (!requireRole("doctor")) { throw new Error("redirect"); }
+refreshUserChip("userChip", "د. " + Auth.getName());
+
+let currentPeriod = "month";
+
+async function loadPeriodStats() {
+  try {
+    const s = await apiFetch(`/api/dashboard/stats?period=${currentPeriod}`);
+    document.getElementById("statTotal").textContent = s.total_patients;
+    document.getElementById("statUnderweight").textContent = s.underweight;
+    document.getElementById("statObese").textContent = s.obese;
+    document.getElementById("statOverweight").textContent = s.overweight;
+    document.getElementById("statNormal").textContent = s.normal;
+    document.getElementById("statBookings").textContent = s.bookings;
+    document.getElementById("statFollowups").textContent = s.followups;
+    document.getElementById("statMounjaro").textContent = s.mounjaro;
+    document.getElementById("statOzempic").textContent = s.ozempic;
+    document.getElementById("statDiet").textContent = s.diet;
+    document.getElementById("statFatBurning").textContent = s.fat_burning;
+    document.getElementById("statGoalLoss").textContent = s.goal_loss;
+    document.getElementById("statGoalGain").textContent = s.goal_gain;
+    document.getElementById("statGoalMaintain").textContent = s.goal_maintain;
+    document.getElementById("statGoalHealth").textContent = s.goal_health;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+document.getElementById("periodToggle").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-period]");
+  if (!btn) return;
+  currentPeriod = btn.dataset.period;
+  document.querySelectorAll("#periodToggle button").forEach((b) => b.classList.toggle("active", b === btn));
+  loadPeriodStats();
+});
+
+loadPeriodStats();
+</script>
+</body>
+</html>
