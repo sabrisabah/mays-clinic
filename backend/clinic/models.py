@@ -774,6 +774,44 @@ class InvoiceItem(models.Model):
         return f"{self.item_name} x{self.quantity} - فاتورة #{self.invoice_id}"
 
 
+class NutritionAIRequestLog(models.Model):
+    """Audit trail for every "إنشاء خطة بالذكاء الاصطناعي" request — one row
+    per ai-suggest call (status successful/failed) and one per ai-apply call
+    (status applied). Deliberately stores NO raw prompt and NO patient-
+    identifying free text (see clinic/services/nutrition_ai/context.py's
+    docstring for what's excluded and why) — only technical/clinical
+    metadata, so this table is safe to browse from /admin without exposing
+    anything sensitive. Create-only, like AuditLogEntry/MounjaroCorrectionLog."""
+    SUCCESSFUL, FAILED, APPLIED = "successful", "failed", "applied"
+    STATUS_CHOICES = [(SUCCESSFUL, "نجح"), (FAILED, "فشل"), (APPLIED, "تم التطبيق")]
+
+    patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="nutrition_ai_requests")
+    plan = models.ForeignKey(NutritionPlan, null=True, blank=True, on_delete=models.SET_NULL, related_name="ai_requests")
+    doctor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="nutrition_ai_requests")
+
+    provider = models.CharField(max_length=30, blank=True, default="")
+    model = models.CharField(max_length=60, blank=True, default="")
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES)
+
+    input_tokens = models.PositiveIntegerField(null=True, blank=True)
+    output_tokens = models.PositiveIntegerField(null=True, blank=True)
+    estimated_cost_usd = models.FloatField(null=True, blank=True)
+    warning_count = models.PositiveIntegerField(default=0)
+
+    # Short machine-readable label only (e.g. "timeout", "validation_failed",
+    # "high_risk_pathway") — never a raw exception message or provider body.
+    error_category = models.CharField(max_length=60, blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name_plural = "Nutrition AI request logs"
+
+    def __str__(self):
+        return f"AI {self.status} - {self.patient.file_number if self.patient_id else '?'} - {self.created_at:%Y-%m-%d %H:%M}"
+
+
 class AuditLogEntry(models.Model):
     """Append-only trail for anything money-related (invoice create/edit/
     cancel/refund, discounts, service price changes, locked-invoice

@@ -39,6 +39,8 @@ urlpatterns = [
     path("patients/<int:patient_id>/nutrition-plans", views.NutritionPlanListCreateView.as_view()),
     path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>", views.NutritionPlanDetailView.as_view()),
     path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/action", views.NutritionPlanActionView.as_view()),
+    path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/ai-suggest", views.NutritionPlanAISuggestView.as_view()),
+    path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/ai-apply", views.NutritionPlanAIApplyView.as_view()),
     path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/meals/<int:meal_id>", views.MealDetailView.as_view()),
     path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/meals/<int:meal_id>/items", views.MealItemListCreateView.as_view()),
     path("patients/<int:patient_id>/nutrition-plans/<int:plan_id>/meals/<int:meal_id>/items/<int:item_id>", views.MealItemDetailView.as_view()),

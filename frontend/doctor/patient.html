@@ -363,7 +363,10 @@
         </div>
 
         <div class="card">
-          <h3>🔹 جدول الوجبات اليومي</h3>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <h3 style="margin:0;">🔹 جدول الوجبات اليومي</h3>
+            <button type="button" class="btn small" id="npAiGenerateBtn" style="display:none;">✨ إنشاء خطة بالذكاء الاصطناعي</button>
+          </div>
           <div id="npMealsWrap"></div>
         </div>
 
@@ -812,6 +815,55 @@
       </div>
 
       <div id="secPrescriptionSlot"></div>
+    </div>
+  </div>
+
+  <!-- AI nutrition-plan generator — instructions modal -->
+  <div class="modal-overlay" id="aiInstructionsModal" style="display:none;">
+    <div class="modal-box">
+      <h3>✨ إنشاء خطة بالذكاء الاصطناعي</h3>
+      <p style="color:var(--muted); font-size:.85rem; margin-top:-6px;">
+        سيُستخدم السعرات والماكروز المحددة في الخطة الحالية كما هي. الناتج مقترح أولي فقط — لن يُحفظ أو يُفعّل إلا بعد مراجعتك والضغط على "إضافة إلى المسودة".
+      </p>
+      <div class="field"><label>عدد الوجبات</label>
+        <select id="ai_num_meals">
+          <option value="3">3</option><option value="4">4</option><option value="5" selected>5</option><option value="6">6</option>
+        </select>
+      </div>
+      <div class="field"><label>نمط الخطة المفضّل (اختياري)</label>
+        <input type="text" id="ai_style" placeholder="مثال: أطباق عراقية بسيطة، وجبات سريعة التحضير...">
+      </div>
+      <div class="field"><label>تعليمات إضافية للطبيب (اختياري)</label>
+        <textarea id="ai_doctor_instructions" placeholder="أي توجيهات إضافية تريدين مراعاتها في الاقتراح..." maxlength="1000"></textarea>
+      </div>
+      <div class="msg error" id="aiSuggestMsg" style="display:none; margin-top:10px;"></div>
+      <div class="btn-row" style="margin-top:16px;">
+        <button type="button" class="btn secondary" id="aiInstructionsCancelBtn">إلغاء</button>
+        <button type="button" class="btn" id="aiGenerateSubmitBtn">إنشاء المقترح</button>
+      </div>
+      <div id="aiLoadingWrap" style="display:none; text-align:center; margin-top:14px;">
+        <p style="color:var(--muted); font-size:.9rem;">⏳ جارٍ توليد المقترح بالذكاء الاصطناعي... قد يستغرق ذلك حتى دقيقة</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI nutrition-plan generator — preview modal -->
+  <div class="modal-overlay" id="aiPreviewModal" style="display:none;">
+    <div class="modal-box" style="max-width:760px;">
+      <h3>معاينة المقترح — للمراجعة فقط</h3>
+      <p style="color:var(--muted); font-size:.85rem; margin-top:-6px;">
+        هذا مقترح من الذكاء الاصطناعي ولم يُحفظ بعد. راجعيه جيداً، ثم اختاري "إضافة إلى المسودة" لحفظه في الخطة، أو "إعادة الإنشاء" لتجربة مقترح آخر.
+      </p>
+      <div id="aiPreviewSummary" style="margin-bottom:10px; font-size:.92rem;"></div>
+      <div id="aiPreviewWarnings"></div>
+      <div id="aiPreviewComparison" style="margin:14px 0;"></div>
+      <div id="aiPreviewMeals"></div>
+      <div class="msg error" id="aiApplyMsg" style="display:none; margin-top:10px;"></div>
+      <div class="btn-row" style="margin-top:16px;">
+        <button type="button" class="btn secondary" id="aiPreviewCancelBtn">إلغاء</button>
+        <button type="button" class="btn secondary" id="aiPreviewRegenerateBtn">↻ إعادة الإنشاء</button>
+        <button type="button" class="btn success" id="aiPreviewApplyBtn">✅ إضافة إلى المسودة</button>
+      </div>
     </div>
   </div>
 
@@ -1417,6 +1469,7 @@ function npRenderBuilder() {
   npUpdateMacroPreview();
   npRenderMeals();
   npRenderReconciliation();
+  npUpdateAiButtonState();
 
   // Lock the whole form once the plan isn't a Draft — content can then only
   // change via "إنشاء نسخة معدّلة" (revise), matching the versioning spec.
@@ -1746,6 +1799,172 @@ function npRenderReconciliation() {
       }).join("")}</tbody>
     </table>`;
 }
+
+// ---------------- NUTRITION AI ("إنشاء خطة بالذكاء الاصطناعي") ----------------
+// Doctor-only, Draft-only. The generated proposal is preview-only until the
+// doctor explicitly clicks "إضافة إلى المسودة" — nothing is saved by
+// ai-suggest, only by ai-apply (and only with the signed proposal_token
+// ai-suggest returned, never hand-edited JSON).
+let aiLastProposalToken = null;
+let aiLastOptions = null; // {num_meals, style, doctor_instructions} — reused by "إعادة الإنشاء"
+let aiRequestInFlight = false;
+
+function npUpdateAiButtonState() {
+  const btn = document.getElementById("npAiGenerateBtn");
+  if (role !== "doctor") { btn.style.display = "none"; return; }
+  btn.style.display = "";
+  btn.disabled = npIsLocked() || aiRequestInFlight;
+  btn.title = npIsLocked() ? "متاح فقط عندما تكون الخطة الحالية مسودة" : "";
+}
+
+function aiOpenInstructionsModal() {
+  document.getElementById("ai_num_meals").value = "5";
+  document.getElementById("ai_style").value = "";
+  document.getElementById("ai_doctor_instructions").value = "";
+  hideMsg(document.getElementById("aiSuggestMsg"));
+  document.getElementById("aiLoadingWrap").style.display = "none";
+  document.getElementById("aiGenerateSubmitBtn").disabled = false;
+  document.getElementById("aiInstructionsModal").style.display = "flex";
+}
+function aiCloseInstructionsModal() {
+  document.getElementById("aiInstructionsModal").style.display = "none";
+}
+function aiCloseAllModals() {
+  aiCloseInstructionsModal();
+  document.getElementById("aiPreviewModal").style.display = "none";
+}
+
+document.getElementById("npAiGenerateBtn").addEventListener("click", aiOpenInstructionsModal);
+document.getElementById("aiInstructionsCancelBtn").addEventListener("click", aiCloseInstructionsModal);
+document.getElementById("aiPreviewCancelBtn").addEventListener("click", aiCloseAllModals);
+
+async function aiRunGenerate(options) {
+  // Duplicate-click / duplicate-request protection — disables the trigger
+  // buttons for the whole round trip, regardless of which button (initial
+  // "إنشاء المقترح" or preview's "إعادة الإنشاء") started it.
+  if (aiRequestInFlight) return;
+  aiRequestInFlight = true;
+  aiLastOptions = options;
+  npUpdateAiButtonState();
+
+  const suggestMsgEl = document.getElementById("aiSuggestMsg");
+  hideMsg(suggestMsgEl);
+  document.getElementById("aiGenerateSubmitBtn").disabled = true;
+  document.getElementById("aiLoadingWrap").style.display = "";
+  document.getElementById("aiInstructionsModal").style.display = "flex";
+  document.getElementById("aiPreviewModal").style.display = "none";
+
+  try {
+    const result = await apiFetch(
+      `/api/patients/${patientId}/nutrition-plans/${npCurrentPlan.id}/ai-suggest`,
+      { method: "POST", body: JSON.stringify(options) }
+    );
+    aiLastProposalToken = result.proposal_token;
+    aiRenderPreview(result.proposal, result.warnings || []);
+    document.getElementById("aiInstructionsModal").style.display = "none";
+    document.getElementById("aiPreviewModal").style.display = "flex";
+  } catch (err) {
+    showMsg(suggestMsgEl, err.message, "error");
+  } finally {
+    aiRequestInFlight = false;
+    document.getElementById("aiLoadingWrap").style.display = "none";
+    document.getElementById("aiGenerateSubmitBtn").disabled = false;
+    npUpdateAiButtonState();
+  }
+}
+
+document.getElementById("aiGenerateSubmitBtn").addEventListener("click", () => {
+  aiRunGenerate({
+    num_meals: parseInt(document.getElementById("ai_num_meals").value, 10) || 5,
+    style: document.getElementById("ai_style").value.trim(),
+    doctor_instructions: document.getElementById("ai_doctor_instructions").value.trim(),
+  });
+});
+document.getElementById("aiPreviewRegenerateBtn").addEventListener("click", () => {
+  if (aiLastOptions) aiRunGenerate(aiLastOptions);
+});
+
+function aiMealLabel(mealType) {
+  return npMealLabel(mealType);
+}
+
+function aiRenderPreview(proposal, warnings) {
+  // escapeHtml() is applied to every single AI-provided string below
+  // (summary, warnings, food names, alternatives, instructions) before it
+  // touches innerHTML — the AI's output is untrusted text, exactly like any
+  // other user-supplied content in this app.
+  document.getElementById("aiPreviewSummary").innerHTML = proposal.summary
+    ? `<p style="margin:0;">${escapeHtml(proposal.summary)}</p>` : "";
+
+  const warnWrap = document.getElementById("aiPreviewWarnings");
+  warnWrap.innerHTML = warnings.length ? `
+    <div class="msg error" style="display:block; margin-bottom:10px;">
+      ${warnings.map((w) => `⚠️ ${escapeHtml(String(w))}`).join("<br>")}
+    </div>` : "";
+
+  const cmp = proposal.comparison || {};
+  const rows = [["calories", "السعرات", "سعرة"], ["protein", "بروتين", "غم"], ["carbs", "كارب", "غم"], ["fat", "دهون", "غم"]];
+  document.getElementById("aiPreviewComparison").innerHTML = `
+    <table>
+      <thead><tr><th></th><th>الهدف</th><th>مجموع المقترح</th><th>الفرق</th></tr></thead>
+      <tbody>${rows.map(([key, label, unit]) => {
+        const r = cmp[key] || { target: 0, actual: 0, diff: 0, diff_pct: 0 };
+        const tolerant = Math.abs(r.diff_pct || 0) <= (key === "calories" ? 10 : 15);
+        return `<tr>
+          <td>${label}</td>
+          <td>${r.target} ${unit}</td>
+          <td>${r.actual} ${unit}</td>
+          <td><span class="badge ${tolerant ? "green" : "orange"}">${r.diff >= 0 ? "+" : ""}${r.diff} ${unit} (${r.diff_pct >= 0 ? "+" : ""}${r.diff_pct}%)</span></td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
+
+  const meals = (proposal.meals || []).slice().sort((a, b) => a.order - b.order);
+  document.getElementById("aiPreviewMeals").innerHTML = meals.map((meal) => {
+    const rowsHtml = (meal.items || []).map((it) => `
+      <tr>
+        <td>${escapeHtml(it.custom_food_name || (npFindFoodById(it.food_id) || {}).name || "")}${it.is_custom ? ` <span class="badge gray">مخصص — يتطلب مراجعة</span>` : ""}${it.patient_visible ? "" : ` <span class="badge gray">مخفي عن المريض</span>`}</td>
+        <td>${it.quantity} ${escapeHtml(it.unit || "")}</td>
+        <td>${escapeHtml(it.food_state || "-")}</td>
+        <td>${escapeHtml(it.alternative_text || "-")}</td>
+        <td>${escapeHtml(it.instructions || "-")}</td>
+      </tr>`).join("");
+    return `
+      <div class="card" style="background:#fafafa; margin-bottom:12px;">
+        <h4 style="margin:0 0 8px;">${aiMealLabel(meal.meal_type)}${meal.time ? " — " + escapeHtml(meal.time) : ""}</h4>
+        <table>
+          <thead><tr><th>الصنف</th><th>الكمية</th><th>الحالة</th><th>البديل</th><th>تعليمات</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>`;
+  }).join("");
+}
+
+document.getElementById("aiPreviewApplyBtn").addEventListener("click", async () => {
+  const applyMsgEl = document.getElementById("aiApplyMsg");
+  hideMsg(applyMsgEl);
+  if (!aiLastProposalToken) {
+    showMsg(applyMsgEl, "لا يوجد مقترح صالح — يرجى إعادة الإنشاء", "error");
+    return;
+  }
+  const applyBtn = document.getElementById("aiPreviewApplyBtn");
+  applyBtn.disabled = true; // duplicate-click protection
+  try {
+    await apiFetch(
+      `/api/patients/${patientId}/nutrition-plans/${npCurrentPlan.id}/ai-apply`,
+      { method: "POST", body: JSON.stringify({ proposal_token: aiLastProposalToken }) }
+    );
+    aiLastProposalToken = null;
+    aiCloseAllModals();
+    await loadNutritionPlans();
+    npSelectPlan(npCurrentPlan.id);
+    showMsg(msgEl, "تم إضافة مقترح الذكاء الاصطناعي إلى المسودة ✅ — لا تزال الخطة مسودة، راجعيها ثم اعتمديها من الأزرار أعلاه", "success");
+  } catch (err) {
+    showMsg(applyMsgEl, err.message, "error");
+  } finally {
+    applyBtn.disabled = false;
+  }
+});
 
 document.getElementById("npSaveDraftBtn").addEventListener("click", async () => {
   hideMsg(msgEl);

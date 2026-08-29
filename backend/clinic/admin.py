@@ -11,7 +11,7 @@ from .models import (
     MounjaroCorrectionLog, OzempicCorrectionLog, HealthStatusNote,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
-    Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
+    Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry, NutritionAIRequestLog,
 )
 from reminders.models import WhatsAppReminder
 from .export import build_all_patients_workbook
@@ -390,6 +390,27 @@ class AuditLogEntryAdmin(admin.ModelAdmin):
     list_display = ["created_at", "action", "actor", "invoice"]
     list_filter = ["action"]
     search_fields = ["detail"]
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(NutritionAIRequestLog)
+class NutritionAIRequestLogAdmin(admin.ModelAdmin):
+    """Read-only in /admin — create-only audit trail for every "إنشاء خطة
+    بالذكاء الاصطناعي" request. Deliberately has nothing sensitive to show
+    (no raw prompt, no patient-identifying free text — see
+    clinic/services/nutrition_ai/context.py) so it's safe to browse."""
+    list_display = ["created_at", "patient", "doctor", "status", "provider", "model", "warning_count", "error_category"]
+    list_filter = ["status", "provider", "error_category"]
+    search_fields = ["patient__file_number", "patient__user__full_name"]
     date_hierarchy = "created_at"
 
     def has_add_permission(self, request):

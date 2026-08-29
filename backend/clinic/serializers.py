@@ -337,6 +337,24 @@ class NutritionPlanSerializer(serializers.ModelSerializer):
         return data
 
 
+class NutritionAISuggestRequestSerializer(serializers.Serializer):
+    """Body of POST .../nutrition-plans/<id>/ai-suggest — everything here is
+    the optional content of the "إنشاء خطة بالذكاء الاصطناعي" instructions
+    modal. Coarse bounds only (num_meals 1-10) — the authoritative ceiling
+    is settings.NUTRITION_AI_MAX_MEALS, enforced in the view/validator."""
+    num_meals = serializers.IntegerField(min_value=1, max_value=10, default=5)
+    style = serializers.CharField(max_length=200, required=False, allow_blank=True, default="")
+    doctor_instructions = serializers.CharField(max_length=1000, required=False, allow_blank=True, default="")
+
+
+class NutritionAIApplyRequestSerializer(serializers.Serializer):
+    """Body of POST .../nutrition-plans/<id>/ai-apply — the ONLY thing the
+    browser sends back is the opaque, server-signed token issued by
+    ai-suggest. The proposal content itself is never re-submitted as raw
+    JSON, so nothing about it can be silently edited client-side."""
+    proposal_token = serializers.CharField()
+
+
 class FollowUpRecordSerializer(serializers.ModelSerializer):
     patient_id = serializers.IntegerField(source="patient.id", read_only=True)
 

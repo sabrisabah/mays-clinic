@@ -1,6 +1,8 @@
 import io
 from datetime import datetime, timedelta
 from urllib.parse import quote
+from django.conf import settings
+from django.core import signing
 from django.db import IntegrityError, transaction
 from django.db.models import Q, ProtectedError
 from django.http import HttpResponse
@@ -17,7 +19,7 @@ from .models import (
     MounjaroCorrectionLog, OzempicDose, OzempicCorrectionLog, HealthStatusNote, LabTestEntry,
     MedicationCategory, Medication, MedicationDose, Prescription, PrescriptionItem,
     Food, Meal, MealItem,
-    Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry,
+    Service, ServiceVariant, Invoice, InvoiceItem, AuditLogEntry, NutritionAIRequestLog,
 )
 from .permissions import IsDoctor, IsClinicStaff
 from .export import build_patient_workbook
@@ -32,8 +34,14 @@ from .utils import (
     compute_tdee,
     next_invoice_number,
     log_action,
+    macros_from_percentages,
+    PEDIATRIC_AGE_CUTOFF,
 )
 from . import serializers as sz
+from .services.nutrition_ai import get_nutrition_ai_provider
+from .services.nutrition_ai.base import NutritionAIError
+from .services.nutrition_ai.context import build_ai_context
+from .services.nutrition_ai.validators import validate_proposal
 
 
 def issue_token_response(user, patient_id=None):
@@ -430,6 +438,258 @@ def _get_plan_or_404(patient, plan_id):
 def _require_draft(plan):
     if plan.status != NutritionPlan.DRAFT:
         raise PermissionDenied("لا يمكن تعديل خطة معتمدة أو مؤرشفة — استخدم 'إنشاء نسخة معدّلة' لتعديلها")
+
+
+# ---------------- NUTRITION AI ("إنشاء خطة بالذكاء الاصطناعي") ----------------
+# See clinic/services/nutrition_ai/ for the provider abstraction, prompt,
+# JSON-schema validation and anonymised-context builder. Everything here is
+# orchestration + the two things that must never move out of Django: the
+# doctor-only/Draft-only/high-risk gating, and turning a validated proposal
+# into real Meal/MealItem rows with server-recomputed nutrition values.
+
+NUTRITION_AI_PROPOSAL_SALT = "clinic.nutrition_ai.proposal"
+NUTRITION_AI_PROPOSAL_MAX_AGE_SECONDS = 15 * 60  # doctor has 15 min to review+apply a given proposal
+
+
+def _nutrition_ai_plan_targets(plan):
+    """Server-side truth for calorie/macro targets — same computation the
+    plan serializer already uses (NutritionPlanSerializer._macro_grams),
+    duplicated here rather than imported to keep the AI service module
+    independent of the serializer layer."""
+    if plan.protein_grams_override:
+        protein_g = plan.protein_grams_override
+        _, carbs_g, fat_g = macros_from_percentages(plan.calorie_target, 0, plan.carbs_pct, plan.fat_pct)
+    else:
+        protein_g, carbs_g, fat_g = macros_from_percentages(plan.calorie_target, plan.protein_pct, plan.carbs_pct, plan.fat_pct)
+    return {"calories": plan.calorie_target or 0, "protein": protein_g, "carbs": carbs_g, "fat": fat_g}
+
+
+def _nutrition_ai_high_risk_reason(patient, plan):
+    """Mirrors NutritionPlanSerializer.get_requires_special_pathway_notes —
+    if any of these apply, the AI must never auto-generate a standard plan
+    (spec: pregnant/lactating/eating-disorder risk/medically unstable/under
+    18 all require a specialised clinical pathway, not a generic proposal)."""
+    reasons = []
+    if plan.is_pregnant:
+        reasons.append("حامل")
+    if plan.is_lactating:
+        reasons.append("مرضعة")
+    if plan.eating_disorder_risk:
+        reasons.append("خطر اضطراب أكل")
+    if plan.medically_unstable:
+        reasons.append("عدم استقرار طبي")
+    if patient.age and patient.age < PEDIATRIC_AGE_CUTOFF:
+        reasons.append("تحت 18 سنة")
+    if not reasons:
+        return None
+    return (
+        "هذا المريض ضمن فئة تتطلب مساراً سريرياً خاصاً (" + "، ".join(reasons) + ") — "
+        "لا يمكن توليد خطة قياسية تلقائياً بالذكاء الاصطناعي لهذه الحالة. "
+        "يرجى بناء الخطة يدوياً وفق تقييم سريري متخصص وتوثيق ملاحظات المسار الخاص."
+    )
+
+
+def _nutrition_ai_sign_proposal(proposal, *, patient_id, plan_id, doctor_id):
+    """Server-signed token embedding the FULL validated proposal — ai-apply
+    only ever trusts what's inside this token, never a proposal re-sent as
+    raw JSON in the apply request body, so nothing about it can be edited
+    client-side between preview and apply without invalidating the
+    signature. Uses Django's own SECRET_KEY-backed signing (no new
+    dependency), same trust boundary as the JWT auth tokens already in use."""
+    payload = {"patient_id": patient_id, "plan_id": plan_id, "doctor_id": doctor_id, "proposal": proposal}
+    return signing.dumps(payload, salt=NUTRITION_AI_PROPOSAL_SALT)
+
+
+def _nutrition_ai_verify_proposal(token, *, patient_id, plan_id, doctor_id):
+    try:
+        payload = signing.loads(token, salt=NUTRITION_AI_PROPOSAL_SALT, max_age=NUTRITION_AI_PROPOSAL_MAX_AGE_SECONDS)
+    except signing.SignatureExpired:
+        raise ValidationError({"detail": "انتهت صلاحية هذا المقترح — يرجى توليد مقترح جديد"})
+    except signing.BadSignature:
+        raise ValidationError({"detail": "رمز المقترح غير صالح"})
+    if payload.get("patient_id") != patient_id or payload.get("plan_id") != plan_id or payload.get("doctor_id") != doctor_id:
+        raise ValidationError({"detail": "رمز المقترح لا يطابق هذا المريض/الخطة/الطبيب"})
+    return payload["proposal"]
+
+
+def _nutrition_ai_log(patient, plan, doctor, *, req_status, provider="", model="", input_tokens=None, output_tokens=None, warning_count=0, error_category=""):
+    return NutritionAIRequestLog.objects.create(
+        patient=patient, plan=plan, doctor=doctor,
+        provider=provider, model=model, status=req_status,
+        input_tokens=input_tokens, output_tokens=output_tokens,
+        warning_count=warning_count, error_category=error_category,
+    )
+
+
+class NutritionPlanAISuggestView(APIView):
+    """POST — generates a PREVIEW-ONLY AI proposal. Never touches Meal/
+    MealItem or the plan itself; the doctor must call ai-apply explicitly
+    (with the returned proposal_token) to actually save anything."""
+
+    def post(self, request, patient_id, plan_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        plan = _get_plan_or_404(patient, plan_id)
+        _require_draft(plan)
+
+        high_risk = _nutrition_ai_high_risk_reason(patient, plan)
+        if high_risk:
+            _nutrition_ai_log(patient, plan, request.user, req_status=NutritionAIRequestLog.FAILED, error_category="high_risk_pathway")
+            raise ValidationError({"detail": high_risk})
+
+        # Basic abuse/cost guard — independent of the frontend's own
+        # duplicate-click protection.
+        recent_count = NutritionAIRequestLog.objects.filter(
+            doctor=request.user, created_at__gte=timezone.now() - timedelta(hours=1),
+        ).count()
+        if recent_count >= settings.NUTRITION_AI_RATE_LIMIT_PER_HOUR:
+            raise ValidationError({"detail": "تم تجاوز الحد المسموح به لطلبات الذكاء الاصطناعي خلال ساعة — يرجى المحاولة لاحقاً"})
+
+        req = sz.NutritionAISuggestRequestSerializer(data=request.data)
+        req.is_valid(raise_exception=True)
+        opts = req.validated_data
+        num_meals = min(opts["num_meals"], settings.NUTRITION_AI_MAX_MEALS)
+
+        try:
+            provider = get_nutrition_ai_provider()
+        except NutritionAIError as exc:
+            _nutrition_ai_log(patient, plan, request.user, req_status=NutritionAIRequestLog.FAILED, error_category=exc.category)
+            raise ValidationError({"detail": exc.message})
+
+        active_foods = list(Food.objects.filter(is_active=True))
+        context = build_ai_context(
+            patient, plan,
+            num_meals=num_meals, style=opts.get("style", ""), doctor_instructions=opts.get("doctor_instructions", ""),
+            foods_queryset=active_foods,
+        )
+
+        try:
+            raw = provider.generate_plan(context)
+        except NutritionAIError as exc:
+            _nutrition_ai_log(
+                patient, plan, request.user, req_status=NutritionAIRequestLog.FAILED,
+                provider=provider.name, model=getattr(settings, "OPENAI_NUTRITION_MODEL", ""), error_category=exc.category,
+            )
+            raise ValidationError({"detail": exc.message})
+
+        usage = raw.get("usage") or {}
+        foods_by_id = {f.id: f for f in active_foods}
+        assessment = getattr(patient, "assessment", None)
+        proposal, warnings, errors = validate_proposal(
+            raw, foods_by_id=foods_by_id, targets=_nutrition_ai_plan_targets(plan),
+            allergy_text=assessment.food_allergy if assessment else "",
+            disliked_text=assessment.disliked_foods if assessment else "",
+            max_meals=settings.NUTRITION_AI_MAX_MEALS, max_items_per_meal=settings.NUTRITION_AI_MAX_ITEMS_PER_MEAL,
+            calorie_tolerance_pct=settings.NUTRITION_AI_CALORIE_TOLERANCE_PCT,
+            macro_tolerance_pct=settings.NUTRITION_AI_MACRO_TOLERANCE_PCT,
+        )
+        if errors:
+            _nutrition_ai_log(
+                patient, plan, request.user, req_status=NutritionAIRequestLog.FAILED,
+                provider=provider.name, model=getattr(settings, "OPENAI_NUTRITION_MODEL", ""),
+                input_tokens=usage.get("input_tokens"), output_tokens=usage.get("output_tokens"),
+                warning_count=len(warnings), error_category="validation_failed",
+            )
+            raise ValidationError({"detail": "المقترح الناتج من الذكاء الاصطناعي غير صالح: " + "؛ ".join(errors[:5])})
+
+        _nutrition_ai_log(
+            patient, plan, request.user, req_status=NutritionAIRequestLog.SUCCESSFUL,
+            provider=provider.name, model=getattr(settings, "OPENAI_NUTRITION_MODEL", ""),
+            input_tokens=usage.get("input_tokens"), output_tokens=usage.get("output_tokens"),
+            warning_count=len(warnings),
+        )
+        token = _nutrition_ai_sign_proposal(proposal, patient_id=patient.id, plan_id=plan.id, doctor_id=request.user.id)
+        return Response({
+            "proposal": proposal,
+            "warnings": warnings,
+            "proposal_token": token,
+            "usage": usage,
+        })
+
+
+class NutritionPlanAIApplyView(APIView):
+    """POST {"proposal_token": "..."} — the ONLY way an AI proposal's meal
+    items actually get saved. Re-validates everything against a fresh Food
+    query (never trusts anything cached in the token beyond the proposal
+    shape itself) and recomputes every nutrition value server-side before
+    writing, inside one atomic transaction."""
+
+    def post(self, request, patient_id, plan_id):
+        if request.user.role != "doctor":
+            raise PermissionDenied("هذا الإجراء متاح للطبيب فقط")
+        patient = get_patient_or_403(request, patient_id)
+        plan = _get_plan_or_404(patient, plan_id)
+        _require_draft(plan)
+
+        req = sz.NutritionAIApplyRequestSerializer(data=request.data)
+        req.is_valid(raise_exception=True)
+        proposal = _nutrition_ai_verify_proposal(
+            req.validated_data["proposal_token"], patient_id=patient.id, plan_id=plan.id, doctor_id=request.user.id,
+        )
+
+        foods_by_id = {f.id: f for f in Food.objects.filter(is_active=True)}
+        assessment = getattr(patient, "assessment", None)
+        # Re-validate the ALREADY-normalized proposal against a fresh
+        # catalogue snapshot — validate_proposal() accepts its own normalized
+        # output unchanged (same shape), so this doubles as a straightforward
+        # "did anything relevant change since ai-suggest" recheck (e.g. a
+        # food got deactivated in the meantime).
+        proposal, warnings, errors = validate_proposal(
+            proposal, foods_by_id=foods_by_id, targets=_nutrition_ai_plan_targets(plan),
+            allergy_text=assessment.food_allergy if assessment else "",
+            disliked_text=assessment.disliked_foods if assessment else "",
+            max_meals=settings.NUTRITION_AI_MAX_MEALS, max_items_per_meal=settings.NUTRITION_AI_MAX_ITEMS_PER_MEAL,
+            calorie_tolerance_pct=settings.NUTRITION_AI_CALORIE_TOLERANCE_PCT,
+            macro_tolerance_pct=settings.NUTRITION_AI_MACRO_TOLERANCE_PCT,
+        )
+        if errors:
+            raise ValidationError({"detail": "تعذّر تطبيق المقترح: " + "؛ ".join(errors[:5]) + " — يرجى توليد مقترح جديد"})
+
+        with transaction.atomic():
+            # Re-check Draft status inside the transaction too — belt and
+            # braces against a concurrent approve/archive between the GET
+            # that rendered the preview and this POST.
+            plan.refresh_from_db()
+            _require_draft(plan)
+
+            meals_by_type = {m.meal_type: m for m in plan.meals.all()}
+            for meal_data in proposal["meals"]:
+                meal = meals_by_type.get(meal_data["meal_type"])
+                if meal is None:
+                    continue  # every Draft plan already has all 5 fixed meal-type rows; defensive only
+                meal.time = datetime.strptime(meal_data["time"], "%H:%M").time() if meal_data["time"] else None
+                meal.save(update_fields=["time"])
+                meal.items.all().delete()
+                for item_data in meal_data["items"]:
+                    food = foods_by_id.get(item_data["food_id"]) if item_data["food_id"] else None
+                    if food:
+                        calories = round(food.calories_per_unit * item_data["quantity"], 1)
+                        protein = round(food.protein_per_unit * item_data["quantity"], 1)
+                        carbs = round(food.carbs_per_unit * item_data["quantity"], 1)
+                        fat = round(food.fat_per_unit * item_data["quantity"], 1)
+                    else:
+                        # Custom food — never invent nutrition values; the
+                        # doctor fills these in manually afterward via the
+                        # existing meal-item editor, same as any other
+                        # custom item added by hand.
+                        calories = protein = carbs = fat = 0
+                    MealItem.objects.create(
+                        meal=meal, food=food,
+                        custom_food_name=item_data["custom_food_name"],
+                        quantity=item_data["quantity"], unit=item_data["unit"], food_state=item_data["food_state"],
+                        calories=calories, protein=protein, carbs=carbs, fat=fat,
+                        alternative_text=item_data["alternative_text"], instructions=item_data["instructions"],
+                        patient_visible=item_data["patient_visible"], order=item_data["order"],
+                    )
+
+            _nutrition_ai_log(patient, plan, request.user, req_status=NutritionAIRequestLog.APPLIED, warning_count=len(warnings))
+
+        plan = patient.nutrition_plans.prefetch_related("meals__items").get(id=plan.id)
+        return Response({
+            "plan": sz.NutritionPlanSerializer(plan, context={"request": request}).data,
+            "warnings": warnings,
+        })
 
 
 class FoodListCreateView(APIView):

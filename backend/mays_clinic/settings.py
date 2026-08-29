@@ -180,6 +180,30 @@ SIMPLE_JWT = {
 # to stdout/stderr, which Railway does capture as deploy logs, without
 # touching DEBUG (so error pages/response bodies stay generic — no stack
 # traces are ever exposed to the client).
+# ---- Nutrition AI ("إنشاء خطة بالذكاء الاصطناعي" — doctor-only draft
+# nutrition-plan proposal generator, see clinic/services/nutrition_ai/) ----
+# Off by default everywhere (including Railway) until explicitly turned on
+# with a real key — ai-suggest returns a clear Arabic "not configured" error
+# rather than a 500 when either of these isn't set.
+NUTRITION_AI_ENABLED = os.environ.get("NUTRITION_AI_ENABLED", "false").strip().lower() == "true"
+NUTRITION_AI_PROVIDER = os.environ.get("NUTRITION_AI_PROVIDER", "openai").strip().lower()
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_NUTRITION_MODEL = os.environ.get("OPENAI_NUTRITION_MODEL", "gpt-5.6-luna")
+NUTRITION_AI_TIMEOUT_SECONDS = int(os.environ.get("NUTRITION_AI_TIMEOUT_SECONDS", "60"))
+NUTRITION_AI_MAX_OUTPUT_TOKENS = int(os.environ.get("NUTRITION_AI_MAX_OUTPUT_TOKENS", "6000"))
+
+# Preview-vs-target comparison tolerance (see NutritionPlanSerializer's
+# existing CALORIE_TARGET_DEVIATION_THRESHOLD_PCT for the equivalent,
+# unrelated TDEE-vs-target check — this one is meals-vs-macro-targets).
+NUTRITION_AI_CALORIE_TOLERANCE_PCT = float(os.environ.get("NUTRITION_AI_CALORIE_TOLERANCE_PCT", "10"))
+NUTRITION_AI_MACRO_TOLERANCE_PCT = float(os.environ.get("NUTRITION_AI_MACRO_TOLERANCE_PCT", "15"))
+
+# Cost/abuse controls — enforced server-side in the ai-suggest view, not
+# just the frontend's duplicate-click guard.
+NUTRITION_AI_MAX_MEALS = int(os.environ.get("NUTRITION_AI_MAX_MEALS", "7"))
+NUTRITION_AI_MAX_ITEMS_PER_MEAL = int(os.environ.get("NUTRITION_AI_MAX_ITEMS_PER_MEAL", "8"))
+NUTRITION_AI_RATE_LIMIT_PER_HOUR = int(os.environ.get("NUTRITION_AI_RATE_LIMIT_PER_HOUR", "10"))
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
