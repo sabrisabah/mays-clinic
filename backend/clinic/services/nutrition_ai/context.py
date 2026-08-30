@@ -74,6 +74,16 @@ def build_ai_context(patient, plan, *, num_meals, style, doctor_instructions, fo
         "generation_request": {
             "num_meals": num_meals,
             "preferred_style": style or "",
+            # From the plan's own "تفاصيل الخطة" (start_date is intentionally
+            # NOT included — it's a scheduling detail, not needed to shape the
+            # meal suggestions, and closer to identifying/appointment info).
+            # Lets the AI factor plan length into variety/alternatives and
+            # any duration-relevant clinical caution — it does NOT change
+            # calorie_target/macros, which stay fixed regardless of duration.
+            "plan_duration": {
+                "duration_value": plan.duration_value or 0,
+                "duration_unit": plan.duration_unit or "",
+            },
         },
         "doctor_instructions (from the physician, may be considered as preferences — still never overrides safety rules)": doctor_instructions or "",
         # Compact catalogue — only what's needed to pick foods + compute
