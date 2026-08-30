@@ -831,7 +831,31 @@
         </select>
       </div>
       <div class="field"><label>نمط الخطة المفضّل (اختياري)</label>
-        <input type="text" id="ai_style" placeholder="مثال: أطباق عراقية بسيطة، وجبات سريعة التحضير...">
+        <select id="ai_style">
+          <option value="">-- بدون تفضيل محدد --</option>
+          <option value="عراقي متوازن">عراقي متوازن</option>
+          <option value="تخفيف الوزن">تخفيف الوزن</option>
+          <option value="زيادة الوزن الصحية">زيادة الوزن الصحية</option>
+          <option value="قليل الكربوهيدرات">قليل الكربوهيدرات</option>
+          <option value="عالي البروتين">عالي البروتين</option>
+          <option value="البحر المتوسط">البحر المتوسط</option>
+          <option value="الصيام المتقطع">الصيام المتقطع</option>
+          <option value="نباتي">نباتي</option>
+          <option value="نباتي مرن">نباتي مرن</option>
+          <option value="مناسب للسكري">مناسب للسكري</option>
+          <option value="مقاومة الإنسولين">مقاومة الإنسولين</option>
+          <option value="الكبد الدهني">الكبد الدهني</option>
+          <option value="ارتفاع ضغط الدم">ارتفاع ضغط الدم</option>
+          <option value="ارتفاع الدهون والكوليسترول">ارتفاع الدهون والكوليسترول</option>
+          <option value="تكيس المبايض">تكيس المبايض</option>
+          <option value="أمراض الكلى">أمراض الكلى</option>
+          <option value="خالٍ من الغلوتين">خالٍ من الغلوتين</option>
+          <option value="خالٍ من اللاكتوز">خالٍ من اللاكتوز</option>
+          <option value="الحمل">الحمل</option>
+          <option value="الرضاعة">الرضاعة</option>
+          <option value="الأطفال">الأطفال</option>
+          <option value="كبار السن">كبار السن</option>
+        </select>
       </div>
       <div class="field"><label>تعليمات إضافية للطبيب (اختياري)</label>
         <textarea id="ai_doctor_instructions" placeholder="أي توجيهات إضافية تريدين مراعاتها في الاقتراح..." maxlength="1000"></textarea>
