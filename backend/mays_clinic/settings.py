@@ -188,7 +188,7 @@ SIMPLE_JWT = {
 NUTRITION_AI_ENABLED = os.environ.get("NUTRITION_AI_ENABLED", "false").strip().lower() == "true"
 NUTRITION_AI_PROVIDER = os.environ.get("NUTRITION_AI_PROVIDER", "openai").strip().lower()
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_NUTRITION_MODEL = os.environ.get("OPENAI_NUTRITION_MODEL", "gpt-5.6-luna")
+OPENAI_NUTRITION_MODEL = os.environ.get("OPENAI_NUTRITION_MODEL", "gpt-5.6-sol")
 NUTRITION_AI_TIMEOUT_SECONDS = int(os.environ.get("NUTRITION_AI_TIMEOUT_SECONDS", "60"))
 NUTRITION_AI_MAX_OUTPUT_TOKENS = int(os.environ.get("NUTRITION_AI_MAX_OUTPUT_TOKENS", "6000"))
 

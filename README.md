@@ -114,7 +114,7 @@ python -m http.server 5500
 | `NUTRITION_AI_ENABLED` | تفعيل/تعطيل الميزة بالكامل | `true` (افتراضياً `false`) |
 | `NUTRITION_AI_PROVIDER` | مزوّد الذكاء الاصطناعي | `openai` |
 | `OPENAI_API_KEY` | مفتاح OpenAI السري الافتراضي (لا يُخزَّن في الكود أو GitHub أبداً) | — |
-| `OPENAI_NUTRITION_MODEL` | اسم النموذج المستخدَم | `gpt-5.6-luna` |
+| `OPENAI_NUTRITION_MODEL` | اسم النموذج المستخدَم | `gpt-5.6-sol` |
 | `NUTRITION_AI_TIMEOUT_SECONDS` | مهلة انتظار استجابة المزوّد (ثوانٍ) | `60` |
 | `NUTRITION_AI_MAX_OUTPUT_TOKENS` | الحد الأقصى لعدد tokens في الرد | `6000` |
 | `NUTRITION_AI_CALORIE_TOLERANCE_PCT` | نسبة التفاوت المسموحة في السعرات قبل تحذير | `10` |
