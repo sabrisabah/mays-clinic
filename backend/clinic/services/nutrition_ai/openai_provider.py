@@ -22,6 +22,18 @@ OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
 MAX_RESPONSE_BYTES = 2_000_000
 
 
+def _is_reasoning_model(model: str) -> bool:
+    """GPT-5-and-newer model families (gpt-5, gpt-5.6-sol/terra/luna, o1, o3,
+    ...) reject the legacy Chat Completions 'max_tokens' parameter (must be
+    'max_completion_tokens' instead) and reject any non-default temperature
+    (only 1, the default, is accepted) — both return HTTP 400 Bad Request.
+    Older models (e.g. the gpt-4o-mini fallback) still expect the legacy
+    names, so branch on the model name rather than assuming one or the
+    other."""
+    m = (model or "").lower()
+    return m.startswith(("gpt-5", "o1", "o3", "o4"))
+
+
 def _resolve_openai_api_key() -> str:
     """The key set from /admin (NutritionAISettings, a singleton row) always
     wins when present, so a doctor/admin can rotate it without a Railway
@@ -59,9 +71,16 @@ class OpenAINutritionAIProvider(NutritionAIProvider):
                 {"role": "user", "content": build_user_message(context)},
             ],
             "response_format": {"type": "json_object"},
-            "max_tokens": max_tokens,
-            "temperature": 0.4,
         }
+        if _is_reasoning_model(model):
+            # gpt-5+ families: legacy 'max_tokens' -> 400 Bad Request, must
+            # use 'max_completion_tokens'; only the default temperature (1)
+            # is accepted, so 'temperature' is omitted entirely rather than
+            # sent as anything but the default.
+            payload["max_completion_tokens"] = max_tokens
+        else:
+            payload["max_tokens"] = max_tokens
+            payload["temperature"] = 0.4
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
