@@ -1222,6 +1222,55 @@ let npPlans = [];
 let npCurrentPlan = null;
 let npActiveMealId = null;
 let npEditingItemId = null;
+// TDEE currently shown in npTdeeOut — either live-computed (Draft plan) or
+// the locked historical snapshot (Active/Archived plan). npUpdateDiffPreview
+// compares the calorie target against THIS, not npCurrentPlan.tdee directly,
+// so the "الفرق عن TDEE" badge always matches what's actually on screen.
+let npCurrentEnergyTdee = 0;
+
+// Mirrors backend/clinic/utils.py compute_bmr()/compute_tdee() (Mifflin-St
+// Jeor) exactly, using the patient's already-loaded assessment (lastAssessment)
+// and profile (currentPatient) — purely a client-side PREVIEW so "الاحتياج من
+// الطاقة" updates the instant the doctor picks مستوى النشاط, without waiting
+// for a "حفظ كمسودة" round-trip. Nothing computed here is ever sent to the
+// server: npSavePlan() only sends activity_level, and the server always
+// recomputes its own authoritative bmr/tdee from the DB (_snapshot_bmr_tdee).
+function npComputeBmrTdeeLive(activityLevel) {
+  const weight = lastAssessment ? parseFloat(lastAssessment.weight) || 0 : 0;
+  const heightM = lastAssessment ? parseFloat(lastAssessment.height) || 0 : 0; // stored in meters, same as backend
+  const age = currentPatient ? parseInt(currentPatient.age) || 0 : 0;
+  const gender = currentPatient ? currentPatient.gender : "";
+  if (!weight || !heightM || !age) return { bmr: 0, tdee: 0 };
+  const heightCm = heightM * 100;
+  const rawBmr = gender === "أنثى"
+    ? 10 * weight + 6.25 * heightCm - 5 * age - 161
+    : 10 * weight + 6.25 * heightCm - 5 * age + 5;
+  const bmr = Math.round(rawBmr);
+  const factorEntry = NP_ACTIVITY_LEVELS.find(([name]) => name === activityLevel);
+  const factor = factorEntry ? factorEntry[1] : 1.20;
+  const tdee = Math.round(bmr * factor);
+  return { bmr, tdee };
+}
+
+// Updates the npBmrOut/npTdeeOut badges and npCurrentEnergyTdee. For a Draft
+// plan this recomputes live from the current assessment + selected activity
+// level; for a locked (Active/Archived) plan it shows the stored historical
+// snapshot instead, since the patient's weight may have changed since that
+// plan was approved and the approved record shouldn't silently drift.
+function npRefreshEnergyNeeds() {
+  const plan = npCurrentPlan;
+  if (!plan) return;
+  let bmr = plan.bmr || 0;
+  let tdee = plan.tdee || 0;
+  if (!npIsLocked()) {
+    const activityLevel = document.getElementById("np_activity_level").value;
+    const live = npComputeBmrTdeeLive(activityLevel);
+    if (live.bmr) { bmr = live.bmr; tdee = live.tdee; }
+  }
+  document.getElementById("npBmrOut").textContent = bmr || "-";
+  document.getElementById("npTdeeOut").textContent = tdee || "-";
+  npCurrentEnergyTdee = tdee;
+}
 
 function npStatusLabel(status) {
   return status === "Draft" ? "مسودة" : status === "Active" ? "مفعّلة" : "مؤرشفة";
@@ -1448,8 +1497,7 @@ function npRenderBuilder() {
   actSel.innerHTML = `<option value="">-- اختر مستوى النشاط --</option>` + NP_ACTIVITY_LEVELS.map(([name]) =>
     `<option value="${name}" ${plan.activity_level === name ? "selected" : ""}>${name}</option>`
   ).join("");
-  document.getElementById("npBmrOut").textContent = plan.bmr || "-";
-  document.getElementById("npTdeeOut").textContent = plan.tdee || "-";
+  npRefreshEnergyNeeds();
   document.getElementById("np_calorie_target").value = plan.calorie_target || "";
   document.getElementById("np_target_reason").value = plan.target_reason || "";
 
@@ -1511,8 +1559,11 @@ function npUpdateDiffPreview() {
 
   // 2) Clinical deviation check — the value is plausible on its own, but
   // represents a real deficit/surplus vs TDEE that needs a documented
-  // clinical reason before the plan can be approved.
-  const tdee = plan.tdee || 0;
+  // clinical reason before the plan can be approved. Compares against
+  // npCurrentEnergyTdee (what npTdeeOut is actually showing right now —
+  // live-computed for a Draft plan) rather than plan.tdee directly, which
+  // can be stale until the next save.
+  const tdee = npCurrentEnergyTdee || 0;
   const diff = Math.round(target - tdee);
   const pct = tdee ? Math.round((diff / tdee) * 1000) / 10 : 0;
   const badge = document.getElementById("npDiffBadge");
@@ -1526,7 +1577,10 @@ function npUpdateDiffPreview() {
     : "السبب السريري للانحراف الكبير عن TDEE (مطلوب قبل الاعتماد)";
 }
 document.getElementById("np_calorie_target").addEventListener("input", npUpdateDiffPreview);
-document.getElementById("np_activity_level").addEventListener("change", npUpdateDiffPreview);
+document.getElementById("np_activity_level").addEventListener("change", () => {
+  npRefreshEnergyNeeds();
+  npUpdateDiffPreview();
+});
 
 function npMacrosFromPercentages(calories, proteinPct, carbsPct, fatPct) {
   return [
