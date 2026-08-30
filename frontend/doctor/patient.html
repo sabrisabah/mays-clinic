@@ -1227,6 +1227,36 @@ let npEditingItemId = null;
 // compares the calorie target against THIS, not npCurrentPlan.tdee directly,
 // so the "الفرق عن TDEE" badge always matches what's actually on screen.
 let npCurrentEnergyTdee = 0;
+// Mirrors the currentWeightManuallyEdited pattern used for the treatment
+// goal's current_weight field: السعرات المستهدفة auto-follows TDEE/الهدف
+// until the doctor types into it directly, at which point their typed
+// value always wins and auto-fill stops touching the field.
+let npCalorieTargetManuallyEdited = false;
+
+// Suggested calorie_target from the currently-shown TDEE and the patient's
+// treatment goal (lastAssessment.goal_type): -500 kcal for نزول وزن,
+// +500 kcal for زيادة وزن, unchanged for تثبيت/تحسين صحي — the standard
+// ~0.5kg/week deficit-or-surplus rule of thumb. Returns 0 (no suggestion)
+// until TDEE is known.
+function npSuggestedCalorieTarget() {
+  const tdee = npCurrentEnergyTdee || 0;
+  if (!tdee) return 0;
+  const goal = lastAssessment ? lastAssessment.goal_type : "";
+  if (goal === "نزول وزن") return tdee - 500;
+  if (goal === "زيادة وزن") return tdee + 500;
+  return tdee;
+}
+
+// Fills np_calorie_target with the suggestion above, but only while the
+// doctor hasn't typed a value in themselves — never overwrites a manually
+// chosen target. Existing implausibility/deviation warnings still apply
+// to the auto-filled value exactly as they would to a typed one.
+function npAutoFillCalorieTarget() {
+  if (npCalorieTargetManuallyEdited) return;
+  const suggested = npSuggestedCalorieTarget();
+  if (!suggested) return;
+  document.getElementById("np_calorie_target").value = suggested;
+}
 
 // Mirrors backend/clinic/utils.py compute_bmr()/compute_tdee() (Mifflin-St
 // Jeor) exactly, using the patient's already-loaded assessment (lastAssessment)
@@ -1499,6 +1529,12 @@ function npRenderBuilder() {
   ).join("");
   npRefreshEnergyNeeds();
   document.getElementById("np_calorie_target").value = plan.calorie_target || "";
+  // A plan that already has a saved target was set deliberately (by a
+  // doctor, possibly on an earlier visit) — treat it like a manual edit so
+  // auto-fill never overwrites it; only a brand-new/never-set target (0)
+  // gets the automatic suggestion below.
+  npCalorieTargetManuallyEdited = !!plan.calorie_target;
+  npAutoFillCalorieTarget();
   document.getElementById("np_target_reason").value = plan.target_reason || "";
 
   // Macro targets
@@ -1576,9 +1612,13 @@ function npUpdateDiffPreview() {
     ? "⚠️ الفرق عن TDEE يتجاوز الحد السريري المحدد. يرجى توثيق السبب السريري قبل اعتماد الخطة."
     : "السبب السريري للانحراف الكبير عن TDEE (مطلوب قبل الاعتماد)";
 }
-document.getElementById("np_calorie_target").addEventListener("input", npUpdateDiffPreview);
+document.getElementById("np_calorie_target").addEventListener("input", () => {
+  npCalorieTargetManuallyEdited = true; // doctor typed a value — auto-fill stops touching this field
+  npUpdateDiffPreview();
+});
 document.getElementById("np_activity_level").addEventListener("change", () => {
   npRefreshEnergyNeeds();
+  npAutoFillCalorieTarget();
   npUpdateDiffPreview();
 });
 
