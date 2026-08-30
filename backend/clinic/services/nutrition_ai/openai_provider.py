@@ -78,6 +78,15 @@ class OpenAINutritionAIProvider(NutritionAIProvider):
             # is accepted, so 'temperature' is omitted entirely rather than
             # sent as anything but the default.
             payload["max_completion_tokens"] = max_tokens
+            # Default reasoning effort ("medium") can burn a large share of
+            # max_completion_tokens on hidden reasoning before ever writing
+            # the visible JSON, which is what was pushing real requests past
+            # our own NUTRITION_AI_TIMEOUT_SECONDS (and, before that, past
+            # gunicorn's worker timeout). "low" is OpenAI's own recommendation
+            # for latency-sensitive workloads and this task doesn't need deep
+            # reasoning — the calorie/macro targets are already fixed, the
+            # model is just fitting meals to them.
+            payload["reasoning_effort"] = getattr(settings, "OPENAI_REASONING_EFFORT", "low")
         else:
             payload["max_tokens"] = max_tokens
             payload["temperature"] = 0.4

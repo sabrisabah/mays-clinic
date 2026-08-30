@@ -115,7 +115,8 @@ python -m http.server 5500
 | `NUTRITION_AI_PROVIDER` | مزوّد الذكاء الاصطناعي | `openai` |
 | `OPENAI_API_KEY` | مفتاح OpenAI السري الافتراضي (لا يُخزَّن في الكود أو GitHub أبداً) | — |
 | `OPENAI_NUTRITION_MODEL` | اسم النموذج المستخدَم | `gpt-5.6-sol` |
-| `NUTRITION_AI_TIMEOUT_SECONDS` | مهلة انتظار استجابة المزوّد (ثوانٍ) | `60` |
+| `OPENAI_REASONING_EFFORT` | مستوى "التفكير" لنماذج gpt-5 وما بعدها فقط (`none`/`low`/`medium`/`high`/`xhigh`/`max`) — قيمة أعلى تعني دقة أعلى محتملة مقابل زمن استجابة أطول بكثير | `low` |
+| `NUTRITION_AI_TIMEOUT_SECONDS` | مهلة انتظار استجابة المزوّد (ثوانٍ) — يجب أن تبقى أقل من مهلة عامل gunicorn (`--timeout 90` في `railway.toml`/`Procfile`) وإلا يُقتَل الطلب بخطأ 500 خام قبل ظهور رسالة المهلة العربية | `60` |
 | `NUTRITION_AI_MAX_OUTPUT_TOKENS` | الحد الأقصى لعدد tokens في الرد | `6000` |
 | `NUTRITION_AI_CALORIE_TOLERANCE_PCT` | نسبة التفاوت المسموحة في السعرات قبل تحذير | `10` |
 | `NUTRITION_AI_MACRO_TOLERANCE_PCT` | نسبة التفاوت المسموحة في الماكروز قبل تحذير | `15` |

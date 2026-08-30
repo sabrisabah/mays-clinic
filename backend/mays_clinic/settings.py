@@ -189,6 +189,13 @@ NUTRITION_AI_ENABLED = os.environ.get("NUTRITION_AI_ENABLED", "false").strip().l
 NUTRITION_AI_PROVIDER = os.environ.get("NUTRITION_AI_PROVIDER", "openai").strip().lower()
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_NUTRITION_MODEL = os.environ.get("OPENAI_NUTRITION_MODEL", "gpt-5.6-sol")
+# Only applies to gpt-5+/o-series "reasoning" models (see
+# openai_provider._is_reasoning_model). Lower effort trades away some of the
+# model's own double-checking for much lower latency; "low" is OpenAI's own
+# recommendation for latency-sensitive workloads and is plenty for fitting
+# meals to an already-fixed calorie/macro target. Valid values (per OpenAI):
+# none, low, medium, high, xhigh, max.
+OPENAI_REASONING_EFFORT = os.environ.get("OPENAI_REASONING_EFFORT", "low")
 NUTRITION_AI_TIMEOUT_SECONDS = int(os.environ.get("NUTRITION_AI_TIMEOUT_SECONDS", "60"))
 NUTRITION_AI_MAX_OUTPUT_TOKENS = int(os.environ.get("NUTRITION_AI_MAX_OUTPUT_TOKENS", "6000"))
 
