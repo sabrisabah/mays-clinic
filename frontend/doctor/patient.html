@@ -882,6 +882,7 @@
           <option value="الأطفال">الأطفال</option>
           <option value="كبار السن">كبار السن</option>
         </select>
+        <small id="aiStyleHint" style="display:none; color:var(--muted);">🔹 مقترح تلقائياً حسب السياق السريري للمريضة/المريض (التاريخ الطبي، الحساسية الغذائية، الهدف العلاجي، العمر) — يمكنك تغييره بحرية.</small>
       </div>
       <div class="field"><label>تعليمات إضافية للطبيب (اختياري)</label>
         <textarea id="ai_doctor_instructions" placeholder="أي توجيهات إضافية تريدين مراعاتها في الاقتراح..." maxlength="1000"></textarea>
@@ -1961,15 +1962,53 @@ function npUpdateAiButtonState() {
   btn.title = npIsLocked() ? "متاح فقط عندما تكون الخطة الحالية مسودة" : "";
 }
 
+// Auto-suggests one "نمط الخطة المفضّل" option from the patient's own
+// clinical context instead of always opening on "-- بدون تفضيل محدد --" —
+// the doctor still picks from the same 22 options and can change/clear it
+// freely; this only decides what's pre-selected when the modal opens.
+// Note this is a UX nudge only — the AI already receives the patient's
+// FULL clinical picture (medical_history, allergies, goal, etc.) via
+// build_ai_context() regardless of which single style ends up chosen here
+// (see backend/clinic/services/nutrition_ai/context.py), so an imperfect
+// guess here never hides anything from the model itself.
+// Priority favors disease-specific patterns (most actionable for shaping
+// actual food choices) over the broader life-stage options, and checks
+// only one condition per branch since the <select> holds a single value —
+// a patient matching more than one is still fully described in
+// doctor_instructions/medical_history sent to the AI either way.
+function aiSuggestedStyleFromContext() {
+  const mh = (lastAssessment && Array.isArray(lastAssessment.medical_history)) ? lastAssessment.medical_history : [];
+  const allergy = (lastAssessment && lastAssessment.food_allergy) ? String(lastAssessment.food_allergy) : "";
+  const goal = lastAssessment ? lastAssessment.goal_type : "";
+  const age = currentPatient ? parseInt(currentPatient.age) || 0 : 0;
+
+  if (mh.includes("سكري")) return "مناسب للسكري";
+  if (mh.includes("كبد دهني")) return "الكبد الدهني";
+  if (mh.includes("ضغط دم")) return "ارتفاع ضغط الدم";
+  if (mh.includes("تكيس مبايض")) return "تكيس المبايض";
+  if (/غلوتين/.test(allergy)) return "خالٍ من الغلوتين";
+  if (/لاكتوز|حليب|ألبان|البان/.test(allergy)) return "خالٍ من اللاكتوز";
+  if (goal === "نزول وزن") return "تخفيف الوزن";
+  if (goal === "زيادة وزن") return "زيادة الوزن الصحية";
+  if (age > 0 && age < 18) return "الأطفال";
+  if (age >= 60) return "كبار السن";
+  return "";
+}
+
 function aiOpenInstructionsModal() {
   document.getElementById("ai_num_meals").value = "5";
-  document.getElementById("ai_style").value = "";
+  const suggestedStyle = aiSuggestedStyleFromContext();
+  document.getElementById("ai_style").value = suggestedStyle;
+  document.getElementById("aiStyleHint").style.display = suggestedStyle ? "" : "none";
   document.getElementById("ai_doctor_instructions").value = "";
   hideMsg(document.getElementById("aiSuggestMsg"));
   document.getElementById("aiLoadingWrap").style.display = "none";
   document.getElementById("aiGenerateSubmitBtn").disabled = false;
   document.getElementById("aiInstructionsModal").style.display = "flex";
 }
+document.getElementById("ai_style").addEventListener("change", () => {
+  document.getElementById("aiStyleHint").style.display = "none";
+});
 function aiCloseInstructionsModal() {
   document.getElementById("aiInstructionsModal").style.display = "none";
 }
