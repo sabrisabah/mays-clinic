@@ -316,6 +316,7 @@
                   <option value="يوم">يوم</option><option value="أسبوع">أسبوع</option><option value="شهر">شهر</option>
                 </select>
               </div>
+              <small id="npDurationDaysHint" style="color:var(--muted);"></small>
             </div>
             <div class="field"><label>الهدف العلاجي</label><input type="text" id="np_treatment_objective"></div>
           </div>
@@ -1552,6 +1553,7 @@ function npRenderBuilder() {
   document.getElementById("np_start_date").value = plan.start_date || "";
   document.getElementById("np_duration_value").value = plan.duration_value || "";
   document.getElementById("np_duration_unit").value = plan.duration_unit || "أسبوع";
+  npUpdateDurationHint();
   document.getElementById("np_treatment_objective").value = plan.treatment_objective || "";
 
   // Safety flags — pregnancy/lactation only apply to female patients, so
@@ -1632,6 +1634,27 @@ function npUpdateSafetyRequirements() {
 }
 ["np_is_pregnant", "np_is_lactating", "np_eating_disorder_risk", "np_medically_unstable"].forEach((id) => {
   document.getElementById(id).addEventListener("change", npUpdateSafetyRequirements);
+});
+
+// "المدة" is stored as a plain (value, unit) pair — e.g. (11, "شهر") means
+// 11 months, NOT 11 days — this live "≈ N يوم" readout exists purely so
+// that reading unambiguous, especially for a doctor entering a large value
+// (like 11) is never mistaken for days at a glance. Approximate on purpose
+// (week=7 days exactly, month≈30 days) — this is a display aid only, the
+// exact (value, unit) pair is still what's saved and what's sent to the AI
+// (see backend/clinic/services/nutrition_ai/context.py's plan_duration).
+const NP_DURATION_UNIT_DAYS = { "يوم": 1, "أسبوع": 7, "شهر": 30 };
+function npUpdateDurationHint() {
+  const hintEl = document.getElementById("npDurationDaysHint");
+  const value = parseInt(document.getElementById("np_duration_value").value) || 0;
+  const unit = document.getElementById("np_duration_unit").value;
+  if (!value || !unit) { hintEl.textContent = ""; return; }
+  const days = value * (NP_DURATION_UNIT_DAYS[unit] || 0);
+  hintEl.textContent = unit === "يوم" ? "" : `≈ ${days} يوم إجمالاً`;
+}
+["np_duration_value", "np_duration_unit"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", npUpdateDurationHint);
+  document.getElementById(id).addEventListener("change", npUpdateDurationHint);
 });
 
 function npUpdateDiffPreview() {

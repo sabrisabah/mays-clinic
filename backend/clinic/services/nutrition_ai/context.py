@@ -13,6 +13,17 @@ for the automated check that this stays true.
 """
 from ...utils import macros_from_percentages, protein_first_breakdown
 
+# Matches the frontend's NP_DURATION_UNIT_DAYS in doctor/patient.html (the
+# live "≈ N يوم" hint next to "المدة") — kept in sync by hand, same as the
+# BMR/TDEE formula duplication elsewhere in this codebase.
+_DURATION_UNIT_DAYS = {"يوم": 1, "أسبوع": 7, "شهر": 30}
+
+
+def _duration_total_days_approx(duration_value, duration_unit):
+    if not duration_value or not duration_unit:
+        return 0
+    return duration_value * _DURATION_UNIT_DAYS.get(duration_unit, 0)
+
 
 def build_ai_context(patient, plan, *, num_meals, style, doctor_instructions, foods_queryset):
     """patient: clinic.models.Patient: plan: clinic.models.NutritionPlan
@@ -83,6 +94,13 @@ def build_ai_context(patient, plan, *, num_meals, style, doctor_instructions, fo
             "plan_duration": {
                 "duration_value": plan.duration_value or 0,
                 "duration_unit": plan.duration_unit or "",
+                # Spelled out explicitly so "11 شهر" is never misread as
+                # "11 يوم" — approximate on purpose (week=7 days, month=30
+                # days), this is a clarifying figure alongside the exact
+                # (value, unit) pair above, not a replacement for it.
+                "duration_total_days_approx": _duration_total_days_approx(
+                    plan.duration_value, plan.duration_unit
+                ),
             },
         },
         "doctor_instructions (from the physician, may be considered as preferences — still never overrides safety rules)": doctor_instructions or "",
