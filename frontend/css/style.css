@@ -210,3 +210,51 @@ a.plain { color: var(--primary); }
 
 .char-counter { font-size: .76rem; color: var(--muted); text-align: left; margin-top: 2px; }
 .char-counter.over { color: var(--danger); font-weight: 700; }
+
+/* Nutrition plan — day tabs (patient-facing) */
+.day-tabs-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.day-tab-btn {
+  padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border); background: #fff;
+  color: var(--muted); cursor: pointer; font-family: inherit; font-size: .88rem;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.day-tab-btn:hover { background: var(--primary-light); color: var(--primary-dark); }
+.day-tab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; box-shadow: var(--shadow); }
+
+/* Nutrition plan — meal cards (patient-facing) */
+.meal-block {
+  border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+  margin-bottom: 18px; box-shadow: var(--shadow);
+}
+.meal-block:last-child { margin-bottom: 0; }
+.meal-block-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--primary-light); padding: 12px 16px; border-bottom: 1px solid var(--border);
+}
+.meal-block-header .meal-title { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--primary-dark); font-size: 1rem; }
+.meal-block-header .meal-icon { font-size: 1.15rem; }
+.meal-block-header .meal-time { font-size: .8rem; color: var(--muted); font-weight: 400; }
+.meal-block-header .meal-total { flex-shrink: 0; }
+.meal-block table { margin: 0; }
+.meal-block th { background: #f4f8f5; font-size: .82rem; }
+.meal-block td { font-size: .88rem; }
+.meal-block tbody tr:last-child td { border-bottom: none; }
+.meal-block .col-alt, .meal-block .col-note { color: var(--muted); }
+
+.day-section-title {
+  display: flex; align-items: center; gap: 10px; margin: 26px 0 14px; font-size: 1.05rem;
+  color: var(--primary-dark); font-weight: 800;
+}
+.day-section-title:first-child { margin-top: 0; }
+.day-section-title .day-badge {
+  background: var(--primary); color: #fff; border-radius: 8px; padding: 3px 12px; font-size: .85rem;
+}
+.day-section-title .day-cal { color: var(--muted); font-size: .82rem; font-weight: 400; }
+
+.plan-day-hidden { display: none; }
+
+@media print {
+  .day-tabs-row { display: none !important; }
+  .plan-day-hidden { display: block !important; }
+  .meal-block { box-shadow: none; break-inside: avoid; }
+}

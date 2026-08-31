@@ -34,6 +34,7 @@ refreshUserChip("userChip", Auth.getName());
 const patientId = Auth.getPatientId();
 
 const PLAN_MEAL_TYPES = [["فطور", "فطور"], ["سناك1", "سناك 1"], ["غداء", "غداء"], ["سناك2", "سناك 2"], ["عشاء", "عشاء"]];
+const PLAN_MEAL_ICON = { "فطور": "🌅", "سناك1": "🥪", "غداء": "🍽️", "سناك2": "🍎", "عشاء": "🌙" };
 function planMealLabel(mealType) {
   return (PLAN_MEAL_TYPES.find(([v]) => v === mealType) || [mealType, mealType])[1];
 }
@@ -41,6 +42,18 @@ function escapeHtml(s) {
   const div = document.createElement("div");
   div.textContent = s || "";
   return div.innerHTML;
+}
+
+let planActiveDay = 1;
+
+function planSetActiveDay(day) {
+  planActiveDay = day;
+  document.querySelectorAll(".plan-day").forEach((el) => {
+    el.classList.toggle("plan-day-hidden", Number(el.dataset.day) !== day);
+  });
+  document.querySelectorAll(".day-tab-btn").forEach((btn) => {
+    btn.classList.toggle("active", Number(btn.dataset.day) === day);
+  });
 }
 
 async function load() {
@@ -56,33 +69,55 @@ async function load() {
 
     const allMeals = (plan.meals || []).slice().sort((a, b) => a.order - b.order);
     const dayNumbers = [...new Set(allMeals.map((m) => m.day_number || 1))].sort((a, b) => a - b);
-    const cycleNoteHtml = dayNumbers.length > 1
-      ? `<p style="color:var(--muted); font-size:.85rem; margin-bottom:14px;">🔁 هذه دورة من ${dayNumbers.length} أيام مختلفة — تتكرر بنفس الترتيب طوال مدة الخطة كاملة.</p>` : "";
+    const isMultiDay = dayNumbers.length > 1;
+    if (!dayNumbers.includes(planActiveDay)) planActiveDay = dayNumbers[0] || 1;
+
+    const cycleNoteHtml = isMultiDay
+      ? `<p style="color:var(--muted); font-size:.85rem; margin-bottom:14px;">🔁 هذه دورة من ${dayNumbers.length} أيام مختلفة — تتكرر بنفس الترتيب طوال مدة الخطة كاملة. اختاري يوماً لعرض وجباته، أو اطبعي الخطة لرؤية كل الأيام معاً.</p>` : "";
+
+    const dayTabsHtml = isMultiDay ? `
+      <div class="day-tabs-row">
+        ${dayNumbers.map((day) => {
+          const dayCalories = allMeals
+            .filter((m) => (m.day_number || 1) === day)
+            .reduce((sum, meal) => sum + (meal.items || []).filter((it) => it.patient_visible).reduce((s, it) => s + (it.calories || 0), 0), 0);
+          return `<button type="button" class="day-tab-btn${day === planActiveDay ? " active" : ""}" data-day="${day}" onclick="planSetActiveDay(${day})">اليوم ${day} — ${Math.round(dayCalories)} سعرة</button>`;
+        }).join("")}
+      </div>` : "";
+
     const mealsHtml = dayNumbers.map((day) => {
       const dayMeals = allMeals.filter((m) => (m.day_number || 1) === day);
-      const dayHeaderHtml = dayNumbers.length > 1
-        ? `<h4 style="margin:18px 0 10px; padding-top:10px; border-top:1px solid var(--muted);">اليوم ${day}</h4>` : "";
+      const dayTitleHtml = isMultiDay
+        ? `<div class="day-section-title"><span class="day-badge">اليوم ${day}</span></div>` : "";
       const dayMealsHtml = dayMeals.map((meal) => {
         const items = (meal.items || []).filter((it) => it.patient_visible);
         if (!items.length) return "";
+        const subtotal = items.reduce((sum, it) => sum + (it.calories || 0), 0);
         const rows = items.map((it) => `
           <tr>
             <td>${escapeHtml(it.food_name)}</td>
             <td>${it.quantity} ${escapeHtml(it.unit || "")}${it.food_state ? " (" + escapeHtml(it.food_state) + ")" : ""}</td>
             <td>${it.calories} سعرة</td>
-            <td>${escapeHtml(it.alternative_text || "-")}</td>
-            <td>${escapeHtml(it.instructions || "-")}</td>
+            <td class="col-alt">${escapeHtml(it.alternative_text || "-")}</td>
+            <td class="col-note">${escapeHtml(it.instructions || "-")}</td>
           </tr>`).join("");
         return `
-          <div style="margin-bottom:20px;">
-            <h3 style="margin-bottom:8px;">${planMealLabel(meal.meal_type)}${meal.time ? ` — <span style="color:var(--muted); font-weight:400; font-size:.85rem;">${meal.time}</span>` : ""}</h3>
+          <div class="meal-block">
+            <div class="meal-block-header">
+              <div class="meal-title">
+                <span class="meal-icon">${PLAN_MEAL_ICON[meal.meal_type] || "🍴"}</span>
+                <span>${planMealLabel(meal.meal_type)}</span>
+                ${meal.time ? `<span class="meal-time">— ${meal.time}</span>` : ""}
+              </div>
+              <span class="badge green meal-total">${Math.round(subtotal)} سعرة</span>
+            </div>
             <table>
               <thead><tr><th>الصنف</th><th>الكمية</th><th>السعرات</th><th>البديل المكافئ</th><th>تعليمات</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>`;
       }).join("");
-      return dayHeaderHtml + dayMealsHtml;
+      return `<div class="plan-day${day === planActiveDay ? "" : " plan-day-hidden"}" data-day="${day}">${dayTitleHtml}${dayMealsHtml}</div>`;
     }).join("");
 
     content.innerHTML = `
@@ -100,6 +135,7 @@ async function load() {
       <div class="card">
         <h3>🔹 جدول الوجبات اليومي</h3>
         ${cycleNoteHtml}
+        ${dayTabsHtml}
         ${mealsHtml || `<div class="empty-state">لم يتم إضافة تفاصيل الوجبات بعد.</div>`}
       </div>
 
