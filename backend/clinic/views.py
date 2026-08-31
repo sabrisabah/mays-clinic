@@ -570,27 +570,49 @@ class NutritionPlanAISuggestView(APIView):
             foods_queryset=active_foods, cycle_length_days=cycle_length_days,
         )
 
-        try:
-            raw = provider.generate_plan(context)
-        except NutritionAIError as exc:
-            _nutrition_ai_log(
-                patient, plan, request.user, req_status=NutritionAIRequestLog.FAILED,
-                provider=provider.name, model=getattr(settings, "OPENAI_NUTRITION_MODEL", ""), error_category=exc.category,
-            )
-            raise ValidationError({"detail": exc.message})
-
-        usage = raw.get("usage") or {}
         foods_by_id = {f.id: f for f in active_foods}
         assessment = getattr(patient, "assessment", None)
-        proposal, warnings, errors = validate_proposal(
-            raw, foods_by_id=foods_by_id, targets=_nutrition_ai_plan_targets(plan),
-            allergy_text=assessment.food_allergy if assessment else "",
-            disliked_text=assessment.disliked_foods if assessment else "",
-            max_meals=settings.NUTRITION_AI_MAX_MEALS, max_items_per_meal=settings.NUTRITION_AI_MAX_ITEMS_PER_MEAL,
-            calorie_tolerance_pct=settings.NUTRITION_AI_CALORIE_TOLERANCE_PCT,
-            macro_tolerance_pct=settings.NUTRITION_AI_MACRO_TOLERANCE_PCT,
-            cycle_length_days=cycle_length_days,
-        )
+
+        # One automatic retry when the model returns a response that PARSES
+        # fine but validates as empty/invalid (e.g. a genuine real incident:
+        # a completed — not truncated — response with just 301 output tokens
+        # and zero meals, confirmed via NutritionAIRequestLog's token counts
+        # for that request; not a timeout, the model just gave up instead of
+        # attempting a best-effort plan). Gated to cycle_length_days == 1
+        # only: a retry doubles worst-case wall time, and a multi-day
+        # request's own per-call timeout (_scaled_limits in openai_provider)
+        # already sits close to gunicorn's 90s worker timeout on its own —
+        # doubling that would risk reintroducing the exact WORKER TIMEOUT
+        # 500 this project already had to fix once. A single-day request's
+        # timeout (60s default) comfortably allows two sequential attempts
+        # within the 90s budget. NEVER retries on NutritionAIError (timeout/
+        # network/auth/rate-limit) — those are either already slow (retrying
+        # only makes it slower) or not something an immediate retry fixes.
+        max_attempts = 2 if cycle_length_days == 1 else 1
+        proposal, warnings, errors = None, [], []
+        for attempt in range(1, max_attempts + 1):
+            try:
+                raw = provider.generate_plan(context)
+            except NutritionAIError as exc:
+                _nutrition_ai_log(
+                    patient, plan, request.user, req_status=NutritionAIRequestLog.FAILED,
+                    provider=provider.name, model=getattr(settings, "OPENAI_NUTRITION_MODEL", ""), error_category=exc.category,
+                )
+                raise ValidationError({"detail": exc.message})
+
+            usage = raw.get("usage") or {}
+            proposal, warnings, errors = validate_proposal(
+                raw, foods_by_id=foods_by_id, targets=_nutrition_ai_plan_targets(plan),
+                allergy_text=assessment.food_allergy if assessment else "",
+                disliked_text=assessment.disliked_foods if assessment else "",
+                max_meals=settings.NUTRITION_AI_MAX_MEALS, max_items_per_meal=settings.NUTRITION_AI_MAX_ITEMS_PER_MEAL,
+                calorie_tolerance_pct=settings.NUTRITION_AI_CALORIE_TOLERANCE_PCT,
+                macro_tolerance_pct=settings.NUTRITION_AI_MACRO_TOLERANCE_PCT,
+                cycle_length_days=cycle_length_days,
+            )
+            if not errors:
+                break
+
         if errors:
             _nutrition_ai_log(
                 patient, plan, request.user, req_status=NutritionAIRequestLog.FAILED,

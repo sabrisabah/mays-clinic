@@ -900,6 +900,20 @@
     </div>
   </div>
 
+  <!-- AI nutrition-plan generator — error popup (shown ON TOP of whichever
+       AI modal is open, so a failure is impossible to miss/mistake for the
+       small inline msg boxes used elsewhere in this file). -->
+  <div class="modal-overlay" id="aiErrorModal" style="display:none; z-index:1100;">
+    <div class="modal-box" style="max-width:420px; text-align:center;">
+      <div style="font-size:2rem; margin-bottom:6px;">⚠️</div>
+      <h3 style="margin-bottom:8px;">تعذر إنشاء المقترح</h3>
+      <p id="aiErrorMessage" style="color:var(--text); white-space:pre-wrap; margin:0;"></p>
+      <div class="btn-row" style="justify-content:center; margin-top:16px;">
+        <button type="button" class="btn" id="aiErrorCloseBtn">حسناً</button>
+      </div>
+    </div>
+  </div>
+
   <!-- AI nutrition-plan generator — preview modal -->
   <div class="modal-overlay" id="aiPreviewModal" style="display:none;">
     <div class="modal-box" style="max-width:760px;">
@@ -2200,6 +2214,7 @@ async function aiRunGenerate(options) {
     document.getElementById("aiPreviewModal").style.display = "flex";
   } catch (err) {
     showMsg(suggestMsgEl, err.message, "error");
+    aiShowErrorPopup(err.message);
   } finally {
     aiRequestInFlight = false;
     document.getElementById("aiLoadingWrap").style.display = "none";
@@ -2222,6 +2237,20 @@ document.getElementById("aiPreviewRegenerateBtn").addEventListener("click", () =
 function aiMealLabel(mealType) {
   return npMealLabel(mealType);
 }
+
+// Prominent popup for AI-suggest/ai-apply failures — layered on top of
+// whichever AI modal is already open (aiErrorModal's z-index is higher
+// than .modal-overlay's default) so the doctor can't miss it or confuse it
+// with the small inline .msg boxes used elsewhere. Message text only
+// (textContent, not innerHTML) — err.message here is always our own
+// server-generated Arabic string, never raw/unescaped AI output.
+function aiShowErrorPopup(message) {
+  document.getElementById("aiErrorMessage").textContent = message || "حدث خطأ غير متوقع";
+  document.getElementById("aiErrorModal").style.display = "flex";
+}
+document.getElementById("aiErrorCloseBtn").addEventListener("click", () => {
+  document.getElementById("aiErrorModal").style.display = "none";
+});
 
 let aiPreviewProposal = null;
 let aiPreviewActiveDay = 1;
@@ -2337,6 +2366,7 @@ document.getElementById("aiPreviewApplyBtn").addEventListener("click", async () 
     showMsg(msgEl, "تم إضافة مقترح الذكاء الاصطناعي إلى المسودة ✅ — لا تزال الخطة مسودة، راجعيها ثم اعتمديها من الأزرار أعلاه", "success");
   } catch (err) {
     showMsg(applyMsgEl, err.message, "error");
+    aiShowErrorPopup(err.message);
   } finally {
     applyBtn.disabled = false;
   }
