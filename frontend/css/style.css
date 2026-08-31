@@ -235,11 +235,21 @@ a.plain { color: var(--primary); }
 .meal-block-header .meal-icon { font-size: 1.15rem; }
 .meal-block-header .meal-time { font-size: .8rem; color: var(--muted); font-weight: 400; }
 .meal-block-header .meal-total { flex-shrink: 0; }
-.meal-block table { margin: 0; }
-.meal-block th { background: #f4f8f5; font-size: .82rem; }
-.meal-block td { font-size: .88rem; }
-.meal-block tbody tr:last-child td { border-bottom: none; }
-.meal-block .col-alt, .meal-block .col-note { color: var(--muted); }
+.meal-block table { margin: 0; border-collapse: collapse; }
+.meal-block th, .meal-block td {
+  border: 1px solid var(--border);
+  padding: 14px 16px;
+}
+.meal-block th {
+  background: var(--primary-light); font-size: 1rem; font-weight: 800; color: var(--primary-dark);
+  border-color: #c7d9c3;
+}
+.meal-block td { font-size: .98rem; line-height: 1.5; }
+.meal-block td:first-child { font-weight: 700; color: var(--text); }
+.meal-block tbody tr:nth-child(odd) td { background: #ffffff; }
+.meal-block tbody tr:nth-child(even) td { background: #f2f7f3; }
+.meal-block tbody tr:hover td { background: var(--primary-light); }
+.meal-block .col-alt, .meal-block .col-note { color: var(--muted); font-size: .92rem; }
 
 .day-section-title {
   display: flex; align-items: center; gap: 10px; margin: 26px 0 14px; font-size: 1.05rem;
