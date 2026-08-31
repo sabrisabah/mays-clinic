@@ -34,6 +34,23 @@ def _is_reasoning_model(model: str) -> bool:
     return m.startswith(("gpt-5", "o1", "o3", "o4"))
 
 
+def _scaled_limits(cycle_length_days, base_timeout, base_max_tokens):
+    """A multi-day proposal (cycle_length_days > 1 — see context.py's
+    compute_cycle_length_days) needs proportionally more output tokens and
+    more time than a single "typical day" request: asking for e.g. a 7-day
+    cycle at the same fixed 6000-token budget a 1-day request uses risks a
+    silently truncated/malformed response, and the extra generation time can
+    blow straight through NUTRITION_AI_TIMEOUT_SECONDS — the exact WORKER
+    TIMEOUT 500 this project already hit once for a single day. Both limits
+    below are capped well under gunicorn's own --timeout 90 (railway.toml/
+    Procfile) so a worst-case slow multi-day request still surfaces our own
+    clean "انتهت مهلة الاتصال" error instead of another raw 500."""
+    cycle_length_days = max(1, int(cycle_length_days or 1))
+    max_tokens = min(20000, base_max_tokens * cycle_length_days)
+    timeout = min(80, base_timeout + 10 * (cycle_length_days - 1))
+    return timeout, max_tokens
+
+
 def _resolve_openai_api_key() -> str:
     """The key set from /admin (NutritionAISettings, a singleton row) always
     wins when present, so a doctor/admin can rotate it without a Railway
@@ -63,6 +80,8 @@ class OpenAINutritionAIProvider(NutritionAIProvider):
         model = getattr(settings, "OPENAI_NUTRITION_MODEL", "") or "gpt-4o-mini"
         timeout = getattr(settings, "NUTRITION_AI_TIMEOUT_SECONDS", 60)
         max_tokens = getattr(settings, "NUTRITION_AI_MAX_OUTPUT_TOKENS", 6000)
+        cycle_length_days = (context.get("generation_request") or {}).get("cycle_length_days", 1)
+        timeout, max_tokens = _scaled_limits(cycle_length_days, timeout, max_tokens)
 
         payload = {
             "model": model,

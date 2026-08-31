@@ -37,6 +37,7 @@ RESPONSE_JSON_SCHEMA_DESCRIPTION = {
     "warnings": ["قائمة تحذيرات نصية بالعربية إن وجدت — يمكن أن تكون فارغة []"],
     "meals": [
         {
+            "day_number": "رقم اليوم ضمن دورة الأيام المتكررة — عدد صحيح من 1 حتى قيمة cycle_length_days المُرسَلة إليك ضمن generation_request (استخدم 1 دائماً إن كانت cycle_length_days تساوي 1)",
             "meal_type": f"واحدة بالضبط من: {ALLOWED_MEAL_TYPES}",
             "time": "وقت الوجبة بصيغة HH:MM (اختياري، أو null)",
             "order": "رقم ترتيب صحيح ابتداءً من 0",

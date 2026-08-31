@@ -25,10 +25,36 @@ def _duration_total_days_approx(duration_value, duration_unit):
     return duration_value * _DURATION_UNIT_DAYS.get(duration_unit, 0)
 
 
-def build_ai_context(patient, plan, *, num_meals, style, doctor_instructions, foods_queryset):
+# Cap on how many genuinely distinct days the AI is asked to generate in one
+# call. A doctor's chosen duration can be anything from a few days to many
+# months (see the "المدة"/duration_total_days_approx feature) — asking for a
+# fully unique day-by-day plan for a whole month+ isn't practical in a single
+# request (response size, cost, latency all scale with it — this project
+# already had to fix a real 500 from a gunicorn worker timeout on a
+# single-day request; more days makes that risk worse, not better). Instead,
+# for any duration of a week or longer the AI produces this many distinct
+# days once, as a ROTATING CYCLE that then repeats for the plan's full
+# stated duration — day_number on each meal identifies which day of the
+# cycle it belongs to (see Meal.day_number). Shorter durations (under a
+# week) get exactly that many distinct days instead, since a longer cycle
+# than the plan itself makes no sense.
+MAX_CYCLE_LENGTH_DAYS = 7
+
+
+def compute_cycle_length_days(duration_value, duration_unit):
+    total_days = _duration_total_days_approx(duration_value, duration_unit)
+    return max(1, min(MAX_CYCLE_LENGTH_DAYS, total_days or 1))
+
+
+def build_ai_context(patient, plan, *, num_meals, style, doctor_instructions, foods_queryset, cycle_length_days=1):
     """patient: clinic.models.Patient: plan: clinic.models.NutritionPlan
     (already confirmed Draft + belonging to patient by the caller).
     foods_queryset: active Food rows to offer as the catalogue.
+    cycle_length_days: from compute_cycle_length_days() above — the caller
+    (views.py) computes this once and passes it in so it's the exact same
+    number used later to validate the AI's response (services.nutrition_ai
+    .validators.validate_proposal) — never recomputed twice with any risk of
+    drifting apart.
     Returns a plain JSON-serialisable dict — no model instances, no IDs
     beyond the food catalogue's own food_id (which is not patient-identifying)."""
     assessment = getattr(patient, "assessment", None)
@@ -85,6 +111,14 @@ def build_ai_context(patient, plan, *, num_meals, style, doctor_instructions, fo
         "generation_request": {
             "num_meals": num_meals,
             "preferred_style": style or "",
+            # How many DISTINCT days of meals to produce (day_number 1..this
+            # value on every meal object) — this exact set of days then
+            # repeats as a rotating cycle for the plan's whole duration.
+            # cycle_length_days=1 (the default/legacy case, e.g. a
+            # manually-built plan being extended, or a duration shorter than
+            # a day) means exactly what it always meant before this field
+            # existed: one typical day, repeated as-is every day.
+            "cycle_length_days": cycle_length_days,
             # From the plan's own "تفاصيل الخطة" (start_date is intentionally
             # NOT included — it's a scheduling detail, not needed to shape the
             # meal suggestions, and closer to identifying/appointment info).

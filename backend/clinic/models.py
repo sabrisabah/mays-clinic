@@ -270,12 +270,22 @@ class Meal(models.Model):
     meal_type = models.CharField(max_length=20, choices=MEAL_TYPES)
     time = models.TimeField(null=True, blank=True)
     order = models.PositiveIntegerField(default=0)
+    # Which day of a repeating cycle this meal belongs to (1-based). A
+    # manually-built plan always has day_number=1 for all 5 of its fixed
+    # meal-type rows (created once in views._create_plan_with_meals) — this
+    # is unchanged, single-day behavior exactly like before this field
+    # existed. Only the AI generator (ai-apply) ever writes day_number > 1,
+    # to represent a rotating N-day cycle (N = min(7, plan duration in days))
+    # that repeats for the plan's full stated duration — see
+    # clinic/services/nutrition_ai/context.py's cycle_length_days. A plan
+    # can therefore have up to 5 x 7 = 35 Meal rows instead of always 5.
+    day_number = models.PositiveSmallIntegerField(default=1)
 
     class Meta:
-        ordering = ["order", "id"]
+        ordering = ["day_number", "order", "id"]
 
     def __str__(self):
-        return f"{self.meal_type} - خطة #{self.plan_id}"
+        return f"{self.meal_type} - خطة #{self.plan_id} - يوم {self.day_number}"
 
 
 class MealItem(models.Model):

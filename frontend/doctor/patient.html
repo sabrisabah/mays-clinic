@@ -394,6 +394,7 @@
             <h3 style="margin:0;">🔹 جدول الوجبات اليومي</h3>
             <button type="button" class="btn small" id="npAiGenerateBtn" style="display:none;">✨ إنشاء خطة بالذكاء الاصطناعي</button>
           </div>
+          <div id="npMealDayTabs" style="display:none;"></div>
           <div id="npMealsWrap"></div>
         </div>
 
@@ -909,6 +910,7 @@
       <div id="aiPreviewSummary" style="margin-bottom:10px; font-size:.92rem;"></div>
       <div id="aiPreviewWarnings"></div>
       <div id="aiPreviewComparison" style="margin:14px 0;"></div>
+      <div id="aiPreviewDayTabs" style="display:none;"></div>
       <div id="aiPreviewMeals"></div>
       <div class="msg error" id="aiApplyMsg" style="display:none; margin-top:10px;"></div>
       <div class="btn-row" style="margin-top:16px;">
@@ -1274,6 +1276,15 @@ let npPlans = [];
 let npCurrentPlan = null;
 let npActiveMealId = null;
 let npEditingItemId = null;
+// Which day-of-cycle tab is showing in "🔹 جدول الوجبات اليومي" (only
+// relevant for a plan with meals spread across day_number > 1 — see
+// npRenderMeals). Reset to day 1 only when the SELECTED PLAN actually
+// changes (npActiveMealDayForPlanId tracks that), not on every re-render —
+// npRenderBuilder re-runs after every minor save (e.g. editing one item),
+// and snapping back to day 1 each time would be disorienting while working
+// on day 3+.
+let npActiveMealDay = 1;
+let npActiveMealDayForPlanId = null;
 // TDEE currently shown in npTdeeOut — either live-computed (Draft plan) or
 // the locked historical snapshot (Active/Archived plan). npUpdateDiffPreview
 // compares the calorie target against THIS, not npCurrentPlan.tdee directly,
@@ -1506,6 +1517,11 @@ document.getElementById("npNewPlanBtn").addEventListener("click", async () => {
 function npRenderBuilder() {
   const plan = npCurrentPlan;
   const locked = npIsLocked();
+
+  if (npActiveMealDayForPlanId !== plan.id) {
+    npActiveMealDay = 1;
+    npActiveMealDayForPlanId = plan.id;
+  }
 
   // Patient context / safety bar
   const ctx = document.getElementById("npContextBar");
@@ -1755,10 +1771,38 @@ document.querySelectorAll("[data-template]").forEach((btn) => {
   });
 });
 
+function npSetActiveMealDay(day) {
+  npActiveMealDay = day;
+  npRenderMeals();
+}
+
 function npRenderMeals() {
   const wrap = document.getElementById("npMealsWrap");
   const locked = npIsLocked();
-  const meals = (npCurrentPlan.meals || []).slice().sort((a, b) => a.order - b.order);
+  const allMeals = (npCurrentPlan.meals || []).slice().sort((a, b) => a.order - b.order);
+
+  // Day tabs only appear once a plan actually HAS meals on more than one
+  // day (i.e. an AI-applied rotating cycle — see Meal.day_number). A
+  // manually-built plan's 5 fixed meal rows are always day_number=1, so
+  // this stays exactly as it was before this feature for every plan that
+  // never went through the AI generator.
+  const dayNumbers = [...new Set(allMeals.map((m) => m.day_number || 1))].sort((a, b) => a - b);
+  const tabsWrap = document.getElementById("npMealDayTabs");
+  if (dayNumbers.length > 1) {
+    if (!dayNumbers.includes(npActiveMealDay)) npActiveMealDay = dayNumbers[0];
+    tabsWrap.style.display = "";
+    tabsWrap.innerHTML = `
+      <p style="color:var(--muted); font-size:.85rem; margin:0 0 8px;">🔁 هذه الخطة دورة من ${dayNumbers.length} أيام مختلفة تتكرر طوال مدة الخطة (وُلّدت بالذكاء الاصطناعي).</p>
+      <div class="btn-row" style="margin:0 0 12px; flex-wrap:wrap;">
+        ${dayNumbers.map((d) => `<button type="button" class="btn small ${d === npActiveMealDay ? "" : "secondary"}" onclick="npSetActiveMealDay(${d})">اليوم ${d}</button>`).join("")}
+      </div>`;
+  } else {
+    npActiveMealDay = 1;
+    tabsWrap.style.display = "none";
+    tabsWrap.innerHTML = "";
+  }
+
+  const meals = allMeals.filter((m) => (m.day_number || 1) === npActiveMealDay);
   wrap.innerHTML = meals.map((meal) => {
     const items = meal.items || [];
     const subtotal = items.reduce((acc, it) => {
@@ -2094,6 +2138,9 @@ function aiMealLabel(mealType) {
   return npMealLabel(mealType);
 }
 
+let aiPreviewProposal = null;
+let aiPreviewActiveDay = 1;
+
 function aiRenderPreview(proposal, warnings) {
   // escapeHtml() is applied to every single AI-provided string below
   // (summary, warnings, food names, alternatives, instructions) before it
@@ -2108,11 +2155,12 @@ function aiRenderPreview(proposal, warnings) {
       ${warnings.map((w) => `⚠️ ${escapeHtml(String(w))}`).join("<br>")}
     </div>` : "";
 
+  const cycleLength = proposal.cycle_length_days || 1;
   const cmp = proposal.comparison || {};
   const rows = [["calories", "السعرات", "سعرة"], ["protein", "بروتين", "غم"], ["carbs", "كارب", "غم"], ["fat", "دهون", "غم"]];
   document.getElementById("aiPreviewComparison").innerHTML = `
     <table>
-      <thead><tr><th></th><th>الهدف</th><th>مجموع المقترح</th><th>الفرق</th></tr></thead>
+      <thead><tr><th></th><th>الهدف اليومي</th><th>${cycleLength > 1 ? "متوسط المقترح (عبر الدورة)" : "مجموع المقترح"}</th><th>الفرق</th></tr></thead>
       <tbody>${rows.map(([key, label, unit]) => {
         const r = cmp[key] || { target: 0, actual: 0, diff: 0, diff_pct: 0 };
         const tolerant = Math.abs(r.diff_pct || 0) <= (key === "calories" ? 10 : 15);
@@ -2125,7 +2173,41 @@ function aiRenderPreview(proposal, warnings) {
       }).join("")}</tbody>
     </table>`;
 
-  const meals = (proposal.meals || []).slice().sort((a, b) => a.order - b.order);
+  aiPreviewProposal = proposal;
+  aiPreviewActiveDay = 1;
+  aiRenderPreviewMeals();
+}
+
+function aiSetPreviewDay(day) {
+  aiPreviewActiveDay = day;
+  aiRenderPreviewMeals();
+}
+
+function aiRenderPreviewMeals() {
+  const proposal = aiPreviewProposal;
+  if (!proposal) return;
+  const cycleLength = proposal.cycle_length_days || 1;
+  const dailyTotals = proposal.daily_totals || {};
+
+  const tabsWrap = document.getElementById("aiPreviewDayTabs");
+  if (cycleLength > 1) {
+    tabsWrap.style.display = "";
+    tabsWrap.innerHTML = `
+      <p style="color:var(--muted); font-size:.85rem; margin:0 0 8px;">🔁 دورة من ${cycleLength} أيام مختلفة — تتكرر بنفس الترتيب طوال مدة الخطة كاملة.</p>
+      <div class="btn-row" style="margin:0 0 12px; flex-wrap:wrap;">
+        ${Array.from({ length: cycleLength }, (_, i) => i + 1).map((d) => {
+          const dayCal = dailyTotals[d] ? Math.round(dailyTotals[d].calories) : null;
+          return `<button type="button" class="btn small ${d === aiPreviewActiveDay ? "" : "secondary"}" onclick="aiSetPreviewDay(${d})">اليوم ${d}${dayCal !== null ? ` — ${dayCal} سعرة` : ""}</button>`;
+        }).join("")}
+      </div>`;
+  } else {
+    tabsWrap.style.display = "none";
+    tabsWrap.innerHTML = "";
+  }
+
+  const meals = (proposal.meals || [])
+    .filter((m) => (m.day_number || 1) === aiPreviewActiveDay)
+    .slice().sort((a, b) => a.order - b.order);
   document.getElementById("aiPreviewMeals").innerHTML = meals.map((meal) => {
     const rowsHtml = (meal.items || []).map((it) => `
       <tr>
@@ -2235,23 +2317,31 @@ async function npDoAction(action) {
 function npPrintPlan(patientView) {
   const plan = npCurrentPlan;
   if (!plan) return;
-  const meals = (plan.meals || []).slice().sort((a, b) => a.order - b.order);
-  const mealsHtml = meals.map((meal) => {
-    const items = (meal.items || []).filter((it) => !patientView || it.patient_visible);
-    if (!items.length) return "";
-    const rows = items.map((it) => `
-      <tr>
-        <td>${escapeHtml(it.food_name)}</td>
-        <td>${it.quantity} ${escapeHtml(it.unit || "")}${it.food_state ? " (" + escapeHtml(it.food_state) + ")" : ""}</td>
-        <td>${it.calories} سعرة</td>
-        <td>${escapeHtml(it.alternative_text || "-")}</td>
-        <td>${escapeHtml(it.instructions || "-")}</td>
-      </tr>`).join("");
-    return `<h3>${npMealLabel(meal.meal_type)}${meal.time ? " — " + meal.time : ""}</h3>
-      <table border="1" cellpadding="6" style="border-collapse:collapse; width:100%; margin-bottom:16px;">
-        <thead><tr><th>الصنف</th><th>الكمية</th><th>السعرات</th><th>البديل</th><th>تعليمات</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`;
+  const allMeals = (plan.meals || []).slice().sort((a, b) => a.order - b.order);
+  const dayNumbers = [...new Set(allMeals.map((m) => m.day_number || 1))].sort((a, b) => a - b);
+  const cycleNote = dayNumbers.length > 1
+    ? `<p>🔁 هذه دورة من ${dayNumbers.length} أيام مختلفة — تتكرر بنفس الترتيب طوال مدة الخطة كاملة.</p>` : "";
+  const mealsHtml = dayNumbers.map((day) => {
+    const dayMeals = allMeals.filter((m) => (m.day_number || 1) === day);
+    const dayHeader = dayNumbers.length > 1 ? `<h2 style="margin-top:22px; border-top:2px solid #333; padding-top:10px;">اليوم ${day}</h2>` : "";
+    const dayMealsHtml = dayMeals.map((meal) => {
+      const items = (meal.items || []).filter((it) => !patientView || it.patient_visible);
+      if (!items.length) return "";
+      const rows = items.map((it) => `
+        <tr>
+          <td>${escapeHtml(it.food_name)}</td>
+          <td>${it.quantity} ${escapeHtml(it.unit || "")}${it.food_state ? " (" + escapeHtml(it.food_state) + ")" : ""}</td>
+          <td>${it.calories} سعرة</td>
+          <td>${escapeHtml(it.alternative_text || "-")}</td>
+          <td>${escapeHtml(it.instructions || "-")}</td>
+        </tr>`).join("");
+      return `<h3>${npMealLabel(meal.meal_type)}${meal.time ? " — " + meal.time : ""}</h3>
+        <table border="1" cellpadding="6" style="border-collapse:collapse; width:100%; margin-bottom:16px;">
+          <thead><tr><th>الصنف</th><th>الكمية</th><th>السعرات</th><th>البديل</th><th>تعليمات</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+    }).join("");
+    return dayHeader + dayMealsHtml;
   }).join("");
   const win = window.open("", "_blank");
   win.document.write(`
@@ -2260,7 +2350,8 @@ function npPrintPlan(patientView) {
     <body>
       <h1>الخطة الغذائية — ${escapeHtml(currentPatient ? currentPatient.full_name || "" : "")}</h1>
       <p>${escapeHtml(plan.name || "")} — إصدار ${plan.version}${plan.start_date ? " — تاريخ البدء: " + plan.start_date : ""}</p>
-      <p>السعرات المستهدفة: ${plan.calorie_target} سعرة — بروتين ${plan.protein_grams} غم — كارب ${plan.carbs_grams} غم — دهون ${plan.fat_grams} غم</p>
+      <p>السعرات المستهدفة يومياً: ${plan.calorie_target} سعرة — بروتين ${plan.protein_grams} غم — كارب ${plan.carbs_grams} غم — دهون ${plan.fat_grams} غم</p>
+      ${cycleNote}
       ${mealsHtml}
       ${plan.patient_notes ? `<h3>ملاحظات</h3><p>${escapeHtml(plan.patient_notes)}</p>` : ""}
       ${(!patientView && plan.plan_notes) ? `<h3>ملاحظات الطبيب</h3><p>${escapeHtml(plan.plan_notes)}</p>` : ""}

@@ -40,7 +40,7 @@ from .utils import (
 from . import serializers as sz
 from .services.nutrition_ai import get_nutrition_ai_provider
 from .services.nutrition_ai.base import NutritionAIError
-from .services.nutrition_ai.context import build_ai_context
+from .services.nutrition_ai.context import build_ai_context, compute_cycle_length_days
 from .services.nutrition_ai.validators import validate_proposal
 
 
@@ -557,11 +557,17 @@ class NutritionPlanAISuggestView(APIView):
             _nutrition_ai_log(patient, plan, request.user, req_status=NutritionAIRequestLog.FAILED, error_category=exc.category)
             raise ValidationError({"detail": exc.message})
 
+        # Rotating-cycle length — computed ONCE here from the plan's own
+        # duration fields and reused for both the prompt (context.py) and
+        # the response validation below, so the AI is never validated
+        # against a different number than it was told to target.
+        cycle_length_days = compute_cycle_length_days(plan.duration_value, plan.duration_unit)
+
         active_foods = list(Food.objects.filter(is_active=True))
         context = build_ai_context(
             patient, plan,
             num_meals=num_meals, style=opts.get("style", ""), doctor_instructions=opts.get("doctor_instructions", ""),
-            foods_queryset=active_foods,
+            foods_queryset=active_foods, cycle_length_days=cycle_length_days,
         )
 
         try:
@@ -583,6 +589,7 @@ class NutritionPlanAISuggestView(APIView):
             max_meals=settings.NUTRITION_AI_MAX_MEALS, max_items_per_meal=settings.NUTRITION_AI_MAX_ITEMS_PER_MEAL,
             calorie_tolerance_pct=settings.NUTRITION_AI_CALORIE_TOLERANCE_PCT,
             macro_tolerance_pct=settings.NUTRITION_AI_MACRO_TOLERANCE_PCT,
+            cycle_length_days=cycle_length_days,
         )
         if errors:
             _nutrition_ai_log(
@@ -630,6 +637,12 @@ class NutritionPlanAIApplyView(APIView):
 
         foods_by_id = {f.id: f for f in Food.objects.filter(is_active=True)}
         assessment = getattr(patient, "assessment", None)
+        # Re-derived from the plan's CURRENT duration rather than trusted
+        # from the token — if the doctor changed "المدة" between ai-suggest
+        # and ai-apply, a day_number the old cycle used but the new one no
+        # longer covers correctly fails validation below (same "did
+        # anything relevant change" recheck philosophy as foods_by_id).
+        cycle_length_days = compute_cycle_length_days(plan.duration_value, plan.duration_unit)
         # Re-validate the ALREADY-normalized proposal against a fresh
         # catalogue snapshot — validate_proposal() accepts its own normalized
         # output unchanged (same shape), so this doubles as a straightforward
@@ -642,6 +655,7 @@ class NutritionPlanAIApplyView(APIView):
             max_meals=settings.NUTRITION_AI_MAX_MEALS, max_items_per_meal=settings.NUTRITION_AI_MAX_ITEMS_PER_MEAL,
             calorie_tolerance_pct=settings.NUTRITION_AI_CALORIE_TOLERANCE_PCT,
             macro_tolerance_pct=settings.NUTRITION_AI_MACRO_TOLERANCE_PCT,
+            cycle_length_days=cycle_length_days,
         )
         if errors:
             raise ValidationError({"detail": "تعذّر تطبيق المقترح: " + "؛ ".join(errors[:5]) + " — يرجى توليد مقترح جديد"})
@@ -653,11 +667,29 @@ class NutritionPlanAIApplyView(APIView):
             plan.refresh_from_db()
             _require_draft(plan)
 
-            meals_by_type = {m.meal_type: m for m in plan.meals.all()}
+            # Keyed by (meal_type, day_number) rather than just meal_type —
+            # a manually-built Draft always has exactly the 5 fixed
+            # meal_type rows at day_number=1 (from _create_plan_with_meals),
+            # which get reused/updated in place exactly as before when the
+            # proposal is a single day (cycle_length_days == 1, the common
+            # case). A multi-day proposal needs additional Meal rows for
+            # day_number 2..cycle_length_days, created on demand here — and
+            # any (meal_type, day_number) row from a PREVIOUS apply that
+            # this new proposal no longer covers (e.g. the doctor
+            # regenerated with a shorter duration/cycle) gets deleted so
+            # nothing stale is left behind.
+            existing_meals = {(m.meal_type, m.day_number): m for m in plan.meals.all()}
+            keep_keys = set()
             for meal_data in proposal["meals"]:
-                meal = meals_by_type.get(meal_data["meal_type"])
+                key = (meal_data["meal_type"], meal_data["day_number"])
+                keep_keys.add(key)
+                meal = existing_meals.get(key)
                 if meal is None:
-                    continue  # every Draft plan already has all 5 fixed meal-type rows; defensive only
+                    meal = Meal.objects.create(
+                        plan=plan, meal_type=meal_data["meal_type"], day_number=meal_data["day_number"],
+                        order=MEAL_TYPES_ORDER.index(meal_data["meal_type"]),
+                    )
+                    existing_meals[key] = meal
                 meal.time = datetime.strptime(meal_data["time"], "%H:%M").time() if meal_data["time"] else None
                 meal.save(update_fields=["time"])
                 meal.items.all().delete()
@@ -682,6 +714,18 @@ class NutritionPlanAIApplyView(APIView):
                         alternative_text=item_data["alternative_text"], instructions=item_data["instructions"],
                         patient_visible=item_data["patient_visible"], order=item_data["order"],
                     )
+
+            # Prune stale extra-day rows from an EARLIER apply that this
+            # proposal no longer covers (e.g. regenerated with a shorter
+            # cycle). day_number == 1 rows are never pruned here — those are
+            # the plan's permanent 5 fixed meal-type rows created up front
+            # by _create_plan_with_meals, and a meal_type simply absent from
+            # this proposal (e.g. the doctor picked fewer than 5 meal types)
+            # has always been left untouched rather than deleted, same as
+            # before this multi-day feature existed.
+            for key, meal in list(existing_meals.items()):
+                if key not in keep_keys and key[1] > 1:
+                    meal.delete()
 
             _nutrition_ai_log(patient, plan, request.user, req_status=NutritionAIRequestLog.APPLIED, warning_count=len(warnings))
 

@@ -54,26 +54,35 @@ async function load() {
       return;
     }
 
-    const meals = (plan.meals || []).slice().sort((a, b) => a.order - b.order);
-    const mealsHtml = meals.map((meal) => {
-      const items = (meal.items || []).filter((it) => it.patient_visible);
-      if (!items.length) return "";
-      const rows = items.map((it) => `
-        <tr>
-          <td>${escapeHtml(it.food_name)}</td>
-          <td>${it.quantity} ${escapeHtml(it.unit || "")}${it.food_state ? " (" + escapeHtml(it.food_state) + ")" : ""}</td>
-          <td>${it.calories} سعرة</td>
-          <td>${escapeHtml(it.alternative_text || "-")}</td>
-          <td>${escapeHtml(it.instructions || "-")}</td>
-        </tr>`).join("");
-      return `
-        <div style="margin-bottom:20px;">
-          <h3 style="margin-bottom:8px;">${planMealLabel(meal.meal_type)}${meal.time ? ` — <span style="color:var(--muted); font-weight:400; font-size:.85rem;">${meal.time}</span>` : ""}</h3>
-          <table>
-            <thead><tr><th>الصنف</th><th>الكمية</th><th>السعرات</th><th>البديل المكافئ</th><th>تعليمات</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>`;
+    const allMeals = (plan.meals || []).slice().sort((a, b) => a.order - b.order);
+    const dayNumbers = [...new Set(allMeals.map((m) => m.day_number || 1))].sort((a, b) => a - b);
+    const cycleNoteHtml = dayNumbers.length > 1
+      ? `<p style="color:var(--muted); font-size:.85rem; margin-bottom:14px;">🔁 هذه دورة من ${dayNumbers.length} أيام مختلفة — تتكرر بنفس الترتيب طوال مدة الخطة كاملة.</p>` : "";
+    const mealsHtml = dayNumbers.map((day) => {
+      const dayMeals = allMeals.filter((m) => (m.day_number || 1) === day);
+      const dayHeaderHtml = dayNumbers.length > 1
+        ? `<h4 style="margin:18px 0 10px; padding-top:10px; border-top:1px solid var(--muted);">اليوم ${day}</h4>` : "";
+      const dayMealsHtml = dayMeals.map((meal) => {
+        const items = (meal.items || []).filter((it) => it.patient_visible);
+        if (!items.length) return "";
+        const rows = items.map((it) => `
+          <tr>
+            <td>${escapeHtml(it.food_name)}</td>
+            <td>${it.quantity} ${escapeHtml(it.unit || "")}${it.food_state ? " (" + escapeHtml(it.food_state) + ")" : ""}</td>
+            <td>${it.calories} سعرة</td>
+            <td>${escapeHtml(it.alternative_text || "-")}</td>
+            <td>${escapeHtml(it.instructions || "-")}</td>
+          </tr>`).join("");
+        return `
+          <div style="margin-bottom:20px;">
+            <h3 style="margin-bottom:8px;">${planMealLabel(meal.meal_type)}${meal.time ? ` — <span style="color:var(--muted); font-weight:400; font-size:.85rem;">${meal.time}</span>` : ""}</h3>
+            <table>
+              <thead><tr><th>الصنف</th><th>الكمية</th><th>السعرات</th><th>البديل المكافئ</th><th>تعليمات</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      }).join("");
+      return dayHeaderHtml + dayMealsHtml;
     }).join("");
 
     content.innerHTML = `
@@ -90,6 +99,7 @@ async function load() {
 
       <div class="card">
         <h3>🔹 جدول الوجبات اليومي</h3>
+        ${cycleNoteHtml}
         ${mealsHtml || `<div class="empty-state">لم يتم إضافة تفاصيل الوجبات بعد.</div>`}
       </div>
 

@@ -60,16 +60,27 @@ def validate_proposal(
     max_items_per_meal,
     calorie_tolerance_pct,
     macro_tolerance_pct,
+    cycle_length_days=1,
 ):
     """foods_by_id: {int food_id: Food instance} — active foods only, keyed
     exactly as sent to the AI (so an id the AI invents simply won't be
     found here and gets rejected).
     targets: {"calories":..,"protein":..,"carbs":..,"fat":..} grams/kcal
-    from the plan (server-side truth, never from the browser).
+    from the plan (server-side truth, never from the browser) — these are
+    PER-DAY targets, so totals are averaged across cycle_length_days below
+    before being compared to them.
     allergy_text/disliked_text: Assessment.food_allergy / disliked_foods
-    raw strings."""
+    raw strings.
+    cycle_length_days: the exact number the AI was told to use for
+    day_number (see context.compute_cycle_length_days / generation_request.
+    cycle_length_days) — passed in by the caller (views.py) rather than
+    trusted from `raw` itself, so a manipulated/hallucinated value in the
+    AI's own response can never widen what's accepted here. 1 (the
+    pre-existing default) means the original single-repeating-day
+    behavior — every meal must have day_number 1 (or omit it)."""
     errors = []
     warnings = []
+    cycle_length_days = max(1, int(cycle_length_days or 1))
 
     if not isinstance(raw, dict):
         return None, [], ["استجابة الذكاء الاصطناعي ليست بصيغة الكائن المتوقعة"]
@@ -84,14 +95,16 @@ def validate_proposal(
     if not isinstance(meals_in, list) or not meals_in:
         return None, warnings, ["لا توجد وجبات ضمن المقترح"]
 
-    effective_max_meals = min(max_meals, len(ALLOWED_MEAL_TYPES) + 5)  # sanity backstop
+    # Bound scales with the cycle: up to `effective_max_meals` distinct meal
+    # types PER DAY, across up to `cycle_length_days` distinct days.
+    effective_max_meals = min(max_meals, len(ALLOWED_MEAL_TYPES) + 5) * cycle_length_days  # sanity backstop
     if len(meals_in) > effective_max_meals:
         errors.append(f"عدد الوجبات المقترحة ({len(meals_in)}) يتجاوز الحد المسموح ({effective_max_meals})")
 
     allergens = _split_terms(allergy_text)
     disliked = _split_terms(disliked_text)
 
-    seen_meal_types = set()
+    seen_meal_types_by_day = {}
     normalized_meals = []
     has_custom_food = False
 
@@ -104,8 +117,22 @@ def validate_proposal(
         if meal_type not in ALLOWED_MEAL_TYPES:
             errors.append(f"نوع وجبة غير معروف: {meal_type!r}")
             continue
+
+        day_number_raw = m.get("day_number", 1)
+        try:
+            day_number = int(day_number_raw)
+        except (TypeError, ValueError):
+            day_number = None
+        if day_number is None or not (1 <= day_number <= cycle_length_days):
+            errors.append(
+                f"رقم يوم غير صالح للوجبة {meal_type}: {day_number_raw!r} "
+                f"(يجب أن يكون بين 1 و{cycle_length_days})"
+            )
+            continue
+
+        seen_meal_types = seen_meal_types_by_day.setdefault(day_number, set())
         if meal_type in seen_meal_types:
-            errors.append(f"تكرار نوع الوجبة ضمن نفس المقترح: {meal_type}")
+            errors.append(f"تكرار نوع الوجبة ({meal_type}) في نفس اليوم ({day_number}) ضمن المقترح")
             continue
         seen_meal_types.add(meal_type)
 
@@ -212,6 +239,7 @@ def validate_proposal(
         if not normalized_items:
             continue
         normalized_meals.append({
+            "day_number": day_number,
             "meal_type": meal_type,
             "time": time_raw if parsed_time else None,
             "order": ALLOWED_MEAL_TYPES.index(meal_type),
@@ -223,19 +251,32 @@ def validate_proposal(
     if not normalized_meals:
         return None, warnings, ["لم يتبقَّ أي وجبة صالحة بعد التحقق من المقترح"]
 
-    totals = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
+    # Per-day totals first (targets are inherently PER DAY — calorie_target
+    # etc. — so a multi-day cycle must never just sum every day together,
+    # or a 7-day proposal would look like a ~700% calorie overshoot). Then
+    # "totals"/"comparison" below are the AVERAGE across the distinct days
+    # actually present, exactly matching plain single-day behavior when
+    # cycle_length_days == 1 (average of one day == that day).
+    daily_totals = {}
     for meal in normalized_meals:
+        day_totals = daily_totals.setdefault(meal["day_number"], {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0})
         for it in meal["items"]:
             if it["is_custom"]:
                 continue
             food = foods_by_id[it["food_id"]]
-            totals["calories"] += food.calories_per_unit * it["quantity"]
-            totals["protein"] += food.protein_per_unit * it["quantity"]
-            totals["carbs"] += food.carbs_per_unit * it["quantity"]
-            totals["fat"] += food.fat_per_unit * it["quantity"]
+            day_totals["calories"] += food.calories_per_unit * it["quantity"]
+            day_totals["protein"] += food.protein_per_unit * it["quantity"]
+            day_totals["carbs"] += food.carbs_per_unit * it["quantity"]
+            day_totals["fat"] += food.fat_per_unit * it["quantity"]
 
     if has_custom_food:
         warnings.append("تحتوي الخطة على أصناف مخصصة بدون قيم غذائية محسوبة — راجعها يدوياً أو أضفها إلى قائمة الأطعمة قبل الاعتماد")
+
+    num_days = len(daily_totals) or 1
+    totals = {
+        key: sum(d[key] for d in daily_totals.values()) / num_days
+        for key in ("calories", "protein", "carbs", "fat")
+    }
 
     comparison = {}
     for key, tol in (
@@ -249,13 +290,31 @@ def validate_proposal(
         comparison[key] = {"target": target, "actual": actual, "diff": diff, "diff_pct": diff_pct}
         if target and abs(diff_pct) > tol:
             warnings.append(
-                f"الفرق في {AR_LABELS[key]} عن الهدف ({diff_pct:+.1f}%) يتجاوز الحد المسموح ({tol}%) — "
+                (f"متوسط {AR_LABELS[key]} عبر أيام الدورة" if num_days > 1 else AR_LABELS[key])
+                + f" يختلف عن الهدف ({diff_pct:+.1f}%) بأكثر من الحد المسموح ({tol}%) — "
                 f"الفعلي {actual} مقابل الهدف {target}"
             )
 
+    # Flag any INDIVIDUAL day whose calories stray far from target, even if
+    # the cycle's average (checked above) looks fine — a doctor should know
+    # if e.g. day 3 of 7 is unusually light/heavy, not just the average.
+    if num_days > 1:
+        calorie_target = targets.get("calories") or 0
+        if calorie_target:
+            for day_number in sorted(daily_totals):
+                day_calories = round(daily_totals[day_number]["calories"], 1)
+                day_diff_pct = round((day_calories - calorie_target) / calorie_target * 100, 1)
+                if abs(day_diff_pct) > calorie_tolerance_pct:
+                    warnings.append(
+                        f"اليوم {day_number} من الدورة: السعرات ({day_calories}) تختلف عن الهدف اليومي "
+                        f"({day_diff_pct:+.1f}%) بأكثر من الحد المسموح ({calorie_tolerance_pct}%)"
+                    )
+
     proposal = {
         "summary": summary,
+        "cycle_length_days": num_days,
         "meals": normalized_meals,
+        "daily_totals": {str(k): {mk: round(mv, 1) for mk, mv in v.items()} for k, v in daily_totals.items()},
         "totals": {k: round(v, 1) for k, v in totals.items()},
         "comparison": comparison,
         "has_custom_foods": has_custom_food,

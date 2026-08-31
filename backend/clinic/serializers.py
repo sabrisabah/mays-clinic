@@ -220,8 +220,8 @@ class MealSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Meal
-        fields = ["id", "plan", "meal_type", "time", "order", "items"]
-        read_only_fields = ["id", "plan", "items"]
+        fields = ["id", "plan", "meal_type", "day_number", "time", "order", "items"]
+        read_only_fields = ["id", "plan", "day_number", "items"]
 
 
 class NutritionPlanSerializer(serializers.ModelSerializer):
@@ -305,20 +305,31 @@ class NutritionPlanSerializer(serializers.ModelSerializer):
         return bool(flagged or self.get_is_under_18(obj))
 
     def get_reconciliation(self, obj):
+        # calorie_target/macro targets are PER DAY. A manually-built plan
+        # only ever has meals at day_number=1 (distinct_days == 1), so this
+        # is exactly the same "actual" total as before this field existed.
+        # An AI-applied multi-day cycle (see Meal.day_number) has meals
+        # spread across several days, so the raw sum must be averaged by
+        # the number of distinct days present — otherwise a 7-day cycle
+        # would always look like a ~700% calorie overshoot against a
+        # single-day target.
         totals = {"calories": 0, "protein": 0, "carbs": 0, "fat": 0}
+        distinct_days = set()
         for meal in obj.meals.all():
+            distinct_days.add(meal.day_number or 1)
             for item in meal.items.all():
                 totals["calories"] += item.calories or 0
                 totals["protein"] += item.protein or 0
                 totals["carbs"] += item.carbs or 0
                 totals["fat"] += item.fat or 0
+        num_days = len(distinct_days) or 1
         protein_g, carbs_g, fat_g = self._macro_grams(obj)
         targets = {"calories": obj.calorie_target or 0, "protein": protein_g, "carbs": carbs_g, "fat": fat_g}
         return {
             key: {
                 "target": targets[key],
-                "actual": round(totals[key], 1),
-                "diff": round(totals[key] - targets[key], 1),
+                "actual": round(totals[key] / num_days, 1),
+                "diff": round(totals[key] / num_days - targets[key], 1),
             }
             for key in totals
         }
