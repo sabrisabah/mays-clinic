@@ -2204,6 +2204,20 @@ async function aiRunGenerate(options) {
   document.getElementById("aiPreviewModal").style.display = "none";
 
   try {
+    // Save the plan's live "تفاصيل الخطة"/"الاحتياج من الطاقة"/"توزيع
+    // الماكروز" field values FIRST — the AI generator reads calorie_target/
+    // macros/duration from the SAVED plan row (services/nutrition_ai/
+    // context.py), not from whatever is currently typed on screen. Without
+    // this, a doctor who edits those fields and clicks "إنشاء خطة بالذكاء
+    // الاصطناعي" without first clicking "حفظ كمسودة" gets a proposal
+    // generated against the OLD (possibly zero/blank) saved values — this
+    // happened in production: a plan with 2790 kcal / 1 month visibly
+    // filled in on screen generated against 0 kcal / 0-day targets because
+    // the doctor hadn't saved yet. Same save-before-action pattern already
+    // used by npDoAction() for المسودة/الاعتماد/الأرشفة.
+    if (!npIsLocked()) {
+      await npSavePlan();
+    }
     const result = await apiFetch(
       `/api/patients/${patientId}/nutrition-plans/${npCurrentPlan.id}/ai-suggest`,
       { method: "POST", body: JSON.stringify(options) }
