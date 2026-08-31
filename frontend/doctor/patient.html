@@ -1285,6 +1285,42 @@ let npEditingItemId = null;
 // on day 3+.
 let npActiveMealDay = 1;
 let npActiveMealDayForPlanId = null;
+
+// Mirrors backend/mays_clinic/settings.py's NUTRITION_AI_CALORIE_TOLERANCE_PCT
+// (10) / NUTRITION_AI_MACRO_TOLERANCE_PCT (15) — the same percentage-based
+// tolerance the AI proposal validator (services/nutrition_ai/validators.py)
+// uses to decide whether a generated day is "close enough" to the plan's
+// daily targets. Kept as a same-value duplicate on the frontend (same
+// pattern as NP_DURATION_UNIT_DAYS above and the BMR/TDEE formula elsewhere
+// in this file) so the doctor sees a CONSISTENT definition of "on target"
+// everywhere in the UI — during AI generation preview (aiPreviewComparison/
+// aiPreviewDayTabs) AND afterward in the saved plan's own reconciliation
+// view and day tabs (npRenderReconciliation/npRenderMeals), which previously
+// used an unrelated hardcoded ±50 kcal / ±5 g absolute threshold instead.
+const NUTRITION_TOLERANCE_PCT = { calories: 10, protein: 15, carbs: 15, fat: 15 };
+
+// Sums a plan's meal items into { day_number: {calories, protein, carbs, fat} }.
+// Includes every item regardless of patient_visible — matches how the
+// backend's NutritionPlanSerializer.get_reconciliation computes totals, so
+// this always agrees with what's already shown/saved server-side.
+function npDailyTotals(meals) {
+  const byDay = {};
+  (meals || []).forEach((meal) => {
+    const day = meal.day_number || 1;
+    const t = byDay[day] || (byDay[day] = { calories: 0, protein: 0, carbs: 0, fat: 0 });
+    (meal.items || []).forEach((it) => {
+      t.calories += it.calories || 0; t.protein += it.protein || 0;
+      t.carbs += it.carbs || 0; t.fat += it.fat || 0;
+    });
+  });
+  return byDay;
+}
+
+// true if `actual` strays from `target` by more than the given tolerance %.
+function npExceedsTolerance(actual, target, tolerancePct) {
+  if (!target) return false;
+  return Math.abs((actual - target) / target * 100) > tolerancePct;
+}
 // TDEE currently shown in npTdeeOut — either live-computed (Draft plan) or
 // the locked historical snapshot (Active/Archived plan). npUpdateDiffPreview
 // compares the calorie target against THIS, not npCurrentPlan.tdee directly,
@@ -1790,11 +1826,18 @@ function npRenderMeals() {
   const tabsWrap = document.getElementById("npMealDayTabs");
   if (dayNumbers.length > 1) {
     if (!dayNumbers.includes(npActiveMealDay)) npActiveMealDay = dayNumbers[0];
+    const dailyTotals = npDailyTotals(allMeals);
+    const calorieTarget = npCurrentPlan.calorie_target || 0;
     tabsWrap.style.display = "";
     tabsWrap.innerHTML = `
-      <p style="color:var(--muted); font-size:.85rem; margin:0 0 8px;">🔁 هذه الخطة دورة من ${dayNumbers.length} أيام مختلفة تتكرر طوال مدة الخطة (وُلّدت بالذكاء الاصطناعي).</p>
+      <p style="color:var(--muted); font-size:.85rem; margin:0 0 8px;">🔁 هذه الخطة دورة من ${dayNumbers.length} أيام مختلفة تتكرر طوال مدة الخطة (وُلّدت بالذكاء الاصطناعي). الأيام المعلّمة ⚠️ تختلف سعراتها عن الهدف اليومي (${calorieTarget} سعرة) بأكثر من ${NUTRITION_TOLERANCE_PCT.calories}%.</p>
       <div class="btn-row" style="margin:0 0 12px; flex-wrap:wrap;">
-        ${dayNumbers.map((d) => `<button type="button" class="btn small ${d === npActiveMealDay ? "" : "secondary"}" onclick="npSetActiveMealDay(${d})">اليوم ${d}</button>`).join("")}
+        ${dayNumbers.map((d) => {
+          const dayCalories = Math.round((dailyTotals[d] || {}).calories || 0);
+          const isOff = npExceedsTolerance(dayCalories, calorieTarget, NUTRITION_TOLERANCE_PCT.calories);
+          const activeClass = d === npActiveMealDay ? "" : "secondary";
+          return `<button type="button" class="btn small ${activeClass}${isOff ? " day-tab-warn" : ""}" onclick="npSetActiveMealDay(${d})">${isOff ? "⚠️ " : ""}اليوم ${d} — ${dayCalories} سعرة</button>`;
+        }).join("")}
       </div>`;
   } else {
     npActiveMealDay = 1;
@@ -1995,13 +2038,32 @@ async function npDeleteItem(mealId, itemId) {
 function npRenderReconciliation() {
   const wrap = document.getElementById("npReconciliationWrap");
   const rec = npCurrentPlan.reconciliation || {};
-  const rows = [["calories", "السعرات", "سعرة"], ["protein", "بروتين", "غم"], ["carbs", "كارب", "غم"], ["fat", "دهون", "غم"]];
-  wrap.innerHTML = `
+  const rows = [
+    ["calories", "السعرات", "سعرة", NUTRITION_TOLERANCE_PCT.calories],
+    ["protein", "بروتين", "غم", NUTRITION_TOLERANCE_PCT.protein],
+    ["carbs", "كارب", "غم", NUTRITION_TOLERANCE_PCT.carbs],
+    ["fat", "دهون", "غم", NUTRITION_TOLERANCE_PCT.fat],
+  ];
+
+  const allMeals = (npCurrentPlan.meals || []);
+  const dayNumbers = [...new Set(allMeals.map((m) => m.day_number || 1))].sort((a, b) => a - b);
+  const isMultiDay = dayNumbers.length > 1;
+
+  // Percentage-based tolerance — matches services/nutrition_ai/validators.py
+  // exactly (was previously a disconnected hardcoded ±50 kcal/±5 g absolute
+  // threshold here, which doesn't mean anything relative to the doctor's
+  // actual chosen calorie_target and could show "green" for a deviation the
+  // AI generator itself would have flagged as a warning).
+  const note = isMultiDay
+    ? `<p style="color:var(--muted); font-size:.85rem; margin:0 0 10px;">القيم أدناه هي المتوسط عبر أيام الدورة الـ${dayNumbers.length} — قد ينحرف يوم واحد عن الهدف حتى لو كان المتوسط ضمن الحد المسموح. شوفي جدول الأيام تحت.</p>`
+    : "";
+
+  const summaryTable = `
     <table>
-      <thead><tr><th></th><th>الهدف</th><th>الفعلي (حسب الوجبات)</th><th>الفرق</th></tr></thead>
-      <tbody>${rows.map(([key, label, unit]) => {
+      <thead><tr><th></th><th>الهدف اليومي</th><th>${isMultiDay ? "المتوسط (حسب الوجبات)" : "الفعلي (حسب الوجبات)"}</th><th>الفرق</th></tr></thead>
+      <tbody>${rows.map(([key, label, unit, tol]) => {
         const r = rec[key] || { target: 0, actual: 0, diff: 0 };
-        const tolerant = Math.abs(r.diff) <= (key === "calories" ? 50 : 5);
+        const tolerant = !npExceedsTolerance(r.actual, r.target, tol);
         return `<tr>
           <td>${label}</td>
           <td>${r.target} ${unit}</td>
@@ -2010,6 +2072,29 @@ function npRenderReconciliation() {
         </tr>`;
       }).join("")}</tbody>
     </table>`;
+
+  let dayTable = "";
+  if (isMultiDay) {
+    const dailyTotals = npDailyTotals(allMeals);
+    const calorieTarget = npCurrentPlan.calorie_target || 0;
+    dayTable = `
+      <table style="margin-top:14px;">
+        <thead><tr><th>اليوم</th><th>الهدف اليومي</th><th>الفعلي</th><th>الفرق</th></tr></thead>
+        <tbody>${dayNumbers.map((d) => {
+          const dayCalories = Math.round((dailyTotals[d] || {}).calories || 0);
+          const diff = Math.round(dayCalories - calorieTarget);
+          const tolerant = !npExceedsTolerance(dayCalories, calorieTarget, NUTRITION_TOLERANCE_PCT.calories);
+          return `<tr>
+            <td>اليوم ${d}</td>
+            <td>${calorieTarget} سعرة</td>
+            <td>${dayCalories} سعرة</td>
+            <td><span class="badge ${tolerant ? "green" : "orange"}">${diff >= 0 ? "+" : ""}${diff} سعرة</span></td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>`;
+  }
+
+  wrap.innerHTML = note + summaryTable + dayTable;
 }
 
 // ---------------- NUTRITION AI ("إنشاء خطة بالذكاء الاصطناعي") ----------------
@@ -2191,13 +2276,16 @@ function aiRenderPreviewMeals() {
 
   const tabsWrap = document.getElementById("aiPreviewDayTabs");
   if (cycleLength > 1) {
+    const calorieTarget = npCurrentPlan.calorie_target || 0;
     tabsWrap.style.display = "";
     tabsWrap.innerHTML = `
-      <p style="color:var(--muted); font-size:.85rem; margin:0 0 8px;">🔁 دورة من ${cycleLength} أيام مختلفة — تتكرر بنفس الترتيب طوال مدة الخطة كاملة.</p>
+      <p style="color:var(--muted); font-size:.85rem; margin:0 0 8px;">🔁 دورة من ${cycleLength} أيام مختلفة — تتكرر بنفس الترتيب طوال مدة الخطة كاملة. الأيام المعلّمة ⚠️ تختلف سعراتها عن الهدف اليومي بأكثر من ${NUTRITION_TOLERANCE_PCT.calories}%.</p>
       <div class="btn-row" style="margin:0 0 12px; flex-wrap:wrap;">
         ${Array.from({ length: cycleLength }, (_, i) => i + 1).map((d) => {
           const dayCal = dailyTotals[d] ? Math.round(dailyTotals[d].calories) : null;
-          return `<button type="button" class="btn small ${d === aiPreviewActiveDay ? "" : "secondary"}" onclick="aiSetPreviewDay(${d})">اليوم ${d}${dayCal !== null ? ` — ${dayCal} سعرة` : ""}</button>`;
+          const isOff = dayCal !== null && npExceedsTolerance(dayCal, calorieTarget, NUTRITION_TOLERANCE_PCT.calories);
+          const activeClass = d === aiPreviewActiveDay ? "" : "secondary";
+          return `<button type="button" class="btn small ${activeClass}${isOff ? " day-tab-warn" : ""}" onclick="aiSetPreviewDay(${d})">${isOff ? "⚠️ " : ""}اليوم ${d}${dayCal !== null ? ` — ${dayCal} سعرة` : ""}</button>`;
         }).join("")}
       </div>`;
   } else {

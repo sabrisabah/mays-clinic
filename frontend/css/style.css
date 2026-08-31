@@ -221,6 +221,12 @@ a.plain { color: var(--primary); }
 .day-tab-btn:hover { background: var(--primary-light); color: var(--primary-dark); }
 .day-tab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; box-shadow: var(--shadow); }
 
+/* Nutrition plan — day tabs that deviate beyond the calorie tolerance
+   (doctor-facing: AI preview + saved plan builder, both use .btn small) */
+.btn.day-tab-warn { border: 2px solid #b9631a; color: #b9631a; }
+.btn.day-tab-warn.secondary { background: #fdecd8; }
+.btn.day-tab-warn:not(.secondary) { background: #b9631a; border-color: #b9631a; color: #fff; }
+
 /* Nutrition plan — meal cards (patient-facing) */
 .meal-block {
   border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
