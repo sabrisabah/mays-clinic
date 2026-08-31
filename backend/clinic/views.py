@@ -1,4 +1,5 @@
 import io
+import time
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from django.conf import settings
@@ -583,14 +584,27 @@ class NutritionPlanAISuggestView(APIView):
         # request's own per-call timeout (_scaled_limits in openai_provider)
         # already sits close to gunicorn's 90s worker timeout on its own —
         # doubling that would risk reintroducing the exact WORKER TIMEOUT
-        # 500 this project already had to fix once. A single-day request's
-        # timeout (60s default) comfortably allows two sequential attempts
-        # within the 90s budget. NEVER retries on NutritionAIError (timeout/
-        # network/auth/rate-limit) — those are either already slow (retrying
-        # only makes it slower) or not something an immediate retry fixes.
+        # 500 this project already had to fix once. NEVER retries on
+        # NutritionAIError (timeout/network/auth/rate-limit) — those are
+        # either already slow (retrying only makes it slower) or not
+        # something an immediate retry fixes.
+        #
+        # A single-day attempt's own HTTP timeout can itself be up to 60s
+        # (NUTRITION_AI_TIMEOUT_SECONDS default), so a SUCCESSFUL-but-
+        # invalid first attempt that happened to take, say, 55s would leave
+        # a full fresh 60s-budget retry with nowhere near enough of
+        # gunicorn's 90s left — that combination (slow-but-parseable first
+        # attempt + validation failure) would silently reintroduce WORKER
+        # TIMEOUT. _retry_start tracks elapsed wall time so the retry is
+        # skipped (falling straight through to the first attempt's own
+        # errors) whenever it wouldn't safely fit.
+        SAFE_RETRY_ELAPSED_BUDGET_SECONDS = 25
         max_attempts = 2 if cycle_length_days == 1 else 1
         proposal, warnings, errors = None, [], []
+        _retry_start = time.monotonic()
         for attempt in range(1, max_attempts + 1):
+            if attempt > 1 and (time.monotonic() - _retry_start) > SAFE_RETRY_ELAPSED_BUDGET_SECONDS:
+                break
             try:
                 raw = provider.generate_plan(context)
             except NutritionAIError as exc:
