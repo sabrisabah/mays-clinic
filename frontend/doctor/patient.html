@@ -855,7 +855,7 @@
       </p>
       <div class="field"><label>عدد الوجبات</label>
         <select id="ai_num_meals">
-          <option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5" selected>5</option>
+          <option value="2">2</option><option value="3" selected>3</option>
         </select>
       </div>
       <div class="field"><label>نمط الخطة المفضّل (اختياري)</label>
@@ -2162,7 +2162,7 @@ function aiSuggestedStyleFromContext() {
 }
 
 function aiOpenInstructionsModal() {
-  document.getElementById("ai_num_meals").value = "5";
+  document.getElementById("ai_num_meals").value = "3";
   const suggestedStyle = aiSuggestedStyleFromContext();
   document.getElementById("ai_style").value = suggestedStyle;
   document.getElementById("aiStyleHint").style.display = suggestedStyle ? "" : "none";
@@ -2239,7 +2239,7 @@ async function aiRunGenerate(options) {
 
 document.getElementById("aiGenerateSubmitBtn").addEventListener("click", () => {
   aiRunGenerate({
-    num_meals: parseInt(document.getElementById("ai_num_meals").value, 10) || 5,
+    num_meals: parseInt(document.getElementById("ai_num_meals").value, 10) || 3,
     style: document.getElementById("ai_style").value.trim(),
     doctor_instructions: document.getElementById("ai_doctor_instructions").value.trim(),
   });
