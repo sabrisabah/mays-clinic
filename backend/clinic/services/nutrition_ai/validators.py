@@ -11,7 +11,7 @@ the whole proposal is rejected — the caller must not display or save it.
 """
 from datetime import datetime
 
-from .schemas import ALLOWED_MEAL_TYPES, ALLOWED_UNITS, ALLOWED_FOOD_STATES, MAX_ITEM_QUANTITY
+from .schemas import ALLOWED_MEAL_TYPES, AI_SELECTABLE_MEAL_TYPES, ALLOWED_UNITS, ALLOWED_FOOD_STATES, MAX_ITEM_QUANTITY
 
 AR_LABELS = {"calories": "السعرات", "protein": "البروتين", "carbs": "الكاربوهيدرات", "fat": "الدهون"}
 
@@ -116,6 +116,17 @@ def validate_proposal(
         meal_type = m.get("meal_type")
         if meal_type not in ALLOWED_MEAL_TYPES:
             errors.append(f"نوع وجبة غير معروف: {meal_type!r}")
+            continue
+        if meal_type not in AI_SELECTABLE_MEAL_TYPES:
+            # سناك1/سناك2 are a fixed clinic-wide default applied at plan
+            # creation (views._apply_default_snack), never something the AI
+            # is asked to generate (schemas.AI_SELECTABLE_MEAL_TYPES /
+            # prompts.py rule 11). The prompt already tells it not to, but
+            # a soft instruction alone isn't reliable (see this feature's
+            # own history — empty-meals, off-target calories), so any
+            # سناك1/سناك2 the AI includes anyway is silently ignored here
+            # rather than rejecting the whole proposal over it or bothering
+            # the doctor with a warning about something already handled.
             continue
 
         day_number_raw = m.get("day_number", 1)

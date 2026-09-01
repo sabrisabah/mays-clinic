@@ -8,8 +8,24 @@ strings that would then fail validation for no good reason.
 from ...models import Meal, Food, MealItem
 
 # ["فطور", "سناك1", "غداء", "سناك2", "عشاء"] — order here IS the canonical
-# display/save order (matches views.py::MEAL_TYPES_ORDER).
+# display/save order (matches views.py::MEAL_TYPES_ORDER). Still the full
+# set of real model choices — used for order-indexing and general "is this
+# a real meal type at all" checks; NOT what the AI is invited to generate
+# (see AI_SELECTABLE_MEAL_TYPES below).
 ALLOWED_MEAL_TYPES = [value for value, _ in Meal.MEAL_TYPES]
+
+# ["فطور", "غداء", "عشاء"] — سناك1/سناك2 deliberately excluded. Doctor
+# request: AI-generated snacks kept coming back inconsistent/problematic,
+# so snacks are now a single fixed clinic-wide default applied automatically
+# at plan-creation time instead (views._apply_default_snack, configured via
+# NutritionAISettings in /admin) — never something the AI is asked to
+# produce. This is what actually gets shown to the AI as its "meal_type"
+# options (schemas.py's RESPONSE_JSON_SCHEMA_DESCRIPTION below); validators
+# .validate_proposal() additionally drops (not errors — just ignores) any
+# سناك1/سناك2 meal the AI includes anyway, as a defense-in-depth backstop
+# since a soft prompt instruction alone has proven unreliable elsewhere in
+# this feature (e.g. the earlier empty-meals and per-day-calorie issues).
+AI_SELECTABLE_MEAL_TYPES = [mt for mt in ALLOWED_MEAL_TYPES if mt not in ("سناك1", "سناك2")]
 
 # ["غم", "مل", "قطعة", "كوب", "ملعقة كبيرة", "ملعقة صغيرة"]
 ALLOWED_UNITS = [value for value, _ in Food.UNIT_CHOICES]
@@ -38,7 +54,7 @@ RESPONSE_JSON_SCHEMA_DESCRIPTION = {
     "meals": [
         {
             "day_number": "رقم اليوم ضمن دورة الأيام المتكررة — عدد صحيح من 1 حتى قيمة cycle_length_days المُرسَلة إليك ضمن generation_request (استخدم 1 دائماً إن كانت cycle_length_days تساوي 1)",
-            "meal_type": f"واحدة بالضبط من: {ALLOWED_MEAL_TYPES}",
+            "meal_type": f"واحدة بالضبط من: {AI_SELECTABLE_MEAL_TYPES} — لا تستخدم سناك1 أو سناك2 إطلاقاً، هذه ثابتة وتُدار من العيادة مباشرة وليست جزءاً من مهمتك",
             "time": "وقت الوجبة بصيغة HH:MM (اختياري، أو null)",
             "order": "رقم ترتيب صحيح ابتداءً من 0",
             "items": [

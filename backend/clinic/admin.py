@@ -428,8 +428,14 @@ class NutritionAISettingsAdmin(admin.ModelAdmin):
     redeploy. There is always exactly one row (pk=1, see
     NutritionAISettings.save()); the changelist redirects straight to it so
     this behaves like a single settings page rather than a list."""
-    fields = ["openai_api_key", "updated_at"]
+    fields = [
+        "openai_api_key",
+        "default_snack1_food", "default_snack1_quantity",
+        "default_snack2_food", "default_snack2_quantity",
+        "updated_at",
+    ]
     readonly_fields = ["updated_at"]
+    autocomplete_fields = ["default_snack1_food", "default_snack2_food"]
 
     def has_add_permission(self, request):
         return not NutritionAISettings.objects.exists()
