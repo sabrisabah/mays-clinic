@@ -272,6 +272,53 @@ def validate_proposal(
     if has_custom_food:
         warnings.append("تحتوي الخطة على أصناف مخصصة بدون قيم غذائية محسوبة — راجعها يدوياً أو أضفها إلى قائمة الأطعمة قبل الاعتماد")
 
+    # Server-side per-day calorie correction. In practice, trusting the
+    # AI's own arithmetic to land each day of a multi-day cycle within
+    # calorie_tolerance_pct turned out unreliable — real proposals came
+    # back with day-to-day swings of roughly -30% to +30% around
+    # calorie_target despite an explicit prompt rule requiring each day to
+    # independently approximate it (prompts.py rule 12's "كل يوم على حدة"
+    # addendum). Rather than accepting an imprecise proposal or rejecting
+    # it outright, scale every real-food item's quantity within a day by
+    # ONE day-wide factor so that day's calorie total lands on
+    # calorie_target — the AI still decides WHICH foods to use and how the
+    # days differ from each other (its actual contribution); only the
+    # final amounts get corrected. Since every nutrition value is linear
+    # in quantity, scaling by a single factor also moves protein/carbs/fat
+    # by the same proportion, preserving whatever macro balance the AI's
+    # food choices already had for that day rather than distorting it.
+    # Custom items (is_custom — no catalogue nutrition) are left exactly
+    # as the AI wrote them and excluded from the scaling factor itself,
+    # same as they're already excluded from daily_totals above.
+    calorie_target_for_scaling = targets.get("calories") or 0
+    if calorie_target_for_scaling:
+        meals_by_day = {}
+        for meal in normalized_meals:
+            meals_by_day.setdefault(meal["day_number"], []).append(meal)
+        for day_number, day_meals in meals_by_day.items():
+            day_calories = daily_totals.get(day_number, {}).get("calories", 0)
+            if day_calories <= 0:
+                continue  # only custom items (or none) that day — nothing to scale
+            scale = calorie_target_for_scaling / day_calories
+            if abs(scale - 1) < 0.01:
+                continue  # already essentially on target — don't perturb needlessly
+            for meal in day_meals:
+                for item in meal["items"]:
+                    if item["is_custom"]:
+                        continue
+                    item["quantity"] = round(min(item["quantity"] * scale, MAX_ITEM_QUANTITY), 1)
+            recomputed = {"calories": 0.0, "protein": 0.0, "carbs": 0.0, "fat": 0.0}
+            for meal in day_meals:
+                for item in meal["items"]:
+                    if item["is_custom"]:
+                        continue
+                    food = foods_by_id[item["food_id"]]
+                    recomputed["calories"] += food.calories_per_unit * item["quantity"]
+                    recomputed["protein"] += food.protein_per_unit * item["quantity"]
+                    recomputed["carbs"] += food.carbs_per_unit * item["quantity"]
+                    recomputed["fat"] += food.fat_per_unit * item["quantity"]
+            daily_totals[day_number] = recomputed
+
     num_days = len(daily_totals) or 1
     totals = {
         key: sum(d[key] for d in daily_totals.values()) / num_days
