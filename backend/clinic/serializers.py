@@ -201,8 +201,9 @@ class MealItemSerializer(serializers.ModelSerializer):
             "quantity", "unit", "food_state",
             "calories", "protein", "carbs", "fat",
             "alternative_text", "instructions", "patient_visible", "order",
+            "is_auto_snack",
         ]
-        read_only_fields = ["id", "meal"]
+        read_only_fields = ["id", "meal", "is_auto_snack"]
 
     def get_food_name(self, obj):
         return obj.food.name if obj.food_id else obj.custom_food_name

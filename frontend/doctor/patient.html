@@ -1869,7 +1869,7 @@ function npRenderMeals() {
     }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
     const rows = items.map((it) => `
       <tr>
-        <td>${escapeHtml(it.food_name)}${it.patient_visible ? "" : ` <span class="badge gray">مخفي عن المريض</span>`}</td>
+        <td>${escapeHtml(it.food_name)}${it.patient_visible ? "" : ` <span class="badge gray">مخفي عن المريض</span>`}${it.is_auto_snack ? ` <span class="badge gray" title="كمية محسوبة تلقائياً كنسبة من سعرات الخطة — عدّليها وتصبح ملكك">🔒 تلقائي</span>` : ""}</td>
         <td>${it.quantity} ${escapeHtml(it.unit || "")}</td>
         <td>${escapeHtml(it.food_state || "-")}</td>
         <td>${it.calories}</td>

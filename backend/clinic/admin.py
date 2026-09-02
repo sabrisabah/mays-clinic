@@ -430,8 +430,8 @@ class NutritionAISettingsAdmin(admin.ModelAdmin):
     this behaves like a single settings page rather than a list."""
     fields = [
         "openai_api_key",
-        "default_snack1_food", "default_snack1_quantity",
-        "default_snack2_food", "default_snack2_quantity",
+        "default_snack1_food", "default_snack1_calorie_pct",
+        "default_snack2_food", "default_snack2_calorie_pct",
         "updated_at",
     ]
     readonly_fields = ["updated_at"]
