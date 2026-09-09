@@ -9,7 +9,7 @@ from .models import (
 )
 from .utils import (
     compute_suggested_calories, macros_from_percentages, protein_first_breakdown,
-    CALORIE_TARGET_DEVIATION_THRESHOLD_PCT, PEDIATRIC_AGE_CUTOFF,
+    CALORIE_TARGET_DEVIATION_THRESHOLD_KCAL, PEDIATRIC_AGE_CUTOFF,
 )
 
 
@@ -296,7 +296,14 @@ class NutritionPlanSerializer(serializers.ModelSerializer):
         return round(((obj.calorie_target or 0) - obj.tdee) / obj.tdee * 100, 1)
 
     def get_requires_target_reason(self, obj):
-        return abs(self.get_tdee_diff_pct(obj)) > CALORIE_TARGET_DEVIATION_THRESHOLD_PCT
+        # Doctor's explicit clinical note: fixed 500 kcal cutoff, not a
+        # percentage — a 500 kcal deficit means the same thing clinically
+        # whether TDEE is 1500 or 3000. Guarded on tdee being computed yet
+        # (same as the old percentage check) so an as-yet-unset TDEE of 0
+        # doesn't make every calorie_target look like a huge deviation.
+        if not obj.tdee:
+            return False
+        return abs(self.get_tdee_diff(obj)) > CALORIE_TARGET_DEVIATION_THRESHOLD_KCAL
 
     def get_is_under_18(self, obj):
         return bool(obj.patient_id and obj.patient.age and obj.patient.age < PEDIATRIC_AGE_CUTOFF)

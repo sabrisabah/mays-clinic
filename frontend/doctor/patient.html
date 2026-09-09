@@ -1265,13 +1265,15 @@ async function loadAssessment() {
 }
 
 // ---------------- NUTRITION PLAN MODULE (الخطة الغذائية) ----------------
-// Mirrors backend/clinic/utils.py PLAN_ACTIVITY_LEVELS / CALORIE_TARGET_DEVIATION_THRESHOLD_PCT
+// Mirrors backend/clinic/utils.py PLAN_ACTIVITY_LEVELS / CALORIE_TARGET_DEVIATION_THRESHOLD_KCAL
 // / PEDIATRIC_AGE_CUTOFF / macros_from_percentages / protein_first_breakdown — kept in sync by hand.
 const NP_ACTIVITY_LEVELS = [
   ["خامل", 1.20], ["نشاط خفيف", 1.375], ["نشاط منتظم", 1.55],
   ["نشاط عالي", 1.725], ["نشاط عالي جداً", 1.90],
 ];
-const NP_CALORIE_DEVIATION_THRESHOLD_PCT = 10;
+// Doctor's explicit clinical note: fixed 500 kcal cutoff (absolute
+// difference from TDEE), not a percentage — replaces the old 10% rule.
+const NP_CALORIE_DEVIATION_THRESHOLD_KCAL = 500;
 // Below this, a value is treated as a likely data-entry error (e.g. "14"
 // instead of "1400") rather than a deliberate low-calorie prescription —
 // flagged immediately as the doctor types, separately from the TDEE
@@ -1744,7 +1746,7 @@ function npUpdateDiffPreview() {
   const pct = tdee ? Math.round((diff / tdee) * 1000) / 10 : 0;
   const badge = document.getElementById("npDiffBadge");
   badge.textContent = `الفرق عن TDEE: ${diff >= 0 ? "+" : ""}${diff} سعرة (${pct >= 0 ? "+" : ""}${pct}%)`;
-  const requiresReason = tdee > 0 && Math.abs(pct) > NP_CALORIE_DEVIATION_THRESHOLD_PCT;
+  const requiresReason = tdee > 0 && Math.abs(diff) > NP_CALORIE_DEVIATION_THRESHOLD_KCAL;
   badge.className = "badge " + (requiresReason ? "orange" : "gray");
   const reasonField = document.getElementById("npTargetReasonField");
   reasonField.style.display = requiresReason ? "" : "none";

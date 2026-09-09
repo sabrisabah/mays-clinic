@@ -199,9 +199,9 @@ OPENAI_REASONING_EFFORT = os.environ.get("OPENAI_REASONING_EFFORT", "low")
 NUTRITION_AI_TIMEOUT_SECONDS = int(os.environ.get("NUTRITION_AI_TIMEOUT_SECONDS", "60"))
 NUTRITION_AI_MAX_OUTPUT_TOKENS = int(os.environ.get("NUTRITION_AI_MAX_OUTPUT_TOKENS", "6000"))
 
-# Preview-vs-target comparison tolerance (see NutritionPlanSerializer's
-# existing CALORIE_TARGET_DEVIATION_THRESHOLD_PCT for the equivalent,
-# unrelated TDEE-vs-target check — this one is meals-vs-macro-targets).
+# Preview-vs-target comparison tolerance (see clinic/utils.py's
+# CALORIE_TARGET_DEVIATION_THRESHOLD_KCAL for the equivalent, unrelated
+# TDEE-vs-target check — this one is meals-vs-macro-targets).
 NUTRITION_AI_CALORIE_TOLERANCE_PCT = float(os.environ.get("NUTRITION_AI_CALORIE_TOLERANCE_PCT", "10"))
 NUTRITION_AI_MACRO_TOLERANCE_PCT = float(os.environ.get("NUTRITION_AI_MACRO_TOLERANCE_PCT", "15"))
 

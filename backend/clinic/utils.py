@@ -207,8 +207,10 @@ PLAN_ACTIVITY_LEVELS = [
 PLAN_ACTIVITY_FACTORS = {name: factor for name, factor, _ in PLAN_ACTIVITY_LEVELS}
 
 # If the physician's calorie_target deviates from TDEE by more than this
-# percentage, target_reason becomes required (server-enforced).
-CALORIE_TARGET_DEVIATION_THRESHOLD_PCT = 10
+# many kcal (absolute difference, not a percentage — doctor's explicit
+# clinical note: a fixed 500 kcal cutoff regardless of the patient's TDEE
+# size), target_reason becomes required (server-enforced).
+CALORIE_TARGET_DEVIATION_THRESHOLD_KCAL = 500
 
 # A plan can't be Approved while any of these apply unless the physician has
 # also written special_pathway_notes — pregnancy/lactation/eating-disorder
