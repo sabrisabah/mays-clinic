@@ -39,6 +39,7 @@
       </div>
 
       <form id="registerForm">
+        <div class="field"><label>رقم البطاقة الموحدة (أرقام فقط، إجباري)</label><input type="text" id="regNationalId" required inputmode="numeric" pattern="[0-9]+" maxlength="20" autocomplete="off"></div>
         <div class="grid-3">
           <div class="field"><label>الاسم</label><input type="text" id="regNameFirst" required></div>
           <div class="field"><label>اسم الأب</label><input type="text" id="regNameFather" required></div>
@@ -102,12 +103,18 @@ function resetForm() {
   hideMsg(msgEl);
 }
 
+// Unified ID card number: digits only (strip anything else as it's typed/pasted).
+document.getElementById("regNationalId").addEventListener("input", (e) => {
+  e.target.value = e.target.value.replace(/[^0-9]/g, "");
+});
+
 document.getElementById("registerForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   hideMsg(msgEl);
   const phone = document.getElementById("regPhone").value.trim();
   const password = document.getElementById("regPassword").value;
   const payload = {
+    national_id: document.getElementById("regNationalId").value.trim(),
     name_first: document.getElementById("regNameFirst").value.trim(),
     name_father: document.getElementById("regNameFather").value.trim(),
     name_grandfather: document.getElementById("regNameGrandfather").value.trim(),

@@ -46,6 +46,7 @@
       <form id="profileForm" class="card">
         <h3>🔹 المعلومات الشخصية</h3>
         <div class="grid">
+          <div class="field"><label>رقم البطاقة الموحدة</label><input type="text" id="national_id" inputmode="numeric" maxlength="20"></div>
           <div class="field"><label>الاسم</label><input type="text" id="name_first"></div>
           <div class="field"><label>اسم الأب</label><input type="text" id="name_father"></div>
           <div class="field"><label>اسم الجد</label><input type="text" id="name_grandfather"></div>
@@ -1188,6 +1189,7 @@ async function loadProfile() {
   const p = await apiFetch(`/api/patients/${patientId}`);
   document.getElementById("patientTitle").textContent = p.full_name;
   document.getElementById("fileNumber").textContent = p.file_number;
+  document.getElementById("national_id").value = p.national_id || "";
   document.getElementById("name_first").value = p.name_first || "";
   document.getElementById("name_father").value = p.name_father || "";
   document.getElementById("name_grandfather").value = p.name_grandfather || "";
@@ -3021,6 +3023,7 @@ document.getElementById("profileForm").addEventListener("submit", async (e) => {
     const result = await apiFetch(`/api/patients/${patientId}`, {
       method: "PUT",
       body: JSON.stringify({
+        national_id: document.getElementById("national_id").value.replace(/[^0-9]/g, ""),
         name_first: document.getElementById("name_first").value.trim(),
         name_father: document.getElementById("name_father").value.trim(),
         name_grandfather: document.getElementById("name_grandfather").value.trim(),

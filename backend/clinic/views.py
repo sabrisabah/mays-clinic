@@ -127,6 +127,7 @@ class RegisterView(APIView):
                     patient = Patient.objects.create(
                         user=user,
                         file_number=next_file_number(),
+                        national_id=data["national_id"],
                         name_first=data["name_first"],
                         name_father=data["name_father"],
                         name_grandfather=data.get("name_grandfather", ""),
@@ -251,6 +252,11 @@ class PatientDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        if "national_id" in data:
+            nid = data["national_id"].strip()
+            if nid and Patient.objects.exclude(id=patient.id).filter(national_id=nid).exists():
+                raise ValidationError({"national_id": "رقم البطاقة الموحدة مسجّل مسبقاً لمريض آخر"})
+            patient.national_id = nid
         if "name_first" in data:
             patient.name_first = data["name_first"]
         if "name_father" in data:

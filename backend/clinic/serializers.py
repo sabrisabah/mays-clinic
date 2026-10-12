@@ -17,6 +17,10 @@ class RegisterSerializer(serializers.Serializer):
     """Public registration — always creates a PATIENT account, identified by
     phone number (not email). Doctor accounts are provisioned separately via
     Django admin / seed_doctor command and keep logging in with email."""
+    national_id = serializers.RegexField(
+        regex=r"^\d{1,20}$", max_length=20,
+        error_messages={"invalid": "رقم البطاقة الموحدة يجب أن يتكون من أرقام فقط", "blank": "رقم البطاقة الموحدة مطلوب"},
+    )
     name_first = serializers.CharField(max_length=50)
     name_father = serializers.CharField(max_length=50)
     name_grandfather = serializers.CharField(max_length=50, required=False, allow_blank=True, default="")
@@ -34,6 +38,12 @@ class RegisterSerializer(serializers.Serializer):
         write_only=True,
         error_messages={"invalid": "كلمة المرور يجب أن تتكون من أرقام فقط (4 أرقام على الأقل)"},
     )
+
+    def validate_national_id(self, value):
+        value = value.strip()
+        if Patient.objects.filter(national_id=value).exists():
+            raise serializers.ValidationError("رقم البطاقة الموحدة مسجّل مسبقاً لمريض آخر")
+        return value
 
     def validate_phone(self, value):
         value = value.strip()
@@ -97,6 +107,7 @@ class AppointmentUpdateSerializer(serializers.Serializer):
 class PatientProfileSerializer(serializers.Serializer):
     patient_id = serializers.IntegerField(source="id", read_only=True)
     full_name = serializers.CharField(source="user.full_name", read_only=True)
+    national_id = serializers.CharField(allow_blank=True)
     name_first = serializers.CharField(allow_blank=True)
     name_father = serializers.CharField(allow_blank=True)
     name_grandfather = serializers.CharField(allow_blank=True)
@@ -116,6 +127,10 @@ class PatientProfileSerializer(serializers.Serializer):
 
 
 class PatientProfileUpdateSerializer(serializers.Serializer):
+    national_id = serializers.RegexField(
+        regex=r"^\d{1,20}$", max_length=20, required=False, allow_blank=True,
+        error_messages={"invalid": "رقم البطاقة الموحدة يجب أن يتكون من أرقام فقط"},
+    )
     name_first = serializers.CharField(max_length=50, required=False, allow_blank=True)
     name_father = serializers.CharField(max_length=50, required=False, allow_blank=True)
     name_grandfather = serializers.CharField(max_length=50, required=False, allow_blank=True)

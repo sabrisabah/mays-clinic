@@ -46,6 +46,11 @@ class User(AbstractUser):
 class Patient(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="patient")
     file_number = models.CharField(max_length=20, unique=True)
+    # رقم البطاقة الموحدة — digits only. Required for every NEW registration
+    # (RegisterSerializer); blank only for patients registered before this
+    # field existed. Uniqueness is enforced in the serializers (not a DB
+    # constraint) so those older blank rows don't collide.
+    national_id = models.CharField(max_length=20, blank=True, default="", db_index=True)
     # Name split into three parts: الاسم / اسم الأب / اسم الجد
     name_first = models.CharField(max_length=50, blank=True, default="")
     name_father = models.CharField(max_length=50, blank=True, default="")
