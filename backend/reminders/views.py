@@ -130,6 +130,7 @@ class ReminderPatientSearchView(APIView):
             qs = qs.filter(
                 Q(user__full_name__icontains=search)
                 | Q(file_number__icontains=search)
+                | Q(national_id__icontains=search)
                 | Q(user__phone__icontains=search)
             )
         qs = qs.order_by("-id")[:25]

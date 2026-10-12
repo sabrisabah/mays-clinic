@@ -27,7 +27,7 @@
     <div class="card" id="newInvoiceCard" style="display:none;">
       <h3 style="margin-top:0;">اختر المريض للفاتورة الجديدة</h3>
       <div class="search-row">
-        <input type="text" id="patientSearchBox" placeholder="ابحث بالاسم، رقم الملف، أو الهاتف...">
+        <input type="text" id="patientSearchBox" placeholder="ابحث بالاسم، رقم الملف، رقم البطاقة الموحدة، أو الهاتف...">
         <button type="button" class="btn secondary" onclick="searchPatients()">بحث</button>
       </div>
       <div id="patientSearchResults"></div>
@@ -58,7 +58,7 @@
         </div>
       </div>
       <div class="search-row" style="margin-top:12px;">
-        <input type="text" id="f_search" placeholder="بحث برقم الفاتورة أو اسم المريض أو رقم الملف...">
+        <input type="text" id="f_search" placeholder="بحث برقم الفاتورة أو اسم المريض أو رقم الملف أو رقم البطاقة الموحدة...">
         <button type="button" class="btn secondary" onclick="loadInvoices()">تصفية</button>
       </div>
       <div id="invoicesWrap"></div>

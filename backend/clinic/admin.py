@@ -150,7 +150,7 @@ class UserAdmin(ImportExportModelAdmin, BaseUserAdmin):
 @admin.register(Patient)
 class PatientAdmin(admin.ModelAdmin):
     list_display = ["file_number", "user", "age", "gender", "created_at"]
-    search_fields = ["file_number", "user__full_name", "user__email"]
+    search_fields = ["file_number", "national_id", "user__full_name", "user__email"]
     actions = ["export_all_data", "force_delete_patients"]
 
     def force_delete_patients(self, request, queryset):
