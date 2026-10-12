@@ -129,9 +129,9 @@ document.getElementById("registerForm").addEventListener("submit", async (e) => 
   const submitBtn = document.getElementById("regSubmitBtn");
   submitBtn.disabled = true;
   try {
-    // Uses the public registration endpoint but deliberately does NOT call
-    // Auth.save() with the response — that would log the secretary out and
-    // log in as the newly created patient instead.
+    // Staff-only registration endpoint (the secretary's own login token is
+    // sent by apiFetch). The response carries no login token, so the
+    // secretary stays logged in as herself.
     const data = await apiFetch("/api/auth/register", {
       method: "POST",
       body: JSON.stringify(payload),

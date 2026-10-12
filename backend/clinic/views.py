@@ -71,10 +71,14 @@ def get_patient_or_403(request, patient_id):
 # ---------------- AUTH ----------------
 
 class RegisterView(APIView):
-    """Public sign-up — always creates a PATIENT account, identified by phone
-    number + a numeric password (PIN). Doctor accounts are created by clinic
-    staff via /admin or the seed_doctor command and keep using email."""
-    permission_classes = [AllowAny]
+    """Staff-only patient registration — always creates a PATIENT account,
+    identified by phone number + a numeric password (PIN). Patients can no
+    longer sign themselves up online: only logged-in clinic staff (the
+    secretary, or the doctor) may create the account, so an anonymous or
+    patient-role request is rejected (401/403). Doctor accounts are created
+    by clinic staff via /admin or the seed_doctor command and keep using
+    email."""
+    permission_classes = [IsAuthenticated, IsClinicStaff]
 
     def post(self, request):
         serializer = sz.RegisterSerializer(data=request.data)
@@ -143,7 +147,12 @@ class RegisterView(APIView):
         else:
             raise last_error
 
-        return Response(issue_token_response(user, patient.id), status=status.HTTP_201_CREATED)
+        # No login token is issued: the caller is clinic staff creating an
+        # account for someone else, not the patient signing in.
+        return Response(
+            {"patient_id": patient.id, "role": user.role, "full_name": user.full_name},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class LoginView(APIView):
