@@ -9,7 +9,8 @@
   html, body { height: 100%; margin: 0; }
   body {
     min-height: 100vh;
-    background: radial-gradient(circle at 25% 15%, #5fe6c4 0%, #14a97e 42%, #0b3d2e 100%);
+    background: linear-gradient(160deg, #2e6752 0%, #ba9837 55%, #f4f4f4 100%);
+    background-attachment: fixed;
     display: flex; align-items: center; justify-content: center;
     padding: 32px 16px;
   }
@@ -19,16 +20,17 @@
   .neu-brand {
     display: flex; align-items: center; justify-content: center;
     background: #ffffff; border-radius: 26px; padding: 14px 28px;
-    margin-bottom: 24px; box-shadow: 0 10px 26px rgba(6,42,32,.35);
+    margin-bottom: 24px; box-shadow: 0 10px 26px rgba(30,60,48,.30);
   }
   .neu-brand img { height: 130px; width: auto; display: block; }
 
   .neu-card {
     width: 100%;
-    background: linear-gradient(150deg, #5fe0b8 0%, #149e77 100%);
+    background: #f4f4f4;
+    border-top: 5px solid #ba9837;
     border-radius: 32px;
     padding: 34px 30px 30px;
-    box-shadow: 22px 22px 44px rgba(6,42,32,.45), -12px -12px 30px rgba(255,255,255,.12);
+    box-shadow: 0 18px 40px rgba(30,60,48,.35);
   }
 
   .neu-tabs {
@@ -43,30 +45,30 @@
   .neu-tabs button.active { background: #0b3d2e; color: #fff; box-shadow: 0 2px 8px rgba(6,42,32,.4); }
 
   .neu-avatar {
-    width: 82px; height: 82px; border-radius: 50%; background: #0b3d2e;
+    width: 82px; height: 82px; border-radius: 50%; background: #2e6752;
     display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;
-    box-shadow: inset 0 2px 6px rgba(255,255,255,.08), 0 8px 18px rgba(6,42,32,.5);
+    box-shadow: 0 0 0 4px #ba9837, 0 8px 18px rgba(30,60,48,.35);
   }
-  .neu-avatar svg { width: 38px; height: 38px; color: #eafff5; }
+  .neu-avatar svg { width: 38px; height: 38px; color: #f4f4f4; }
 
   .neu-title {
-    text-align: center; color: #eafff5; font-size: 1.05rem; font-weight: 700;
+    text-align: center; color: #2e6752; font-size: 1.05rem; font-weight: 700;
     letter-spacing: 2px; margin: 0 0 24px;
   }
 
   .neu-field { position: relative; margin-bottom: 16px; }
   .neu-field svg {
     position: absolute; right: 18px; top: 50%; transform: translateY(-50%);
-    width: 18px; height: 18px; color: rgba(234,255,246,.85); pointer-events: none;
+    width: 18px; height: 18px; color: #ba9837; pointer-events: none;
   }
   .neu-field input, .neu-field select {
     width: 100%; border: none; border-radius: 999px; padding: 14px 46px 14px 18px;
-    background: rgba(6,42,32,.22); color: #fff; font-size: .92rem; font-family: inherit;
-    box-shadow: inset 3px 3px 8px rgba(6,42,32,.35), inset -2px -2px 6px rgba(255,255,255,.06);
+    background: #fff; color: #2e6752; font-size: .92rem; font-family: inherit;
+    border: 1px solid #d9d9d9;
     box-sizing: border-box;
   }
-  .neu-field input::placeholder { color: rgba(234,255,246,.6); }
-  .neu-field input:focus, .neu-field select:focus { outline: none; box-shadow: inset 3px 3px 8px rgba(6,42,32,.45), 0 0 0 2px rgba(255,255,255,.35); }
+  .neu-field input::placeholder { color: #8a9a93; }
+  .neu-field input:focus, .neu-field select:focus { outline: none; border-color: #ba9837; box-shadow: 0 0 0 3px rgba(186,152,55,.35); }
   .neu-field select { appearance: none; -webkit-appearance: none; cursor: pointer; }
   .neu-field select option { color: #0b3d2e; }
 
@@ -76,9 +78,9 @@
   .neu-row-3 svg { display: none; }
 
   .neu-optrow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: .78rem; }
-  .neu-optrow label { display: flex; align-items: center; gap: 6px; color: rgba(234,255,246,.85); cursor: pointer; }
-  .neu-optrow input[type=checkbox] { accent-color: #0b3d2e; }
-  .neu-optrow a { color: #eafff5; text-decoration: none; cursor: pointer; opacity: .9; }
+  .neu-optrow label { display: flex; align-items: center; gap: 6px; color: #2e6752; cursor: pointer; }
+  .neu-optrow input[type=checkbox] { accent-color: #2e6752; }
+  .neu-optrow a { color: #8a6d12; text-decoration: none; cursor: pointer; opacity: .9; }
   .neu-optrow a:hover { text-decoration: underline; }
 
   .neu-hint { font-size: .72rem; color: rgba(234,255,246,.65); margin: 4px 0 16px; line-height: 1.5; }
@@ -87,19 +89,19 @@
 
   .neu-btn {
     display: block; width: 100%; border: none; border-radius: 999px; padding: 14px;
-    background: #0b3d2e; color: #fff; font-family: inherit; font-size: .92rem; font-weight: 700;
-    letter-spacing: 1px; cursor: pointer; box-shadow: 0 10px 20px rgba(6,42,32,.4);
+    background: #2e6752; color: #fff; font-family: inherit; font-size: .92rem; font-weight: 700;
+    letter-spacing: 1px; cursor: pointer; box-shadow: 0 10px 20px rgba(46,103,82,.35);
     transition: background .15s, transform .1s;
   }
-  .neu-btn:hover { background: #12503d; }
+  .neu-btn:hover { background: #ba9837; }
   .neu-btn:active { transform: translateY(1px); }
 
   .msg {
     border-radius: 14px; padding: 10px 14px; font-size: .82rem; margin-bottom: 16px;
-    background: rgba(6,42,32,.3); color: #fff; display: none;
+    background: #e3efe9; color: #2e6752; display: none;
   }
-  .msg.error { background: rgba(120,20,20,.4); }
-  .msg.success { background: rgba(20,90,60,.4); }
+  .msg.error { background: #f8dede; color: #8a1c1c; }
+  .msg.success { background: #e3efe9; color: #2e6752; }
 
   .neu-footnote { text-align: center; color: rgba(234,255,246,.75); font-size: .76rem; margin-top: 20px; line-height: 1.6; max-width: 340px; }
 </style>
