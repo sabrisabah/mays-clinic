@@ -133,7 +133,6 @@
         </div>
         <div class="neu-optrow">
           <label><input type="checkbox" id="rememberMe" checked> تذكرني</label>
-          <a id="forgotPassword">نسيت كلمة المرور؟</a>
         </div>
         <button type="submit" class="neu-btn">دخول</button>
       </form>
@@ -148,11 +147,6 @@ if (Auth.isLoggedIn()) {
 }
 
 const msgEl = document.getElementById("msg");
-
-document.getElementById("forgotPassword").addEventListener("click", (e) => {
-  e.preventDefault();
-  showMsg(msgEl, "الرجاء التواصل مع إدارة العيادة لإعادة تعيين كلمة المرور.", "success");
-});
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
